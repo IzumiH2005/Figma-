@@ -4,6 +4,7 @@ import { evaluate, interp } from './expr.js';
 import { splitTop } from './project.js';
 import { playAnims, resolveEasing, EASINGS, prefersReducedMotion, easeFn } from './anim.js';
 import { morphBetween, liveBoolean } from './vector.js';
+import { groupRigs, groupPos, groupValues, rigBox, toBox } from './rig.js';
 
 export const TRANSITIONS = ['instant', 'none', 'dissolve', 'fade', 'smart', 'push', 'push-left', 'push-right', 'push-up', 'push-down', 'slide', 'slide-left', 'slide-right', 'slide-up', 'slide-down', 'ios', 'scale', 'zoom', 'flip'];
 const EASE_NAMES = new Set([...Object.keys(EASINGS), 'spring', 'bouncy', 'snappy', 'gentle', 'wobbly', 'stiff', 'bounce']);
@@ -35,6 +36,7 @@ export class Player {
     this.vars = opts.vars || project.initialVars();
     this.history = []; this.overlays = []; this.current = null; this.currentName = null;
     this.timers = []; this.keyHandlers = []; this.busy = false;
+    this.inst = {}; // instance-local props (interactive components): { instKey: { prop: value } }
     host.style.position = host.style.position || 'relative';
     host.style.overflow = 'hidden';
     this._onKey = (e) => { for (const h of this.keyHandlers) if (h.key === e.key || h.key.toLowerCase() === e.key.toLowerCase()) { e.preventDefault(); h.fn(); } };
@@ -64,6 +66,7 @@ export class Player {
     this.host.innerHTML = '';
     this.history = []; this.overlays = [];
     if (!this.opts.keepVars) this.vars = this.opts.vars || this.project.initialVars();
+    if (!this.opts.keepVars) this.inst = {};
     const s = name ? this.project.screen(name) : this.project.startScreen();
     if (!s) return;
     this.emit('prenavigate', { name: s.attrs.name });
@@ -135,6 +138,36 @@ export class Player {
     }
   }
 
+  // live rigs: dragging a rigged element changes a $variable or the instance's own props
+  bindRigs(el) {
+    const live = (el._rigs || []).filter((g) => g.bind.type !== 'attr');
+    if (!live.length || el._rigBound) return; el._rigBound = true;
+    el.dataset.hot = '1'; el.style.touchAction = 'none'; if (!el.style.cursor) el.style.cursor = 'grab';
+    el.addEventListener('pointerdown', (e) => {
+      if (e.button) return;
+      e.stopPropagation(); e.preventDefault();
+      const groups = groupRigs(live);
+      const values = (g) => Object.fromEntries(g.rigs.map((x) => [x.target, x.bind.value]));
+      let best = null;
+      for (const g of groups) {
+        const box = toBox(rigBox(el, g.rigs[0].r)); const p = groupPos(g, values(g), box); const d = Math.hypot(p.x - e.clientX, p.y - e.clientY);
+        if (!best || d < best.d) best = { g, box, d };
+      }
+      const { g, box } = best; const prev = el.style.cursor; document.body.style.cursor = 'grabbing';
+      const apply = (ev) => {
+        const vals = groupValues(g, ev.clientX, ev.clientY, box); let changed = false;
+        for (const x of g.rigs) { const v = vals[x.target]; if (this.readBound(x.bind) !== v) { this.writeBound(x.bind, v); changed = true; } }
+        if (changed) { this.emit('rig', { values: vals }); this.scheduleRerender(); }
+      };
+      apply(e);
+      const mv = (ev) => apply(ev);
+      const up = () => { window.removeEventListener('pointermove', mv); window.removeEventListener('pointerup', up); document.body.style.cursor = ''; el.style.cursor = prev; };
+      window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up);
+    });
+  }
+  readBound(b) { return b.type === 'var' ? this.vars[b.name] : (this.inst[b.key] || {})[b.name] ?? b.value; }
+  writeBound(b, v) { if (b.type === 'var') this.vars[b.name] = v; else (this.inst[b.key] = this.inst[b.key] || {})[b.name] = v; }
+
   bindSwipe(el, dir, fn) {
     let sx, sy, active = false;
     el.addEventListener('pointerdown', (e) => { sx = e.clientX; sy = e.clientY; active = true; });
@@ -185,8 +218,25 @@ export class Player {
           this.vars[m[1]] = /^\{[^{}]*\}$/.test(ex) ? interp(ex, scope) : evaluate(ex, scope);
           return { dirty: true, transition: m[3] ? parseTransition(words(m[3])) : null };
         }
-        case 'toggle': { const n = w[1].replace(/^\$/, ''); this.vars[n] = !this.vars[n]; return { dirty: true, transition: w.length > 2 ? parseTransition(w.slice(2)) : null }; }
-        case 'inc': case 'dec': { const n = w[1].replace(/^\$/, ''); const by = w[2] && /^-?\d/.test(w[2]) ? +w[2] : 1; this.vars[n] = (+this.vars[n] || 0) + (cmd === 'inc' ? by : -by); return { dirty: true }; }
+        case 'change': { // change k=v k2={expr} [smart 300 ease] → the enclosing instance's own props (Figma "Change to", on any prop)
+          const key = scope.lookup('__inst'); if (!key) throw new Error('change : à utiliser dans un composant');
+          const rest = step.replace(/^change\s+/, ''); const re = /([\w-]+)\s*=\s*(\{[^{}]*\}|"[^"]*"|'[^']*'|\S+)/g; let m, last = 0;
+          const loc = (this.inst[key] = this.inst[key] || {});
+          while ((m = re.exec(rest))) {
+            const [, k, ex] = m; last = re.lastIndex;
+            let v;
+            if (/^\{/.test(ex)) v = interp(ex, scope);
+            else if (/^["']/.test(ex)) v = ex.slice(1, -1);
+            else if (/^-?\d+(\.\d+)?$/.test(ex)) v = +ex;
+            else if (ex === 'true' || ex === 'false') v = ex === 'true';
+            else v = ex; // enum value
+            loc[k] = v;
+          }
+          const tail = words(rest.slice(last));
+          return { dirty: true, transition: tail.length ? parseTransition(tail) : null };
+        }
+        case 'toggle': { const n = w[1].replace(/^\$/, ''); const key = !w[1].startsWith('$') && !(n in this.vars) && scope.lookup('__inst'); if (key) { const loc = (this.inst[key] = this.inst[key] || {}); loc[n] = !(n in loc ? loc[n] : scope.lookup(n)); return { dirty: true, transition: w.length > 2 ? parseTransition(w.slice(2)) : null }; } this.vars[n] = !this.vars[n]; return { dirty: true, transition: w.length > 2 ? parseTransition(w.slice(2)) : null }; }
+        case 'inc': case 'dec': { const n = w[1].replace(/^\$/, ''); const by = w[2] && /^-?\d/.test(w[2]) ? +w[2] : 1; const key = !w[1].startsWith('$') && !(n in this.vars) && scope.lookup('__inst'); if (key) { const loc = (this.inst[key] = this.inst[key] || {}); loc[n] = (+(n in loc ? loc[n] : scope.lookup(n)) || 0) + (cmd === 'inc' ? by : -by); return { dirty: true }; } this.vars[n] = (+this.vars[n] || 0) + (cmd === 'inc' ? by : -by); return { dirty: true }; }
         case 'mode': {
           const modes = this.project.modes; const target = w[1] || 'next';
           this.mode = target === 'next' ? (this.mode + 1) % modes.length : Math.max(0, modes.indexOf(target));
@@ -202,7 +252,8 @@ export class Player {
         }
         case 'restart': this.start(); return { navigated: true };
         case 'if': {
-          const m = /^if\s+(.+?)\s+then\s+(.+?)(?:\s+else\s+(.+))?$/.exec(step);
+          // "if <cond> then A [else B]" or the brace form "if {cond} A [else B]"
+          const m = /^if\s+(.+?)\s+then\s+(.+?)(?:\s+else\s+(.+))?$/.exec(step) || /^if\s+\{([^{}]*)\}\s+(.+?)(?:\s+else\s+(.+))?$/.exec(step);
           if (!m) throw new Error(`if invalide: ${step}`);
           const branch = evaluate(m[1], scope) ? m[2] : m[3];
           if (branch) return await this.step(branch.trim(), scope, el);

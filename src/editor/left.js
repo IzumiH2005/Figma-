@@ -69,7 +69,7 @@ export class LeftPanel {
     const comp = /^(\w+\.)?[A-Z]/.test(n.tag);
     const hidden = n.attrs.hidden === true || n.attrs.hidden === 'true';
     const row = h('div.lrow' + (sel ? '.sel' : '') + (comp ? '.comp' : '') + (hidden ? '.hid' : ''), {
-      style: { paddingLeft: 8 + depth * 14 + 'px' }, draggable: 'true',
+      style: { paddingLeft: 8 + depth * 14 + 'px' }, draggable: 'true', dataset: { id: n.id },
       onclick: (e) => { app.select(n.id, e.shiftKey || e.metaKey); },
       onpointerenter: () => { app.hover = n.id; this.hooks.onHover && this.hooks.onHover(); },
       ondblclick: () => this.rename(n),

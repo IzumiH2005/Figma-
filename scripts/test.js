@@ -133,6 +133,7 @@ export function PillRow({ className, ...props }) { return <div className={cn("fl
 // agent pointer: a continuous drag on a boolean operand's anchor edits the path (live boolean)
 {
   const tmpMq = path.join(ROOT, 'out', '_drive.mq');
+  fs.mkdirSync(path.dirname(tmpMq), { recursive: true });
   fs.writeFileSync(tmpMq, examples.find((e) => e.file === 'notch-menu.mq').source);
   const before = /name=notch[^>]*d="([^"]+)"/.exec(fs.readFileSync(tmpMq, 'utf8'))[1];
   const log = console.log; console.log = () => {};
@@ -140,6 +141,19 @@ export function PillRow({ className, ...props }) { return <div className={cn("fl
   console.log = log;
   const after = /name=notch[^>]*d="([^"]+)"/.exec(fs.readFileSync(tmpMq, 'utf8'))[1];
   ok(before !== after && /62 50/.test(after), `mq drive : glisser une ancre d'opérande de booléen modifie le tracé (${after.slice(0, 60)}…)`);
+  fs.rmSync(tmpMq);
+}
+
+// Component Studio: rename a prop (expressions + instances follow), add a rig, matrix with an instance-swap axis
+{
+  const tmpMq = path.join(ROOT, 'out', '_studio.mq');
+  fs.writeFileSync(tmpMq, examples.find((e) => e.file === 'component-lab.mq').source);
+  const log = console.log; console.log = () => {};
+  await drive({ file: tmpMq, script: 'studio Stepper; dblclick css [data-f="pn-count"]; key Control+a; type "qty"; key Enter; wait 300; click ui "Ajouter un rig"; menu "qty"; wait 300; exit', write: true, buildEditorHTML, chromium });
+  console.log = log;
+  const src = fs.readFileSync(tmpMq, 'utf8');
+  ok(/name=Stepper props="qty=1[^"]*"[^>]*rig:qty="x 0\.\.10 step=1"/.test(src) && /if \{qty < max\} inc qty/.test(src) && /<Stepper max=12 qty=7\/>/.test(src) && />\{qty\}<\/text>/.test(src) && !/\{count/.test(src),
+    'Studio : renommer une prop réécrit expressions, interactions et instances ; « Ajouter un rig » écrit rig:qty');
   fs.rmSync(tmpMq);
 }
 

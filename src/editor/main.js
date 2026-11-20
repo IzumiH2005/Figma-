@@ -7,6 +7,7 @@ import { RightPanel } from './right.js';
 import { CodeDrawer } from './code.js';
 import { PlayMode } from './play.js';
 import { Timeline } from './timeline.js';
+import { Studio } from './studio.js';
 
 const NEW_PROJECT = `<project name="Nouveau projet" fonts="Inter:400;500;600;700;800" modes="light dark">
   <tokens>
@@ -78,6 +79,7 @@ function boot() {
     onHover: () => canvas.drawOverlay(),
     onContext: (x, y) => contextMenu(x, y),
     onEditComponent: (name) => editComponent(name),
+    openStudio: (name) => studio.open(name),
     onEditCode: () => { right.tab = 'code'; right.render(); },
     play: (name) => play.open(name),
     ensureFont: (f) => { app.project.fonts.push(f + ':400;500;600;700'); MQ.ensureFonts(app.project); },
@@ -102,8 +104,12 @@ function boot() {
   };
   canvas = new Canvas(app, canvasEl, hooks);
   window.__canvas = canvas; // used by `mq drive` (agent pointer)
+  window.__play = play;
   left = new LeftPanel(app, leftEl, hooks);
   right = new RightPanel(app, rightEl, hooks);
+  window.__right = right;
+  const studio = new Studio(app, hooks);
+  window.__studio = studio; // Component Studio (also driven by `mq drive … studio Name`)
   code = new CodeDrawer(app, codeEl);
   timeline = new Timeline(app, tlEl, hooks);
 
@@ -129,6 +135,7 @@ function boot() {
       protoBtn,
       h('button.tb' + (app.showGrid ? '.on' : ''), { title: 'Grilles de mise en page (Maj+G)', onclick: () => toggleGrid() }, icon('layout-grid', 16)),
       h('button.tb' + (app.view !== 'normal' ? '.on' : ''), { title: 'Simulation de vision', onclick: (e) => viewMenu(e) }, icon('eye', 16)),
+      h('button.tb', { title: 'Component Studio (Ctrl+Maj+K)', onclick: () => studio.open() }, icon('component', 16)),
       h('button.tb', { title: 'Timeline Motion', onclick: () => timeline.toggle() }, icon('gantt-chart', 16)),
       h('button.tb', { title: 'Code source (Ctrl+/)', onclick: () => code.toggle() }, icon('code-xml', 16)),
       zoomLabel,
@@ -273,6 +280,7 @@ function boot() {
       '-',
       n && (/^(\w+\.)?[A-Z]/.test(n.tag) || n.tag === 'instance') ? { label: 'Remplacer l’instance…', icon: 'replace', run: () => swapInstance(n.id) } : null,
       { label: 'Créer un composant', key: 'Ctrl+Alt+K', icon: 'component', disabled: !n || n.tag === 'screen' || isComp, run: () => makeComponent() },
+      isComp ? { label: `Ouvrir ${n.tag} dans le Studio`, icon: 'component', run: () => studio.open(n.tag) } : null,
       isComp && !isComp.fromKit ? { label: `Éditer ${n.tag}`, icon: 'pencil', run: () => editComponent(n.tag) } : null,
       isComp ? { label: 'Détacher l\'instance', icon: 'unlink', run: () => detach() } : null,
       '-',
@@ -454,7 +462,7 @@ function boot() {
 
   // ---------------- keyboard
   addEventListener('keydown', (e) => {
-    if (play.root) return;
+    if (play.root || studio.root) return;
     const t = e.target;
     if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
     if (canvas.sbuild.key(e)) { e.preventDefault(); return; }
@@ -468,6 +476,7 @@ function boot() {
     if (mod && k === 'v') { e.preventDefault(); if (navigator.clipboard && navigator.clipboard.readText) navigator.clipboard.readText().then((t2) => paste(t2 && t2.trim().startsWith('<') ? t2 : null)).catch(() => paste()); else paste(); return; }
     if (mod && k === 'd') { e.preventDefault(); duplicate(); return; }
     if (mod && k === 'a') { e.preventDefault(); const n = app.selNodes[0]; const par = n ? app.parent(n.id) : null; app.select(par && par.children ? par.children.filter((c) => c.tag !== '#text').map((c) => c.id) : (app.page ? app.page.children.map((c) => c.id) : [])); return; }
+    if (mod && e.shiftKey && k === 'k') { e.preventDefault(); studio.open(); return; }
     if (mod && e.altKey && k === 'k') { e.preventDefault(); makeComponent(); return; }
     if (mod && e.shiftKey && k === 'g') { e.preventDefault(); unwrap(); return; }
     if (mod && k === 'g') { e.preventDefault(); wrap('stack'); return; }

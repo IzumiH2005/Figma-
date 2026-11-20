@@ -8,7 +8,7 @@ import { createRequire } from 'node:module';
 import { buildRuntime, buildEditorHTML, readExamples, iconSubset } from '../scripts/build.js';
 import { importShadcnTheme } from '../src/core/themes.js';
 import { importShadcn, SHADCN_REGISTRY } from '../src/core/shadcn-import.js';
-import { drive } from './drive.js';
+import { drive, send as driveSend } from './drive.js';
 
 const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -27,7 +27,8 @@ const HELP = `Maquette CLI
   mq export  <file.mq> [-o proto.html]                               prototype HTML autonome (lecture seule)
   mq fmt     <file.mq> [--write]                                     reformate le source
   mq kit     [préfixe]                                               liste les composants du kit + props (mq kit ui. : pack shadcn)
-  mq drive   <file.mq> <gestes.txt> [--write] [--video s.mp4]       pilote souris : gestes continus dans l'éditeur (points, plume, crayon…)
+  mq drive   <file.mq> <gestes.txt> [--write] [--video s.mp4]       pilote souris : gestes continus dans l'éditeur (points, plume, rigs, menus…)
+  mq drive   <file.mq> --serve [port]  ·  mq drive send "cmd; cmd"   session persistante (navigateur gardé ouvert)
   mq shadcn  add <noms…|all> [--into f.mq] [--theme neutral|zinc|slate|stone|gray]   importe les composants du registre shadcn/ui (ui.*)
   mq shadcn  list | theme <globals.css> [--into f.mq]                  liste le registre · importe un thème (:root/.dark) en tokens sh-*
   mq icons   [recherche]                                             cherche des noms d'icônes (lucide)
@@ -503,11 +504,17 @@ async function cmdKit(o) {
 
 // agent pointer: drive the real editor with continuous mouse gestures (see cli/drive.js)
 async function cmdDrive(o) {
-  const file = o._[1]; if (!file) throw new Error('usage : mq drive projet.mq gestes.txt [--write] [--video s.mp4] [--shots dossier]  |  -e "select x; edit; anchors"');
-  const script = o.e ? String(o.e) : fs.readFileSync(o._[2], 'utf8');
+  if (o._[1] === 'send') { // client of a persistent session (mq drive f.mq --serve)
+    const script = o.e ? String(o.e) : o._.slice(2).join(' ');
+    process.stdout.write(await driveSend(script, +o.port || 7788)); return;
+  }
+  const file = o._[1]; if (!file) throw new Error('usage : mq drive projet.mq gestes.txt [--write] [--video s.mp4] [--shots dossier] [--speed 2]  |  -e "select x; rigs"  |  --serve [port] puis mq drive send "…"');
+  const script = o.e ? String(o.e) : o._[2] ? fs.readFileSync(o._[2], 'utf8') : '';
+  if (!script && !o.serve) throw new Error('mq drive : donne un fichier de gestes, -e "…" ou --serve');
   const { chromium } = require('playwright');
-  const r = await drive({ file, script, write: !!o.write, video: o.video, shots: o.shots, scale: o.scale || 1, buildEditorHTML, chromium });
+  const r = await drive({ file, script, write: !!o.write, video: o.video, shots: o.shots, scale: o.scale || 1, speed: o.speed || 1, serve: o.serve ? (o.serve === true ? 7788 : +o.serve) : 0, buildEditorHTML, chromium });
   if (o.video && r.video) { execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-i', r.video, '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', o.video]); console.log(`✓ vidéo de la session : ${o.video}`); }
+  if (r.failures) process.exitCode = 1;
 }
 
 // merge sh-* token lines into a project's <tokens> block (created if missing)

@@ -106,6 +106,7 @@ export class Canvas {
             this.overlay.appendChild(hh);
           }
           const n = app.node(id);
+          if (n && n.tag !== 'screen' && r.w > 6 && r.h > 6) { const ro = h('div.ov.cv-rotate', { title: 'Rotation (Maj : par 15°)' }); ro.dataset.rotate = id; ro.style.left = r.x + r.w + 12 + 'px'; ro.style.top = r.y - 12 + 'px'; this.overlay.appendChild(ro); }
           const scale = 1 / app.zoom;
           this.overlay.appendChild(h('div.ov.cv-size', { style: { left: r.x + r.w / 2 + 'px', top: r.y + r.h + 8 + 'px' } }, `${round(r.w * scale)} × ${round(r.h * scale)}`));
           if (app.protoView && n && n.tag !== 'screen') {
@@ -284,6 +285,7 @@ export class Canvas {
     if (this.vedit.down(e)) return;
     // handles / noodle / labels
     if (t.dataset && t.dataset.handle) return this.startResize(e, t.dataset.handle);
+    if (t.dataset && t.dataset.rotate) return this.startRotate(e, t.dataset.rotate);
     if (t.dataset && t.dataset.noodle) { const r = this.local(t.getBoundingClientRect()); this.drag = { noodle: { a: { x: r.x + r.w / 2, y: r.y + r.h / 2 }, b: { x: r.x, y: r.y } }, from: t.dataset.noodle }; return; }
     if (t.dataset && t.dataset.screenLabel) {
       const id = t.dataset.screenLabel;
@@ -329,6 +331,12 @@ export class Canvas {
     this.drag = { resize: handle, id, sx: e.clientX, sy: e.clientY, w0: r.width / app.zoom, h0: r.height / app.zoom, el, abs: getComputedStyle(el).position === 'absolute', x0: +n.attrs.x || el.offsetLeft, y0: +n.attrs.y || el.offsetTop, ratio: r.width / r.height };
   }
 
+  startRotate(e, id) {
+    const app = this.app; const el = this.elOf(id); const n = app.node(id); if (!el || !n) return;
+    const r = el.getBoundingClientRect(); const c = { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    app.begin(); this.drag = { rotate: true, id, c, a0: Math.atan2(e.clientY - c.y, e.clientX - c.x), rot0: parseFloat(n.attrs.rotate) || 0 };
+  }
+
   startDraw(e) {
     const app = this.app;
     const p = this.local({ left: e.clientX, top: e.clientY, width: 0, height: 0 });
@@ -370,6 +378,13 @@ export class Canvas {
       this.drawOverlay(); return;
     }
     if (d.resize) return this.doResize(e);
+    if (d.rotate) {
+      let ang = d.rot0 + ((Math.atan2(e.clientY - d.c.y, e.clientX - d.c.x) - d.a0) * 180) / Math.PI;
+      ang = e.shiftKey ? Math.round(ang / 15) * 15 : Math.round(ang);
+      ang = ((ang + 180) % 360 + 360) % 360 - 180;
+      const n = app.node(d.id); if (ang) n.attrs.rotate = String(ang); else delete n.attrs.rotate;
+      app.emit('doc'); return;
+    }
     if (d.move) {
       const dx = (e.clientX - d.sx) / app.zoom, dy = (e.clientY - d.sy) / app.zoom;
       if (!d.started) {
@@ -521,6 +536,7 @@ export class Canvas {
       this.drawOverlay(); return;
     }
     if (d.marquee) { if (d.pending) app.select(d.scope); this.drawOverlay(); return; }
+    if (d.rotate) { app.commit(); return; }
     if (d.draw) return this.finishDraw(d, e);
     if (d.resize) {
       if (!d.result) return;
@@ -663,7 +679,8 @@ export class Canvas {
   context(e) {
     const app = this.app;
     const chain = this.chainAt(e.target);
-    if (chain.length) { const pick = this.pickFromChain(chain, e.metaKey || e.ctrlKey); if (!app.selection.includes(pick)) app.select(pick); }
+    // right-click inside the current selection keeps it (Figma): the menu acts on what is selected
+    if (chain.length && !chain.some((id) => app.selection.includes(id))) { const pick = this.pickFromChain(chain, e.metaKey || e.ctrlKey); app.select(pick); }
     this.hooks.onContext && this.hooks.onContext(e.clientX, e.clientY);
   }
 

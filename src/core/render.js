@@ -12,6 +12,7 @@ import { ICONS } from './icons.js';
 import { iconSvg, splitIconName, packLoaded } from './iconpacks.js';
 import { genImage } from './gen.js';
 import { makeStatusBar, makeHomeBar } from './chrome.js';
+import { parseRig } from './rig.js';
 
 export const FRAME_TAGS = new Set(['shape', 'boolean', 'textpath', 'path', 'frame', 'row', 'col', 'grid', 'stack', 'box', 'screen', 'rect', 'ellipse', 'button', 'card', 'section', 'header', 'footer', 'nav', 'list']);
 export const INLINE_TEXT = new Set(['span', 'b', 'i', 'u', 's', 'a', 'code', 'br']);
@@ -592,17 +593,21 @@ export function renderNode(node, scope, parentLayout, ctx, overrides) {
     const stripped = { ...node, attrs: { ...at } }; delete stripped.attrs.repeat; delete stripped.attrs.each; delete stripped.attrs.as;
     const out = [];
     list.forEach((item, i) => {
-      const sc = scope.child({ [as]: item, i, index: i, first: i === 0, last: i === list.length - 1 });
+      const sc = scope.child({ [as]: item, i, index: i, first: i === 0, last: i === list.length - 1, __loop: (scope.lookup('__loop') || '') + '.' + i });
       for (const el of renderNode(stripped, sc, parentLayout, ctx, overrides)) { if (el.dataset.key) el.dataset.key += '#' + (item && item.id != null ? item.id : i); out.push(el); }
     });
     return out;
   }
 
   // slot
+  // named slots (Figma « slot » property): <slot name=footer/> receives the instance children marked slot=footer,
+  // the plain <slot/> receives the others; a slot's own children are its default content when nothing is given.
   if (node.tag === 'slot') {
-    if (!ctx.slot) return [];
+    const want = node.attrs.name ? String(node.attrs.name) : null;
+    const given = ctx.slot ? ctx.slot.children.filter((c) => ((c.attrs && c.attrs.slot) ? String(c.attrs.slot) : null) === want) : [];
+    if (!given.length) return node.children && node.children.length ? renderChildren(node.children, scope, parentLayout, ctx) : [];
     const saved = ctx.owner; ctx.owner = ctx.slot.owner;
-    const els = renderChildren(ctx.slot.children, ctx.slot.scope, parentLayout, { ...ctx, slot: ctx.slot.parent, owner: ctx.slot.owner, depth: ctx.depth });
+    const els = renderChildren(given, ctx.slot.scope, parentLayout, { ...ctx, slot: ctx.slot.parent, owner: ctx.slot.owner, instance: ctx.slot.instance, depth: ctx.depth });
     ctx.owner = saved; return els;
   }
 
@@ -618,18 +623,46 @@ export function renderNode(node, scope, parentLayout, ctx, overrides) {
   if (comp) return [renderInstance(node, comp, scope, parentLayout, ctx, overrides)];
 
   const { a, states, events } = resolveAttrs(node, scope, ctx, overrides);
+  const rigs = takeRigs(a, (t) => rigBinding(t, node.id, a, ctx));
   const el = createElementFor(node, a, scope, parentLayout, ctx);
   if (!el) return [];
   decorate(el, node, a, states, events, scope, parentLayout, ctx);
+  if (rigs.length) attachRigs(el, rigs, ctx);
   return [a.clone && a.clone !== true ? wrapClone(el, a.clone) : el];
+}
+
+// rig:<target>="…" → [{ target, spec, r, bind }] (removed from the attrs so they never reach the CSS)
+function takeRigs(a, bindOf) {
+  const out = [];
+  for (const k of Object.keys(a)) {
+    if (!k.startsWith('rig:')) continue;
+    const spec = a[k]; delete a[k];
+    if (spec === true || spec === false || spec == null || spec === 'false' || spec === 'none') continue;
+    const target = k.slice(4); out.push({ target, spec: String(spec), r: parseRig(spec), bind: bindOf(target) });
+  }
+  return out;
+}
+// what a rig writes: a $variable, a prop of the enclosing instance, or an attribute of the node itself
+function rigBinding(target, nodeId, a, ctx) {
+  if (target.startsWith('$')) { const name = target.slice(1); return { type: 'var', name, value: ctx.vars ? ctx.vars[name] : undefined }; }
+  const inst = ctx.instance;
+  if (inst && target in inst.props) return { type: 'prop', id: inst.id, key: inst.key, top: inst.top, comp: inst.comp, name: target, value: inst.props[target] };
+  return { type: 'attr', id: nodeId, owned: !!ctx.owner, name: target, value: a[target] };
+}
+function attachRigs(el, rigs, ctx) {
+  el._rigs = (el._rigs || []).concat(rigs); el.dataset.rigged = '1';
+  if (ctx.runtime && ctx.runtime.bindRigs) ctx.runtime.bindRigs(el);
 }
 
 function renderInstance(node, comp, scope, parentLayout, ctx, outerOverrides) {
   const props = { ...comp.props };
+  const instKey = node.id + (scope.lookup('__loop') || '');
+  const rigAttrs = {};
   const base = {}, events = {}, states = {}, deferred = [];
   const raw = {}; mergeClasses(node, scope, ctx, raw); Object.assign(raw, node.attrs);
   for (const [k, v] of Object.entries(raw)) {
     if (k === 'class' || k === 'if' || k === 'repeat' || k === 'each' || k === 'as') continue;
+    if (k.startsWith('rig:')) { rigAttrs[k] = v; continue; }
     if (k in comp.props) { if (v === true) props[k] = true; else { const r = resolveDollars(safeInterp(v, scope, ctx), ctx); props[k] = /^\{[\s\S]*\}$/.test(v) ? r : coerce(r); } continue; }
     if (EVENT_KEYS(k)) { events[k.replace(/^@/, 'on:')] = { action: v, scope }; continue; }
     const ci = k.indexOf(':');
@@ -643,11 +676,17 @@ function renderInstance(node, comp, scope, parentLayout, ctx, outerOverrides) {
     base[k] = rv();
   }
   deferred.sort((x, y) => x[2] - y[2]).forEach(([k, v]) => { base[k] = v; });
+  // rigs declared on <component rig:value="…"> apply to every instance (an instance can override or disable one with rig:value=false)
+  for (const [k, v] of Object.entries((comp.node && comp.node.attrs) || {})) if (k.startsWith('rig:') && !(k in rigAttrs)) rigAttrs[k] = v;
   if (outerOverrides) { Object.assign(base, outerOverrides.base); Object.assign(events, outerOverrides.events); }
+  // interactive components: instance-local state set by `change k=v` or a rig in the prototype
+  const local = ctx.runtime && ctx.runtime.inst && ctx.runtime.inst[instKey];
+  if (local) for (const [k, v] of Object.entries(local)) if (k in comp.props) props[k] = v;
+  const instance = { id: node.id, key: instKey, props, top: !ctx.owner, comp: comp.name };
   const kids = (node.children || []).filter((c) => !(c.tag === '#text' && !c.text.trim()));
-  const compScope = scope.child({ ...props, children: kids.length > 0, label: props.label ?? (kids.length && kids.every((k) => k.tag === 'text' && k.implicit) ? textOf(kids[0]) : props.label) });
+  const compScope = scope.child({ __inst: instKey, ...props, children: kids.length > 0, label: props.label ?? (kids.length && kids.every((k) => k.tag === 'text' && k.implicit) ? textOf(kids[0]) : props.label) });
   compScope.parent = null; compScope.root = scope.root; // isolate locals
-  const sub = { ...ctx, depth: ctx.depth + 1, owner: ctx.owner || node.id, slot: { children: kids, scope, owner: ctx.owner, parent: ctx.slot } };
+  const sub = { ...ctx, depth: ctx.depth + 1, owner: ctx.owner || node.id, instance, slot: { children: kids, scope, owner: ctx.owner, instance: ctx.instance, parent: ctx.slot } };
   if (!comp.root) return document.createElement('div');
   const els = renderNode(comp.root, compScope, parentLayout, sub, { base, events, states });
   const el = els[0] || document.createElement('div');
@@ -657,6 +696,9 @@ function renderInstance(node, comp, scope, parentLayout, ctx, outerOverrides) {
   if (!ctx.owner) el.dataset.id = node.id;
   const key = base.key || base.name;
   if (key) el.dataset.key = key;
+  el.dataset.inst = instKey;
+  const own = takeRigs(rigAttrs, (t) => t.startsWith('$') ? rigBinding(t, node.id, {}, ctx) : t in comp.props ? { type: 'prop', id: node.id, key: instKey, top: !ctx.owner, comp: comp.name, name: t, value: props[t] } : { type: 'attr', id: node.id, owned: !!ctx.owner, name: t, value: base[t] });
+  if (own.length) attachRigs(el, own, ctx);
   return el;
 }
 
@@ -811,6 +853,8 @@ function decorate(el, node, a, states, events, scope, parentLayout, ctx) {
   el.dataset.tag = tag;
   const key = tag === 'icon' ? a.key : (a.key || a.name);
   if (key) el.dataset.key = key;
+  if (a['aria-label'] != null && a['aria-label'] !== true) el.setAttribute('aria-label', String(a['aria-label']));
+  if (a.role) el.setAttribute('role', String(a.role));
   if (Object.keys(states).length) {
     const cls = 'mqs' + (++UID).toString(36);
     el.classList.add(cls);

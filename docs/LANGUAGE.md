@@ -237,6 +237,23 @@ Les tokens acceptent des **modes nommés** (`sh-primary: light: #171717 | dark: 
 
 - Les props déclarées vont dans le scope du composant ; les autres attributs de l'instance (`w`, `grow`, `x`, `on:click`, `anim`, `name`…) s'appliquent à sa racine.
 - `<slot/>` insère les enfants de l'instance. Un texte seul comme enfant devient `label`.
+- **Slots nommés** (les « slots » de Figma) : `<slot name=footer/>` reçoit les enfants de l'instance marqués `slot=footer` ; `<slot/>` reçoit les autres. Les enfants d'un slot sont son contenu par défaut, affiché quand l'instance ne fournit rien :
+
+```xml
+<component name=Panel props="title='Titre'">
+  <col p=24 gap=16>
+    <slot name=header><text weight=600>{title}</text></slot>
+    <slot><text color=$muted>Contenu vide</text></slot>
+    <slot name=footer/>
+  </col>
+</component>
+
+<Panel>
+  <row slot=header justify=between><text weight=600>Abonnement</text><Tag label=Actif/></row>
+  <text>Corps</text>
+  <Button slot=footer label=Gérer/>
+</Panel>
+```
 - Variantes = expressions sur les props (`fill={kind == 'ghost' ? …}`) ou `class="btn btn-{kind}"`.
 - Kit intégré (`mq kit`) :
   - Actions : `Button` (kind `primary secondary tonal outline ghost link danger`, size `sm md lg`, `state=hover|pressed|focus|disabled|loading`), `IconButton`, `FAB`.
@@ -245,6 +262,28 @@ Les tokens acceptent des **modes nommés** (`sh-primary: light: #171717 | dark: 
   - Feedback : `Alert` (tone `info success warning error`), `Toast`, `Snackbar`, `Tooltip`, `Progress`, `Skeleton`, `EmptyState`.
   - Menus et dialogues : `Menu` + `MenuItem` (icône, `shortcut`, `submenu`, `danger`, `selected`, `disabled`), `Dialog`, `ConfirmDialog`, `Sheet`, `Grabber`, `Accordion`.
   - Contenu : `Card`, `ListItem`, `Avatar`, `AvatarGroup`, `Badge`, `Chip`, `Stat`, `Rating`, `Testimonial`, `SocialProof`, `OrDivider`.
+
+**Composants interactifs** (état propre à chaque instance) : dans un composant, `change on={!on}` ou `inc count` / `dec count` modifient la **prop de l'instance**, pas une variable globale. Chaque instance garde son état et le re-rendu passe par smart animate : `<row on:click="change on={!on} smart 320 gentle">`. Dans Figma, les props ne sont pas modifiables par une interaction ; ici elles le sont.
+
+**Rigs** (contrôle à la souris) : `rig:<cible>="<mode> min..max [step=] [from= to=] [in=calque] [group=] [label=]"` transforme un geste en valeur.
+- Modes : `x` et `y` (glisser), `angle` (tourner autour du centre ; `from`/`to` en degrés, 0 = haut, sens horaire), `radius` (distance au centre). Un intervalle inversé (`y 100..0`) inverse le sens.
+- Cible : une prop du composant (`rig:value=…` sur `<component>`, valable pour toutes les instances), une variable (`rig:$volume=…`) ou n'importe quel attribut d'un nœud (`<shape kind=star rig:points="x 3..12 step=1"/>`).
+- `in=track` : la zone de geste est le calque nommé `track` du composant. Deux rigs du même `group=` forment un pad 2D.
+- En prototype, on glisse directement sur l'élément ; dans l'éditeur, une poignée verte écrit la valeur dans le code. Une instance peut désactiver un rig hérité avec `rig:value=false`.
+
+```xml
+<component name=Knob props="value=0.5 size=120" rig:value="angle 0..1 from=-135 to=135 in=face">
+  <stack name=face w={size} h={size} center> … rotate={-135 + value * 270} … </stack>
+</component>
+```
+
+**Component Studio** (bouton ◇ de la barre du haut, Ctrl+Maj+K, ou clic droit › « Ouvrir dans le Studio ») : l'atelier de composants.
+- Playground vivant : largeur et zoom réglables, rigs et interactions actifs, valeurs courantes affichées et « Garder ces valeurs ».
+- Contrôles automatiques comme dans Storybook : interrupteur, puces d'enum, liste d'échange, curseur, champ texte.
+- Matrice des variantes, à la manière des component sets de Figma : deux axes au choix parmi les enums, les booléens et les props d'échange ; un clic sur une cellule l'essaie.
+- Édition des propriétés : Texte, Nombre, Booléen, Variante, Échange d'instance, Slot. Renommer une prop réécrit les expressions, les interactions, les rigs et les instances.
+- Rigs, presets d'interaction (bascule, compteur, survol), utilisations, « Insérer » une instance, « Copier dans le projet » pour un composant du kit.
+- Le panneau de droite de l'éditeur propose aussi une section **Rig** sur tout calque : props, position, taille, rotation, paramètres de forme, variables.
 
 **Instance swap** : `<instance of={done ? 'Badge' : 'Chip'} label="…"/>` affiche le composant nommé avec les mêmes props. Une prop déclarée `icon: swap(IconButton|FAB)` dans `desc` (ou dont la valeur par défaut est le nom d'un composant) propose une liste de remplacement, avec ses valeurs préférées en tête. Clic droit sur une instance › « Remplacer l'instance… ».
 
@@ -285,7 +324,8 @@ Fonctions : `len min max round floor ceil abs clamp fixed money(n,'€') percent
 | `overlay Nom [center|bottom|top|left|right] [dim=.5] [blur=6] [noclose]` | ouvre un écran **ou un composant** en overlay |
 | `close` · `swap Nom` | fermer / remplacer l'overlay |
 | `set $v = expr [smart ms]` · `toggle $v` · `inc $v [n]` · `dec $v` | variables (re-rendu animé en smart par défaut) |
-| `if expr then action [else action]` | conditionnelle |
+| `change k=v [smart ms easing]` · `inc k` · `dec k` (sans `$`) | dans un composant : modifie la prop de cette instance |
+| `if expr then action [else action]` · `if {expr} action` | conditionnelle |
 | `scroll clé` · `scroll top` | défilement doux vers un élément nommé |
 | `play clé preset` | jouer une animation (ex. `shake` sur erreur) |
 | `mode dark` · `mode next` | changer de mode de tokens en direct |

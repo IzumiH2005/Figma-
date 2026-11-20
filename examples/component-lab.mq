@@ -1,0 +1,311 @@
+<project name="Component Lab — composants interactifs et riggés" typescale=ui fonts="Inter:400;500;600;700|JetBrains Mono:500" modes="dark light">
+  <!-- Banc d'essai du Component Studio. Chaque composant montre une capacité :
+       rigs (rig:prop="angle|x|y|radius min..max"), état local d'instance (change k=v), variantes (enum/booléen),
+       slots nommés, instance swap, component sets. Ouvre l'onglet « Studio » de l'éditeur sur un composant pour voir sa matrice. -->
+  <tokens>
+    brand: ramp(#6D5DFC)
+    gray: neutrals(#6D5DFC, 0.014)
+    primary: $brand-500 | $brand-600
+    on-primary: #FFFFFF
+    accent-text: $brand-300 | $brand-700
+    primary-soft: alpha($brand-400, 18)
+    bg: $gray-950 | $gray-50
+    surface: $gray-900 | #FFFFFF
+    surface-2: $gray-800 | $gray-100
+    text: $gray-50 | $gray-950
+    muted: $gray-400 | $gray-600
+    subtle: $gray-300 | $gray-700
+    border: alpha(#FFFFFF, 10) | $gray-200
+    success: #2BD9A0 | #0E8F68
+    warning: #FFB547 | #B26A00
+    danger: #FF5C7A | #D21F45
+    mono: "JetBrains Mono"
+  </tokens>
+
+  <vars>
+    volume: 64
+    hue: 250
+  </vars>
+
+  <styles>
+    .card { col gap=16 p=24 radius=20 fill=$surface stroke="1 $border" }
+    .eyebrow { size=12 weight=600 upper ls=1 color=$accent-text }
+    .readout { font=$mono size=12 color=$muted }
+  </styles>
+
+  <!-- 1 · Rig angle : on tourne le bouton à la souris, la valeur suit (0..1) -->
+  <component name=Knob props="value=0.5 label='Gain' size=120" desc="Bouton rotatif. Glisser en cercle. value: 0..1" rig:value="angle 0..1 from=-135 to=135 in=face">
+    <col gap=12 align=center>
+      <stack name=face w={size} h={size} center>
+        <shape kind=ellipse absolute x=0 y=0 w={size} h={size} start=135 sweep=270 ratio=0.84 fill=$surface-2/>
+        <shape kind=ellipse name=knob-arc absolute x=0 y=0 w={size} h={size} start=135 sweep={max(1, value * 270)} ratio=0.84 fill=$primary/>
+        <stack name=knob-cap w={size * 0.72} h={size * 0.72} radius=full fill=$surface-2 stroke="1 $border" rotate={-135 + value * 270}>
+          <frame absolute x={size * 0.36 - 2} y=8 w=4 h={size * 0.14} radius=full fill=$text/>
+        </stack>
+      </stack>
+      <text size=14 weight=600>{label}</text>
+      <text class=readout>{round(value * 100)} %</text>
+    </col>
+  </component>
+
+  <!-- 2 · Rig x sur un sous-élément (in=track), avec pas de 1 -->
+  <component name=Fader props="value=40 label='Opacité' unit='%'" desc="Curseur horizontal riggé. value: 0..100" rig:value="x 0..100 step=1 in=track">
+    <col w=fill gap=12>
+      <row w=fill justify=between>
+        <text size=14 weight=600>{label}</text>
+        <text class=readout>{value}{unit}</text>
+      </row>
+      <stack name=track w=fill h=24 align=center>
+        <frame w=fill h=6 radius=full fill=$surface-2/>
+        <frame name=fader-fill w={value + '%'} h=6 radius=full fill=$primary/>
+        <ellipse name=fader-thumb absolute x={'calc(' + value + '% - 12px)'} y=0 size=24 fill=$on-primary shadow="0 2 8 rgba(0,0,0,.35)"/>
+      </stack>
+    </col>
+  </component>
+
+  <!-- 3 · Composant interactif : état local à chaque instance, transition smart animate -->
+  <component name=Switch props="on=false label='Wi-Fi'" desc="Interrupteur interactif (état propre à chaque instance). on: booléen">
+    <row w=fill justify=between align=center cursor=pointer on:click="change on={!on} smart 320 gentle" aria-label={label}>
+      <text size=14 weight=500>{label}</text>
+      <stack name=switch-track w=52 h=32 radius=full p=4 fill={on ? $success : $surface-2} justify={on ? 'end' : 'start'} align=center>
+        <ellipse name=switch-knob size=26 fill=$on-primary shadow="0 2 6 rgba(0,0,0,.25)"/>
+      </stack>
+    </row>
+  </component>
+
+  <!-- 4 · Rig 2D : deux rigs du même groupe forment un pad XY -->
+  <component name=XYPad props="x=0.5 y=0.5 size=176" desc="Pad 2D (deux rigs, group=pad)" rig:x="x 0..1 group=pad in=pad" rig:y="y 1..0 group=pad in=pad">
+    <col gap=12>
+      <stack name=pad w={size} h={size} radius=16 fill=$surface-2 stroke="1 $border" clip>
+        <frame absolute x={x * size} y=0 w=1 h={size} fill=$border/>
+        <frame absolute x=0 y={(1 - y) * size} w={size} h=1 fill=$border/>
+        <ellipse name=pad-dot absolute x={x * size - 10} y={(1 - y) * size - 10} size=20 fill=$primary stroke="3 $on-primary"/>
+      </stack>
+      <text class=readout>x {x} · y {y}</text>
+    </col>
+  </component>
+
+  <!-- 5 · Compteur : inc/dec agissent sur la prop de l'instance -->
+  <component name=Stepper props="count=1 min=0 max=9" desc="Compteur interactif (inc/dec sur la prop locale)">
+    <row w=hug gap=8 align=center p=4 radius=full fill=$surface-2>
+      <stack w=40 h=40 radius=full center fill=$surface cursor=pointer on:click="if {count > min} dec count" aria-label="Moins"><icon name=minus size=16 color=$text/></stack>
+      <text name=stepper-count w=32 align=center size=18 weight=600 font=$mono>{count}</text>
+      <stack w=40 h=40 radius=full center fill=$surface cursor=pointer on:click="if {count < max} inc count" aria-label="Plus"><icon name=plus size=16 color=$text/></stack>
+    </row>
+  </component>
+
+  <!-- 6 · Variantes : deux props enum + un booléen → matrice dans le Studio -->
+  <component name=Tag props="tone=info size=md dot=true label='Étiquette'" desc="Étiquette. tone: info|success|warning|danger ; size: sm|md">
+    <row gap={size == 'sm' ? 4 : 8} align=center px={size == 'sm' ? 8 : 12} h={size == 'sm' ? 24 : 32} radius=full
+         fill={alpha(tone == 'success' ? $success : tone == 'warning' ? $warning : tone == 'danger' ? $danger : $primary, 16)}>
+      <ellipse if={dot} size=8 fill={tone == 'success' ? $success : tone == 'warning' ? $warning : tone == 'danger' ? $danger : $primary}/>
+      <text size={size == 'sm' ? 12 : 14} weight=600 color=$text>{label}</text>
+    </row>
+  </component>
+
+  <!-- 7 · Rig sur une variable : le fader pilote $volume, affiché ailleurs dans l'écran -->
+  <component name=VolumeBar props="h=160" desc="Fader vertical lié à la variable $volume" rig:$volume="y 100..0 step=1 in=vtrack">
+    <col gap=8 align=center>
+      <col name=vtrack w=40 h={h} radius=12 fill=$surface-2 clip justify=end>
+        <frame name=volume-fill w=fill h={$volume + '%'} fill=$primary/>
+      </col>
+      <text class=readout>{$volume}</text>
+    </col>
+  </component>
+
+  <!-- 8 · Slots nommés (Figma « slots ») : header et footer ont un contenu par défaut, remplaçable par l'instance -->
+  <component name=Panel props="title='Titre' tone=default" desc="Carte à slots nommés (header, footer, contenu). tone: default|accent">
+    <col w=fill gap=16 p=24 radius=20 fill=$surface stroke={tone == 'accent' ? '1.5 ' + $primary : '1 ' + $border}>
+      <slot name=header><text size=18 weight=600>{title}</text></slot>
+      <slot><text color=$muted size=14>Contenu vide</text></slot>
+      <slot name=footer><text size=12 color=$muted>Aucune action</text></slot>
+    </col>
+  </component>
+
+  <!-- 9 · Instance swap : la prop lead choisit le composant affiché en tête de ligne -->
+  <component name=LeadIcon props="icon=bell" desc="Tête de ligne : icône">
+    <stack w=40 h=40 radius=12 center fill=$primary-soft><icon name={icon} size=20 color=$accent-text/></stack>
+  </component>
+  <component name=LeadAvatar props="who='Ada Lovelace'" desc="Tête de ligne : avatar">
+    <image src={'avatar:' + who} w=40 h=40 radius=full/>
+  </component>
+  <component name=LeadCheck props="on=true" desc="Tête de ligne : case interactive (état d'instance)">
+    <stack w=40 h=40 center cursor=pointer on:click="change on={!on} smart 200 snappy" aria-label="Cocher">
+      <stack w=24 h=24 radius=8 center fill={on ? $primary : 'transparent'} stroke={on ? 'none' : '2 ' + $muted}>
+        <icon if={on} name=check size=16 color=$on-primary/>
+      </stack>
+    </stack>
+  </component>
+  <component name=ListRow props="title='Notifications' sub='3 nouvelles' lead=LeadIcon chevron=true" desc="Ligne de liste. lead: swap(LeadIcon|LeadAvatar|LeadCheck) ; chevron: booléen">
+    <row w=fill gap=12 align=center py=8>
+      <instance of={lead}/>
+      <col grow gap=2>
+        <text size=14 weight=600>{title}</text>
+        <text size=12 color=$muted>{sub}</text>
+      </col>
+      <icon if={chevron} name=chevron-right size=16 color=$muted/>
+    </row>
+  </component>
+
+  <!-- 10 · Component set : kind × size + état disabled, survol et pression natifs -->
+  <component name=Action props="label='Continuer' kind=primary size=md disabled=false" desc="Bouton de test. kind: primary|secondary|ghost ; size: sm|md ; disabled: booléen">
+    <row h={size == 'sm' ? 32 : 40} px={size == 'sm' ? 12 : 16} gap=8 radius=12 align=center cursor=pointer
+         fill={kind == 'primary' ? $primary : kind == 'secondary' ? $surface-2 : 'transparent'}
+         hover:fill={kind == 'primary' ? shade($primary, 10) : alpha($text, 8)} press:scale=0.97
+         opacity={disabled ? 0.45 : 1} events={disabled ? 'none' : 'auto'}>
+      <text size={size == 'sm' ? 12 : 14} weight=600 color={kind == 'primary' ? $on-primary : $text} nowrap>{label}</text>
+    </row>
+  </component>
+
+  <!-- 11 · Rig x pas à pas : glisser sur les étoiles règle la note -->
+  <component name=StarRating props="value=3" desc="Note riggée (0..5, pas de 1)" rig:value="x 0..5 step=1 in=stars">
+    <row gap=12 align=center>
+      <row name=stars gap=4>
+        <shape each={range(5)} kind=star points=5 inner=0.46 round=0.2 w=24 h=24 fill={i < value ? $warning : $surface-2}/>
+      </row>
+      <text class=readout>{value}/5</text>
+    </row>
+  </component>
+
+  <!-- 12 · Rig angle sur 360° piloté par une variable : la teinte est partagée -->
+  <component name=HueDial props="size=120" desc="Cadran de teinte lié à $hue (angle 0..360)" rig:$hue="angle 0..360 from=0 to=360 in=wheel">
+    <col gap=12 align=center>
+      <stack name=wheel w={size} h={size} center>
+        <shape kind=ellipse absolute x=0 y=0 w={size} h={size} ratio=0.7 fill="conic(#FF4D4D, #FFD84D, #5CFF6B, #4DE1FF, #5B6CFF, #E04DFF, #FF4D4D)"/>
+        <ellipse w={size * 0.5} h={size * 0.5} fill={'hsl(' + $hue + ' 80% 60%)'} stroke="2 $surface"/>
+        <stack absolute x=0 y=0 w={size} h={size} rotate={$hue}>
+          <ellipse name=hue-thumb absolute x={size / 2 - 9} y={size * 0.075 - 9} size=18 fill=$on-primary stroke="2 rgba(0,0,0,.35)"/>
+        </stack>
+      </stack>
+      <text class=readout>teinte {$hue}°</text>
+    </col>
+  </component>
+
+  <!-- 13 · Segmented : état local + smart animate de la pastille nommée -->
+  <component name=Segment props="value=0" desc="Contrôle segmenté (état d'instance, smart animate)">
+    <stack w=264 h=40 radius=12 p=4 fill=$surface-2>
+      <frame name=seg-pill absolute x={4 + value * 85.33} y=4 w=85.33 h=32 radius=8 fill=$surface shadow="0 1 3 rgba(0,0,0,.25)"/>
+      <row w=fill h=32>
+        <stack each={['Jour', 'Semaine', 'Mois']} as=lbl grow h=32 center cursor=pointer on:click="change value={i} smart 280 snappy">
+          <text size=14 weight={i == value ? 600 : 500} color={i == value ? $text : $subtle}>{lbl}</text>
+        </stack>
+      </row>
+    </stack>
+  </component>
+
+  <screen name=Lab device=desktop w=1280 h=auto fill=$bg start>
+    <col w=fill maxw=1180 mx=auto px=48 py=48 gap=32>
+      <col gap=8>
+        <text class=eyebrow>Component Studio</text>
+        <text class=t-h1 weight=700>Component Lab</text>
+        <text color=$muted lh=1.5 maxw=640>Chaque carte teste une capacité : rigs pilotés à la souris, état local d'instance, variantes. En prototype, tout est manipulable ; dans l'éditeur, les poignées vertes écrivent dans le code.</text>
+      </col>
+      <grid cols=3 gap=24 w=fill>
+        <col class=card align=center>
+          <text class=eyebrow>Rig angle</text>
+          <row gap=24 align=start><Knob name=knob-gain value=0.62 label=Gain/><Knob name=knob-mix value=0.3 label=Mix size=96/></row>
+        </col>
+        <col class=card>
+          <text class=eyebrow>Rig x · in=track</text>
+          <Fader name=fader-opacity value=72/>
+          <Fader name=fader-blur value=18 label=Flou unit=px/>
+        </col>
+        <col class=card>
+          <text class=eyebrow>État d'instance · change</text>
+          <Switch label=Wi-Fi on=true/>
+          <Switch label=Bluetooth/>
+          <Switch label="Mode avion"/>
+        </col>
+        <col class=card align=center>
+          <text class=eyebrow>Rig 2D · group</text>
+          <XYPad x=0.7 y=0.35/>
+        </col>
+        <col class=card>
+          <text class=eyebrow>inc / dec locaux</text>
+          <Stepper count=2/>
+          <Stepper count=7 max=12/>
+        </col>
+        <col class=card>
+          <text class=eyebrow>Variable · $volume</text>
+          <row gap=24 align=center>
+            <VolumeBar/>
+            <col gap=4>
+              <text class=t-h2 weight=700 font=$mono>{$volume}</text>
+              <text color=$muted size=14>volume partagé</text>
+            </col>
+          </row>
+        </col>
+      </grid>
+      <col class=card>
+        <text class=eyebrow>Variantes · tone × size</text>
+        <row gap=12 wrap>
+          <Tag tone=info label=Info/>
+          <Tag tone=success label=Payé/>
+          <Tag tone=warning label="En attente"/>
+          <Tag tone=danger label=Refusé/>
+          <Tag tone=info size=sm label=Brouillon dot=false/>
+          <Tag tone=success size=sm label=Actif/>
+        </row>
+      </col>
+      <grid cols=3 gap=24 w=fill>
+        <Panel title="Slots par défaut"/>
+        <Panel title="Slots remplis" tone=accent>
+          <row slot=header justify=between w=fill align=center>
+            <text size=18 weight=600>Abonnement</text>
+            <Tag tone=success size=sm label=Actif/>
+          </row>
+          <text color=$muted size=14 lh=1.5>Le header et le footer de l'instance remplacent le contenu par défaut du composant.</text>
+          <row slot=footer gap=8><Action label=Gérer/><Action label=Plus kind=ghost/></row>
+        </Panel>
+        <col class=card>
+          <text class=eyebrow>Instance swap · lead</text>
+          <col w=fill>
+            <ListRow/>
+            <ListRow title="Ada Lovelace" sub="Vous a mentionné" lead=LeadAvatar/>
+            <ListRow title="Relire la maquette" sub="Aujourd'hui" lead=LeadCheck chevron=false/>
+          </col>
+        </col>
+        <col class=card>
+          <text class=eyebrow>Component set · kind × size</text>
+          <row gap=8 wrap align=center>
+            <Action/>
+            <Action kind=secondary label=Annuler/>
+            <Action kind=ghost label=Passer/>
+            <Action size=sm label=Petit/>
+            <Action disabled=true label=Indisponible/>
+          </row>
+          <Segment value=1/>
+        </col>
+        <col class=card>
+          <text class=eyebrow>Rig x · step=1</text>
+          <StarRating/>
+          <StarRating value=5/>
+        </col>
+        <col class=card align=center>
+          <text class=eyebrow>Rig angle 360° · $hue</text>
+          <HueDial/>
+        </col>
+      </grid>
+      <col class=card>
+        <text class=eyebrow>Rig de forme · rig:points</text>
+        <row gap=24 align=center>
+          <shape name=star-rig kind=star w=96 h=96 points=6 inner=0.5 fill=$primary rig:points="x 3..12 step=1"/>
+          <text color=$muted size=14 maxw=480 lh=1.5>Un rig peut piloter n'importe quel attribut d'un nœud : ici le nombre de branches de l'étoile (glisser la poignée verte).</text>
+        </row>
+      </col>
+    </col>
+  </screen>
+
+  <flow name=demo>
+    start Lab
+    wait 600
+    click "Bluetooth"
+    wait 700
+    click "Mode avion"
+    wait 700
+    click "Mois"
+    wait 600
+    click "Jour"
+    wait 900
+  </flow>
+</project>

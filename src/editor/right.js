@@ -1,4 +1,5 @@
 // Right panel: Design / Prototype / Motion / Code / Lint inspectors
+import { rigEditor, namedIn } from './studio.js';
 import { MQ, h, icon, clear, toast, ask } from './dom.js';
 import { isContainer } from './state.js';
 import { highlight } from './code.js';
@@ -84,7 +85,16 @@ export class RightPanel {
         if (opts) return h('div.prow', null, h('label', null, k), select(opts[1].split('|').map((o) => [o, o]), cur ?? def, (v) => set(k, v === def ? null : v)));
         return h('div.prow', null, h('label', null, k), input('p-' + k, cur !== undefined && cur !== true ? cur : '', (v) => set(k, v === '' ? null : v), { placeholder: typeof def === 'object' ? JSON.stringify(def) : String(def) }));
       });
-      b.appendChild(sec('Propriétés du composant', ...rows, comp.desc ? h('div.hint', null, comp.desc) : null, h('button.btn.ghost', { onclick: () => this.hooks.onEditComponent(n.tag) }, icon('pencil', 13), 'Éditer le composant')));
+      b.appendChild(sec('Propriétés du composant', ...rows, comp.desc ? h('div.hint', null, comp.desc) : null, h('div.chips', null, h('button.btn.ghost', { onclick: () => this.hooks.openStudio(n.tag) }, icon('component', 13), 'Studio'), comp.fromKit ? null : h('button.btn.ghost', { onclick: () => this.hooks.onEditComponent(n.tag) }, icon('pencil', 13), 'Code'))));
+    }
+
+    // Rig: any attribute (or prop, or $variable) can be driven by a mouse gesture: green handles in the editor, live in prototype
+    if (!multi && n.tag !== 'screen' && n.tag !== '#text') {
+      const isDef = n.tag === 'component'; const def = isDef ? app.project.components[a.name] : null;
+      const base = isDef && def ? Object.keys(def.props) : ['x', 'y', 'w', 'h', 'rotate', 'opacity', 'radius', 'gap', 'size', ...(n.tag === 'shape' ? ['points', 'inner', 'sides', 'ratio', 'start', 'sweep', 'round', 'seed', 'turns', 'amp'] : []), ...(n.tag === 'text' ? ['weight', 'ls'] : [])];
+      const targets = [...base.map((k) => [k, k]), ...Object.keys(app.project.vars).map((k) => ['$' + k, '$' + k])];
+      const has = Object.keys(a).some((k) => k.startsWith('rig:'));
+      b.appendChild(sec(has ? 'Rig' : 'Rig (contrôle à la souris)', ...rigEditor(app, n, targets, isDef ? namedIn(n) : namedIn(n), has ? null : 'Relie un attribut à une poignée : glisser dans l\'éditeur écrit le code, en prototype l\'élément devient manipulable.')));
     }
 
     if (n.tag === 'screen' && !multi) {
@@ -547,7 +557,7 @@ const q = (s) => (/\s/.test(s) ? JSON.stringify(s) : s);
 
 export function sec(title, ...kids) { return h('div.sec', null, h('div.sectitle', null, title), h('div.secbody', null, kids)); }
 
-function input(f, value, onCommit, opts = {}) {
+export function input(f, value, onCommit, opts = {}) {
   const el = h('input.inp' + (opts.mono ? '.mono' : ''), { value: value ?? '', placeholder: opts.placeholder || '', dataset: { f } });
   const commit = () => { if (el.value !== String(value ?? '')) onCommit(el.value.trim()); };
   el.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter') { commit(); el.blur(); } if (e.key === 'Escape') { el.value = value ?? ''; el.blur(); } });
@@ -555,7 +565,7 @@ function input(f, value, onCommit, opts = {}) {
   return el;
 }
 
-function num(label, value, onCommit, unit) {
+export function num(label, value, onCommit, unit) {
   const el = h('input.numinp', { value: value ?? '', dataset: { f: 'n-' + label } });
   const lab = h('span.nlabel', { title: 'Glisser pour ajuster' }, label);
   const wrap = h('label.num', null, lab, el, unit ? h('span.unit', null, unit) : null);
@@ -591,14 +601,14 @@ function padField(a, set) {
   return h('label.num', null, h('span.nlabel', null, 'Pad'), h('input.numinp', { value: v, dataset: { f: 'pad' }, title: '16 · "12 20" · "safe 20 20"', onkeydown: (e) => { e.stopPropagation(); if (e.key === 'Enter') e.target.blur(); }, onchange: (e) => { const x = e.target.value.trim(); set('p', x || null); } }));
 }
 
-function select(opts, value, onChange) {
+export function select(opts, value, onChange) {
   const s = h('select.sel', { onchange: (e) => onChange(e.target.value), onkeydown: (e) => e.stopPropagation() }, opts.map(([v, l]) => h('option', { value: v }, l)));
   s.value = value ?? '';
   if (s.value !== String(value ?? '') && value) { s.appendChild(h('option', { value }, value)); s.value = value; }
   return s;
 }
 
-function toggle(on, onChange) { return h('button.tgl' + (on ? '.on' : ''), { onclick: () => onChange(!on) }, h('i')); }
+export function toggle(on, onChange) { return h('button.tgl' + (on ? '.on' : ''), { onclick: () => onChange(!on) }, h('i')); }
 
 function seg(items, value, onChange) {
   return h('div.seg', null, items.map(([v, ic, title]) => h('button' + (v === value ? '.on' : ''), { title, onclick: () => onChange(v) }, icon(ic, 14))));

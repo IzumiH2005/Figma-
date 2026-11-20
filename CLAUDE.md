@@ -24,6 +24,10 @@ Playwright et Chromium sont préinstallés dans l'environnement ; ffmpeg sert po
    - `drag anchor 3 to local 96 22`, `drag handle 2.out by -5 0`, `drag rig 0 by 10 0` déplacent les points, les poignées et les rigs.
    - `pen 10,20 60,0>80,0 …` trace à la plume, `pencil x,y x,y … ms=1200` à main levée.
    - `shot f.png calque` fait une capture.
+   - `rigs` liste les rigs (éditeur ou prototype) ; `rig value 0.8` glisse la poignée jusqu'à la valeur.
+   - `present [Écran]` lance le prototype, puis `click proto "Bluetooth"` ; `rclick`/`menu "…"`, `resize`, `rotate`, `expect nom attr = v`.
+   - `studio [Composant]` ouvre le Component Studio : `click ui "Ajouter une propriété"; menu "Booléen"; type "on"; key Enter`, `rig …` sur son playground.
+   - `--serve` garde le navigateur ouvert entre deux appels (`mq drive send "…"`).
    Méthode : se fixer des repères (centre, rayon, tangentes), glisser chaque point et chaque poignée vers sa cible, puis regarder la capture et faire une passe de plus. Ne pas taper des `d=` à la main pour une forme organique.
 6. **Livrer** : `node cli/mq.js build f.mq -o out/maquette.html`, puis publie ce fichier en artifact ; envoie PNG et MP4 avec SendUserFile.
 
@@ -34,6 +38,7 @@ Playwright et Chromium sont préinstallés dans l'environnement ; ffmpeg sert po
 - Motion : décide séparément le timing (durée) et le spacing (courbe) ; jamais de `linear` pour un déplacement ; `anticipate`/`snap` avant une action importante, `hard` (rebond) ou `soft` (amorti) pour l'arrivée, `arc` pour les trajets longs, cascades décalées (`stagger … drag=1.1`), une seule boucle visible, l'écran posé en moins de 1,2 s.
 - Pour lire un texte sur une couleur arbitraire : `color={onColor($fond)}`. Pour les variations : `shade($primary, 10)` au survol, `alpha($primary, 12)` pour un fond doux.
 
+- Composants : props en `{expr}`, variantes en enum (`desc="kind: a|b"`), échange d'instance (`lead: swap(A|B)` + `<instance of={lead}/>`), slots nommés (`<slot name=footer>défaut</slot>` + `slot=footer`), état d'instance (`change on={!on}`), rigs (`rig:value="angle 0..1 in=face"`). Mets-les au point dans le Component Studio (`drive … -e "studio Nom"`). Modèle : `examples/component-lab.mq`.
 - Nomme (`name=`) les éléments qui doivent se transformer entre deux écrans ou deux états : c'est la clé du smart animate.
 - Un écran mobile : `device=iphone-16 statusbar homebar pt=safe` ; un `NavBar` du kit gère déjà `pt=safe`.
 - Barres fixes : `fixed place=bottom w=fill` (la TabBar du kit gère `pb=safe`) ; ajoute `pb` au contenu pour qu'il ne passe pas dessous.

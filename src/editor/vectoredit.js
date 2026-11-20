@@ -107,7 +107,7 @@ export class VectorEditor {
   draw(overlay, svg) {
     if (this.pen || this.pencil) this.drawCreation(svg);
     const app = this.app;
-    if (!this.id && app.selection.length === 1 && app.tool === 'move') this.drawRig(overlay);
+    if (!this.id && app.selection.length === 1 && app.tool === 'move') this.drawRig(overlay, svg);
     if (!this.id) return;
     const F = this.frame(); if (!F) { this.exit(); return; }
     const d = P().serializePath(P().transformPath(this.subs, (p) => this.toScreen(p, F)));
@@ -128,17 +128,58 @@ export class VectorEditor {
     overlay.appendChild(h('div.ov.ve-help', { style: { left: F.r.x + 'px', top: F.r.y + F.r.h + 12 + 'px' } }, 'Points : glisser · Alt casse les poignées · clic sur le tracé ajoute un point · double-clic angle/courbe · Entrée pour terminer'));
   }
 
-  drawRig(overlay) {
+  drawRig(overlay, svg) {
     const id = this.app.selection[0]; const n = this.app.node(id); if (!n) return;
+    const el = this.canvas.elOf(id); if (!el) return;
+    this.drawCustomRigs(overlay, svg, id, el);
     const kind = n.tag === 'shape' ? n.attrs.kind || 'rect' : n.tag === 'rect' ? 'rect' : n.tag === 'ellipse' ? 'ellipse' : null;
     if (!kind || !RIGS[kind]) return;
-    const el = this.canvas.elOf(id); if (!el) return;
     const r = this.canvas.local(el.getBoundingClientRect());
     const vw = +el.dataset.vw || el.offsetWidth, vh = +el.dataset.vh || el.offsetHeight;
     const params = n.tag === 'shape' ? n.attrs : { radius: n.attrs.radius, start: n.attrs.start, sweep: n.attrs.sweep, ratio: n.attrs.ratio };
     RIGS[kind](vw, vh, params).forEach((hd, i) => {
-      overlay.appendChild(h('div.ov.ve-rig', { title: `${hd.param} (glisser)`, style: { left: r.x + hd.x * (r.w / vw) + 'px', top: r.y + hd.y * (r.h / vh) + 'px' }, dataset: { rig: `${id}|${kind}|${i}` } }));
+      overlay.appendChild(h('div.ov.ve-rig', { title: `${hd.param} (glisser)`, style: { left: r.x + hd.x * (r.w / vw) + 'px', top: r.y + hd.y * (r.h / vh) + 'px' }, dataset: { rig: `${id}|${kind}|${i}`, rigName: hd.param } }));
     });
+  }
+
+  // custom rigs (rig:<target>="…") carried by the selected element or any element inside it
+  customRigs(id, el) {
+    const R = MQ.Rig; const out = [];
+    const els = [el, ...el.querySelectorAll('[data-rigged]')].filter((x) => x._rigs);
+    for (const x of els) {
+      const mine = x._rigs.filter((g) => (g.bind.type === 'attr' && g.bind.id === id && !g.bind.owned) || (g.bind.type === 'prop' && g.bind.id === id && g.bind.top) || g.bind.type === 'var');
+      for (const grp of R.groupRigs(mine)) out.push({ el: x, grp });
+    }
+    return out;
+  }
+  drawCustomRigs(overlay, svg, id, el) {
+    const R = MQ.Rig; const list = this.customRigs(id, el); this._custom = list;
+    list.forEach(({ el: x, grp }, gi) => {
+      const box = this.canvas.local(R.rigBox(x, grp.rigs[0].r));
+      const vals = Object.fromEntries(grp.rigs.map((g) => [g.target, this.rigValue(g)]));
+      const p = R.groupPos(grp, vals, box);
+      // track: a line for x/y, an arc for angle, a 2D frame for groups
+      const r0 = grp.rigs[0].r; let d = '';
+      if (grp.rigs.length > 1) d = `M${box.x} ${box.y}h${box.w}v${box.h}h${-box.w}Z`;
+      else if (r0.mode === 'x' || r0.mode === 'y') { const a = R.handlePos(r0, r0.min, box), b = R.handlePos(r0, r0.max, box); d = `M${a.x} ${a.y}L${b.x} ${b.y}`; }
+      else if (r0.mode === 'angle') { const pts = []; for (let k = 0; k <= 32; k++) { const q = R.handlePos(r0, r0.min + (k / 32) * (r0.max - r0.min), box); pts.push(`${q.x} ${q.y}`); } d = 'M' + pts.join('L'); }
+      else { const c = { x: box.x + box.w / 2, y: box.y + box.h / 2 }; d = `M${c.x} ${c.y}L${p.x} ${p.y}`; }
+      if (svg && d) { const t = document.createElementNS(NS, 'path'); t.setAttribute('d', d); t.setAttribute('class', 've-rig-track'); svg.appendChild(t); }
+      const label = grp.rigs.map((g) => `${g.r.label || g.target} ${vals[g.target] ?? '–'}`).join(' · ');
+      overlay.appendChild(h('div.ov.ve-rig.custom', { title: label + ' (glisser · Maj = précis)', style: { left: p.x + 'px', top: p.y + 'px' }, dataset: { crig: String(gi), rigName: grp.rigs.map((g) => g.target).join(',') } }));
+      overlay.appendChild(h('div.ov.ve-rig-label', { style: { left: p.x + 10 + 'px', top: p.y - 22 + 'px' } }, label));
+    });
+  }
+  rigValue(g) { const b = g.bind; const v = b.type === 'var' ? (this.app.project.initialVars?.() || {})[b.name] : b.value; return v === undefined || v === '' ? undefined : isNaN(+v) ? v : +v; }
+  writeRig(g, v) {
+    const b = g.bind; const app = this.app;
+    if (b.type === 'attr' || b.type === 'prop') { const n = app.node(b.id); if (!n) return; n.attrs[b.name] = String(v); return; }
+    if (b.type === 'var') { // edit the default in the <vars> block (the canvas shows initial values)
+      const vn = [...app.project.byId.values()].find((x) => x.tag === 'vars'); if (!vn) return;
+      const re = new RegExp('^(\\s*\\$?' + b.name.replace(/[.*+?^${}()|[\]\\-]/g, '\\$&') + '\\s*[:=]\\s*)([^\\n]*?)(;?\\s*(//.*)?)$', 'm');
+      if (re.test(vn.raw || '')) vn.raw = vn.raw.replace(re, (m0, p1, p2, p3) => p1 + v + p3); else vn.raw = (vn.raw || '').replace(/\s*$/, '') + `\n    ${b.name}: ${v}\n  `;
+      app.project.vars[b.name] = String(v);
+    }
   }
 
   drawCreation(svg) {
@@ -155,9 +196,16 @@ export class VectorEditor {
   // ------------------------------------------------------------ pointer handling (returns true when consumed)
   down(e) {
     const t = e.target; const app = this.app;
+    if (t.dataset && t.dataset.crig !== undefined && this._custom) {
+      const c = this._custom[+t.dataset.crig]; if (!c) return false;
+      const box = MQ.Rig.toBox(MQ.Rig.rigBox(c.el, c.grp.rigs[0].r));
+      app.begin(); this.drag = { crig: true, grp: c.grp, box, sx: e.clientX, sy: e.clientY, start: MQ.Rig.groupPos(c.grp, Object.fromEntries(c.grp.rigs.map((g) => [g.target, this.rigValue(g)])), box) };
+      e.preventDefault(); return true;
+    }
     if (t.dataset && t.dataset.rig) {
       const [id, kind, i] = t.dataset.rig.split('|'); const n = app.node(id); const el = this.canvas.elOf(id);
-      app.begin(); this.drag = { rig: true, id, kind, i: +i, el, n }; e.preventDefault(); return true;
+      const r = el.getBoundingClientRect(); const vw = +el.dataset.vw || el.offsetWidth, vh = +el.dataset.vh || el.offsetHeight;
+      app.begin(); this.drag = { rig: true, id, kind, i: +i, el, n, r, vw, vh }; e.preventDefault(); return true;
     }
     if (app.tool === 'pen') return this.penDown(e);
     if (app.tool === 'pencil') return this.pencilDown(e);
@@ -185,8 +233,15 @@ export class VectorEditor {
     if (this.pen) { this.penMove(e); return true; }
     if (this.pencil && this.pencil.down) { const L = this.pencil.lel.getBoundingClientRect(); const z = this.app.zoom; this.pencil.pts.push([(e.clientX - L.left) / z, (e.clientY - L.top) / z]); this.canvas.drawOverlay(); return true; }
     if (!D) return false;
+    if (D.crig) {
+      // Shift = fine control (¼ of the pointer movement), like a pro scrubber
+      const k = e.shiftKey ? 0.25 : 1; const px = D.start.x + (e.clientX - D.sx) * k, py = D.start.y + (e.clientY - D.sy) * k;
+      const vals = MQ.Rig.groupValues(D.grp, px, py, D.box);
+      for (const g of D.grp.rigs) this.writeRig(g, vals[g.target]);
+      this.app.emit('doc'); return true;
+    }
     if (D.rig) {
-      const { n, el, kind, i } = D; const r = el.getBoundingClientRect(); const vw = +el.dataset.vw || el.offsetWidth, vh = +el.dataset.vh || el.offsetHeight;
+      const { n, kind, i, r, vw, vh } = D;
       const lx = (e.clientX - r.left) * (vw / r.width), ly = (e.clientY - r.top) * (vh / r.height);
       const params = n.tag === 'shape' ? n.attrs : n.attrs;
       const hd = RIGS[kind](vw, vh, params)[i]; n.attrs[hd.param] = String(hd.map(lx, ly));
@@ -219,7 +274,7 @@ export class VectorEditor {
     if (this.pencil && this.pencil.down) return this.pencilUp(e);
     const D = this.drag; this.drag = null;
     if (!D) return !!this.pen;
-    if (D.rig) { this.app.commit(); return true; }
+    if (D.rig || D.crig) { this.app.commit(); return true; }
     if (D.anchors || D.handle) { this.commit(); return true; }
     return false;
   }
