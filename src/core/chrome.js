@@ -11,11 +11,21 @@ function fgOf(mode, textColor) {
   return /\blight\b/.test(mode) ? '#fff' : /\bdark\b/.test(mode) ? '#000' : (isDark(textColor) ? '#000' : '#fff');
 }
 
-export function makeStatusBar(mode, device, textColor) {
+export function makeStatusBar(mode, device, textColor, bg) {
   const el = document.createElement('div');
   el.className = 'mq-statusbar';
   const fg = fgOf(mode, textColor);
-  if (device && device.os === 'android') return androidStatusBar(el, fg, device);
+  const out = device && device.os === 'android' ? androidStatusBar(el, fg, device) : iosStatusBar(el, fg, device);
+  // statusbar=blur: a material veil of the screen's background, so content scrolling underneath stays legible
+  if (/\bblur\b/.test(mode)) {
+    const c = parseColor(bg || (isDark(textColor) ? '#fff' : '#000')) || [255, 255, 255, 1];
+    out.style.background = `rgba(${c[0]},${c[1]},${c[2]},.78)`;
+    out.style.backdropFilter = out.style.webkitBackdropFilter = 'blur(20px) saturate(1.8)';
+  }
+  return out;
+}
+
+function iosStatusBar(el, fg, device) {
   const h = device && device.safeTop ? Math.min(device.safeTop, 54) : 44;
   el.style.cssText = `position:absolute;left:0;right:0;top:0;height:${h}px;display:flex;align-items:center;justify-content:space-between;padding:6px 32px 0 40px;color:${fg};font:600 16px/1 Inter,-apple-system,system-ui,sans-serif;pointer-events:none;z-index:9000;letter-spacing:-.2px`;
   const sig = `<svg width="18" height="12" viewBox="0 0 18 12" fill="${fg}"><rect x="0" y="8" width="3" height="4" rx="1"/><rect x="5" y="5.5" width="3" height="6.5" rx="1"/><rect x="10" y="3" width="3" height="9" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1"/></svg>`;

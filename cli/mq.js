@@ -114,6 +114,11 @@ async function loadInPage(page, source, mode) {
   }, { source, mode });
 }
 
+// still renders show the end of one-shot animations (chart reveal, entrances); loops stay at their first frame
+async function settleAnims(page) {
+  await page.evaluate(() => { for (const an of document.getAnimations()) { try { const t = an.effect && an.effect.getComputedTiming(); if (t && t.iterations !== Infinity) an.finish(); } catch (e) { /* */ } } });
+}
+
 async function waitFonts(page) {
   await page.evaluate(async () => {
     await document.fonts.ready;
@@ -155,6 +160,7 @@ async function cmdRender(o) {
     if (!ok) { console.error(`✖ écran introuvable: ${name}`); continue; }
     await waitFonts(page);
     const file = path.join(outDir, `${slug(name)}.png`);
+    await settleAnims(page);
     await page.locator('#shot').screenshot({ path: file, omitBackground: !o.frame });
     files.push(file);
     console.log(`✓ ${file}`);
@@ -201,6 +207,7 @@ async function cmdBoard(o) {
   await waitFonts(page);
   const file = o.o || 'out/board.png';
   fs.mkdirSync(path.dirname(file), { recursive: true });
+  await settleAnims(page);
   await page.locator('#board').screenshot({ path: file });
   console.log(`✓ ${file} (${size.w}×${size.h})`);
   await browser.close();

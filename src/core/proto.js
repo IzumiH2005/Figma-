@@ -160,14 +160,21 @@ export class Player {
     el.dataset.hot = '1'; el.style.touchAction = 'none'; if (!el.style.cursor) el.style.cursor = 'grab';
     el.addEventListener('pointerdown', (e) => {
       if (e.button) return;
-      e.stopPropagation(); e.preventDefault();
+      // a control inside the rigged component (a −/+ button, a link) keeps its own click
+      const hit = e.target && e.target.closest ? e.target.closest('[data-hot]') : null;
+      if (hit && hit !== el && el.contains(hit)) return;
       const groups = groupRigs(live);
       const values = (g) => Object.fromEntries(g.rigs.map((x) => [x.target, x.bind.value]));
       let best = null;
       for (const g of groups) {
-        const box = toBox(rigBox(el, g.rigs[0].r)); const p = groupPos(g, values(g), box); const d = Math.hypot(p.x - e.clientX, p.y - e.clientY);
+        const box = toBox(rigBox(el, g.rigs[0].r));
+        // a rig scoped to a part (in=dial) only starts on that part (16 px of slack for a handle on its edge)
+        if (g.rigs[0].r.in) { const M = 16; if (e.clientX < box.x - M || e.clientX > box.x + box.w + M || e.clientY < box.y - M || e.clientY > box.y + box.h + M) continue; }
+        const p = groupPos(g, values(g), box); const d = Math.hypot(p.x - e.clientX, p.y - e.clientY);
         if (!best || d < best.d) best = { g, box, d };
       }
+      if (!best) return;
+      e.stopPropagation(); e.preventDefault();
       const { g, box } = best; const prev = el.style.cursor; document.body.style.cursor = 'grabbing';
       const apply = (ev) => {
         const vals = groupValues(g, ev.clientX, ev.clientY, box); let changed = false;

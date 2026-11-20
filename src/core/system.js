@@ -35,6 +35,14 @@ function pickStep(r, against, min, prefer = 600, dir = 1) {
 }
 const onColor = (bg) => (contrast(parseColor(bg), [255, 255, 255, 1]) >= contrast(parseColor(bg), [17, 17, 20, 1]) ? '#FFFFFF' : '#111114');
 const alphaHex = (h, a) => { const c = parseColor(h); return `rgba(${Math.round(c[0])},${Math.round(c[1])},${Math.round(c[2])},${a})`; };
+// a translucent colour laid over a solid one → the solid colour the eye sees (for contrast checks)
+const over = (top, under) => { const t = parseColor(top), u = parseColor(under); const a = t[3] ?? 1; return '#' + [0, 1, 2].map((i) => Math.round(t[i] * a + u[i] * (1 - a)).toString(16).padStart(2, '0')).join(''); };
+// the step nearest `prefer` that reaches `min` against every background of the list
+function pickStepAll(r, backs, min, prefer, dir) {
+  const order = STEPS.slice().sort((a, b) => Math.abs(a - prefer) - Math.abs(b - prefer) || (dir > 0 ? b - a : a - b));
+  for (const s of order) if (backs.every((bk) => contrast(parseColor(r[s]), parseColor(bk)) >= min)) return s;
+  return dir > 0 ? 950 : 50;
+}
 
 export function generateSystem(a = {}) {
   const brand = parseColor(String(a.brand || '#5B5BF7')) || parseColor('#5B5BF7');
@@ -58,11 +66,11 @@ export function generateSystem(a = {}) {
     const ls = role === 'warning' ? pickStep(r, '#FFFFFF', 4.5, 700, 1) : pickStep(r, '#FFFFFF', 4.5, Math.max(500, brandStep), 1);
     light[role] = r[ls]; light[`on-${role}`] = onColor(r[ls]);
     light[`${role}-hover`] = r[STEPS[Math.min(STEPS.length - 1, STEPS.indexOf(ls) + 1)]];
-    light[`${role}-soft`] = alphaHex(r[ls], 0.12); light[`${role}-text`] = r[pickStep(r, light.surface, 4.5, ls, 1)];
+    light[`${role}-soft`] = alphaHex(r[ls], 0.12); light[`${role}-text`] = r[pickStepAll(r, [light.surface, over(light[`${role}-soft`], light.surface), over(light[`${role}-soft`], light.bg)], 4.5, ls, 1)];
     const ds = pickStep(r, dark.bg, 4.5, 400, -1);
     dark[role] = r[ds]; dark[`on-${role}`] = onColor(r[ds]);
     dark[`${role}-hover`] = r[STEPS[Math.max(0, STEPS.indexOf(ds) - 1)]];
-    dark[`${role}-soft`] = alphaHex(r[ds], 0.18); dark[`${role}-text`] = r[pickStep(r, dark.surface, 4.5, ds, -1)];
+    dark[`${role}-soft`] = alphaHex(r[ds], 0.18); dark[`${role}-text`] = r[pickStepAll(r, [dark.surface, over(dark[`${role}-soft`], dark.surface), over(dark[`${role}-soft`], dark.bg)], 4.5, ds, -1)];
   }
   light.focus = alphaHex(light.primary, 0.4); dark.focus = alphaHex(dark.primary, 0.5);
   // elevation: smooth layered shadows; in dark mode surfaces get lighter instead and shadows get denser
@@ -77,7 +85,16 @@ export function generateSystem(a = {}) {
   const [sans, display] = String(a.type || 'Inter').split('/').map((x) => x.trim());
   S['font-sans'] = sans; S['font-display'] = display || sans; S['font-mono'] = a.mono || 'JetBrains Mono';
   const base = +a['font-size'] || 16; const ratio = TYPE_RATIO[a.scale] || +a.scale || 1.25;
-  ['xs', 'sm', 'base', 'lg', 'xl', '2xl', '3xl', '4xl', '5xl'].forEach((k, i) => { S[`text-${k}`] = String(Math.round(base * Math.pow(ratio, i - 2))); });
+  // modular scale, snapped to what UI needs: small sizes legible and even (≥ 12, then 14 — the kit's caption / secondary),
+  // sizes above the base on the 4-grid, always strictly increasing
+  let prev = 0;
+  ['xs', 'sm', 'base', 'lg', 'xl', '2xl', '3xl', '4xl', '5xl'].forEach((k, i) => {
+    const raw = base * Math.pow(ratio, i - 2);
+    let v = i === 2 ? base : raw < base ? Math.max(12, Math.round(raw / 2) * 2) : Math.round(raw / 4) * 4;
+    if (v <= prev) v = prev + (raw < base ? 2 : 4);
+    if (i < 2 && v >= base) v = base - (2 - i) * 2;
+    S[`text-${k}`] = String(v); prev = v;
+  });
   const M = MOTION[a.motion || 'calm'] || MOTION.calm;
   Object.assign(S, { 'dur-fast': String(M.fast), 'dur-base': String(M.base), 'dur-slow': String(M.slow), 'ease-standard': 'cubic-bezier(.2,0,0,1)', 'ease-enter': M.enter, 'ease-exit': 'cubic-bezier(.4,0,1,1)', spring: M.spring });
 
@@ -97,7 +114,7 @@ export function generateSystem(a = {}) {
   const pair = (mode, fg, bg, min, what) => { const sem = mode === 'light' ? light : dark; const f = parseColor(sem[fg] || fg), b = parseColor(sem[bg] || bg); if (!f || !b) return; const r = contrast(f, b); checks.push({ mode, fg, bg, ratio: Math.round(r * 100) / 100, min, ok: r >= min, what }); };
   for (const m of ['light', 'dark']) {
     for (const s of ['bg', 'surface', 'surface-2']) { pair(m, 'text', s, 4.5, 'texte'); pair(m, 'muted', s, 4.5, 'texte secondaire'); }
-    for (const [role] of roles) { pair(m, `on-${role}`, role, 4.5, `texte sur ${role}`); pair(m, `${role}-text`, 'surface', 4.5, `${role} en texte`); pair(m, role, 'bg', 3, `${role} (UI) sur le fond`); }
+    for (const [role] of roles) { pair(m, `on-${role}`, role, 4.5, `texte sur ${role}`); pair(m, `${role}-text`, 'surface', 4.5, `${role} en texte`); { const sem = m === 'light' ? light : dark; pair(m, `${role}-text`, over(sem[`${role}-soft`], sem.surface), 4.5, `${role} en texte sur ${role}-soft`); } pair(m, role, 'bg', 3, `${role} (UI) sur le fond`); }
   }
   return { primitives: P, light, dark, scales: S, components: C, shadcn: SH, checks, ramps: Object.keys(R) };
 }

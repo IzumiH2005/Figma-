@@ -30,7 +30,7 @@ C'est la source de vérité : l'éditeur visuel le lit et le réécrit, la CLI l
 
 | Balise | Rôle |
 |---|---|
-| `screen` | Artboard / écran de prototype. `device=`, `w`/`h`, `h=auto` (hug, pages web), `start`, `statusbar[=dark|light]`, `homebar`, `x`/`y` sur le canvas, `grid="12 100 20"` (colonnes, marge, gouttière) et `baseline=8` pour les grilles de mise en page |
+| `screen` | Artboard / écran de prototype. `device=`, `w`/`h`, `h=auto` (hug, pages web), `start`, `statusbar[=dark|light] [blur]` (`blur` : voile flouté du fond sous la barre d'état, pour le contenu qui défile dessous), `homebar`, `x`/`y` sur le canvas, `grid="12 100 20"` (colonnes, marge, gouttière) et `baseline=8` pour les grilles de mise en page |
 | `frame` `box` | Conteneur ; **sans** `row`/`col`/`grid` c'est une pile superposée (ZStack) |
 | `row` `col` `grid` `stack` | Raccourcis de conteneurs auto layout |
 | `text` | Texte ; enfants inline : `<b>`, `<i>`, `<u>`, `<s>`, `<code>`, `<span …>`, `<br/>`, `<icon>`. Sur un texte, `fill`/`color` = couleur du texte, `bg` = fond |
@@ -493,7 +493,7 @@ Expressions : littéraux, tableaux/objets, `+ - * / %`, comparaisons, `&& || ! ?
 - `lerp(a, b, u)`.
 Toutes interpolent des nombres, des **couleurs** (OKLab), des **tracés** (comme `pathmix`, clés nommées comprises), des tableaux et des objets ; le reste bascule à mi-chemin.
 
-Fonctions : `len min max round floor ceil abs clamp fixed money(n,'€') percent pad upper lower str num replace split trim join includes push without toggleIn sum slice filter find map first last range pick(i, a, b, c) date(offset) now()`.
+Fonctions : `len min max round floor ceil abs clamp fixed fmt(n, d) (nombre à la française : 1,80 · 4 088) money(n,'€') percent pad upper lower str num replace split trim join includes push without toggleIn sum slice filter find map first last range pick(i, a, b, c) date(offset) now()`.
 
 ## Prototype : interactions
 

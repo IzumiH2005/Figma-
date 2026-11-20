@@ -136,15 +136,23 @@ export function buildChart(el, a, w, h, resolve) {
   const series = Array.isArray(data[0]) ? data : [data];
   const labels = Array.isArray(a.labels) ? a.labels : typeof a.labels === 'string' ? a.labels.split(',') : null;
   const colors = (a.colors ? (Array.isArray(a.colors) ? a.colors : String(a.colors).split(',')) : PALETTE).map((c) => resolve(String(c).trim()));
-  const muted = resolve(a.muted || 'rgba(127,127,127,.55)');
+  const mt = resolve('$muted');
+  const muted = a.muted ? resolve(a.muted) : mt && !String(mt).startsWith('$') ? mt : 'rgba(127,127,127,.55)';
   const showAxis = a.axis !== false && type !== 'spark' && type !== 'donut';
   const padL = showAxis ? 28 : 0, padB = showAxis && labels ? 20 : 0, padT = 6;
   const W = w - padL, H = h - padB - padT;
-  const max = Number(a.max) || Math.max(...series.flat(), 1) * 1.08, min = Number(a.min) || 0;
+  const min = Number(a.min) || 0;
+  // "nice" ticks: 4 steps of 1 / 2 / 2.5 / 5 × 10ⁿ, so the axis never reads 3, 3, 3
+  const rawStep = ((Math.max(...series.flat(), 1e-9) - min) * 1.04) / 4 || 1;
+  const mag = Math.pow(10, Math.floor(Math.log10(rawStep)));
+  const tick = [1, 2, 2.5, 5, 10].map((k) => k * mag).find((k) => k >= rawStep);
+  const max = Number(a.max) || min + tick * 4;
+  const tickDec = Number(a.max) ? (max - min < 8 ? 1 : 0) : Math.max(0, -Math.floor(Math.log10(tick) + 1e-9) + (tick / mag === 2.5 ? 1 : 0));
+  const fmtTick = (v) => Number(v).toLocaleString('fr-FR', { minimumFractionDigits: tickDec, maximumFractionDigits: tickDec });
   const Y = (v) => padT + H - ((v - min) / (max - min)) * H;
   const reveal = a.reveal !== undefined && a.reveal !== false; const dur = Number(a.reveal) > 50 ? Number(a.reveal) : 700;
   let body = '';
-  if (showAxis && a.grid !== false) for (let i = 0; i <= 4; i++) { const v = min + ((max - min) * i) / 4; const y = Y(v); body += `<line x1="${padL}" x2="${w}" y1="${y}" y2="${y}" stroke="${muted}" stroke-opacity=".25" stroke-dasharray="${i ? '3 4' : ''}"/>`; if (showAxis) body += `<text x="${padL - 6}" y="${y + 3}" text-anchor="end" font-size="10" fill="${muted}">${Math.round(v)}</text>`; }
+  if (showAxis && a.grid !== false) for (let i = 0; i <= 4; i++) { const v = min + ((max - min) * i) / 4; const y = Y(v); body += `<line x1="${padL}" x2="${w}" y1="${y}" y2="${y}" stroke="${muted}" stroke-opacity=".25" stroke-dasharray="${i ? '3 4' : ''}"/>`; if (showAxis) body += `<text x="${padL - 6}" y="${y + 3}" text-anchor="end" font-size="11" fill="${muted}">${fmtTick(v)}</text>`; }
   const n = series[0].length; const step = W / n;
   if (type === 'bar') {
     const groupW = step * (1 - Number(a.gap ?? 0.35)); const bw = groupW / series.length; const r = Number(a.radius ?? 4);

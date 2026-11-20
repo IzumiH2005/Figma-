@@ -174,6 +174,9 @@ export function lintScreen(screenEl, project, screenNode) {
     const a = rel(el, screenEl), b = rel(nx, screenEl);
     const gap = Math.max(b.x - (a.x + a.w), b.y - (a.y + a.h));
     const big = Math.min(a.w, a.h, b.w, b.h) >= minTap; // cibles déjà pleine taille (onglets, segments) : pas besoin d'écart
+    // segments jumeaux dans un même rail rempli (contrôle segmenté) : un seul contrôle, pas deux cibles voisines
+    const par = el.parentElement; const parFill = par && (parseColor(getComputedStyle(par).backgroundColor) || [0, 0, 0, 0])[3] > 0.05;
+    if (parFill && Math.abs(a.h - b.h) < 1 && Math.abs(a.w - b.w) < 2 && a.h >= 32 && gap <= 4) continue;
     if (gap >= 0 && gap < 8 && touch && !big) push('info', 'crowded', `Éléments cliquables collés (${Math.round(gap)}px) : ≥ 8px pour éviter les erreurs de tap (${label(el)})`, el);
   }
   // repeated cards with unequal heights in a row/grid
@@ -376,7 +379,7 @@ export function lintScreen(screenEl, project, screenNode) {
   const anims = ((screenEl._mq && screenEl._mq.anims) || []).filter((x) => x.el && x.el.isConnected && visible(x.el));
   const entr = anims.filter((x) => x.kind === 'in').map((x) => { const sp = parseSpec(x.spec, 'in'); return { x, sp, start: (sp.delay || 0) + (x.delay || 0), dur: sp.duration * (x.durScale || 1) }; });
   const loops = anims.filter((x) => x.kind === 'loop').map((x) => ({ x, sp: parseSpec(x.spec, 'loop') }));
-  const MOVING = new Set(['fade-up', 'fade-down', 'fade-left', 'fade-right', 'scale-in', 'zoom-in', 'pop', 'land', 'stretch-in', 'slide-up', 'slide-down', 'slide-left', 'slide-right', 'rotate-in', 'drop', 'grow', 'grow-up']);
+  const MOVING = new Set(['rise', 'appear', 'fade-up', 'fade-down', 'fade-left', 'fade-right', 'scale-in', 'zoom-in', 'pop', 'land', 'stretch-in', 'slide-up', 'slide-down', 'slide-left', 'slide-right', 'rotate-in', 'drop', 'grow', 'grow-up']);
   const srcFix = (x, mut) => { const node = ownerNode(x.el, project); return node && node.attrs && node.attrs.anim ? { id: node.id, attrs: { anim: mut(String(node.attrs.anim)) } } : undefined; };
   for (const e of entr) {
     const nm = label(e.x.el);

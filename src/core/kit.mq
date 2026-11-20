@@ -56,7 +56,7 @@
     stroke={kind == 'outline' ? '1 ' + $border : 'none'} bgblur={kind == 'glass' ? 16 : 0}>
     <icon name={icon} size={round(size * 0.48)}/>
     <stack if={badge > 0} absolute top=2 right=2 minw=18 h=18 px=5 radius=full fill=$danger center stroke={'2 ' + $bg + ' outside'}>
-      <text size=12 weight=700 color=#fff lh=1>{badge}</text>
+      <text size=12 weight=700 color={onColor($danger)} lh=1>{badge}</text>
     </stack>
   </stack>
 </component>
@@ -84,9 +84,9 @@
   </stack>
 </component>
 
-<component name="Toggle" props="value=false" desc="Interrupteur (iOS : piste verte et curseur blanc ; Android : interrupteur Material 3, curseur qui grossit et piste contournée à l'arrêt). Ex: &lt;Toggle value={$wifi} on:click=&quot;toggle $wifi&quot;/&gt;">
+<component name="Toggle" props="value=false color=''" desc="Interrupteur (iOS : piste verte et curseur blanc, ou color=$primary pour la teinte de l'app ; Android : interrupteur Material 3, curseur qui grossit et piste contournée à l'arrêt). Ex: &lt;Toggle value={$wifi} on:click=&quot;toggle $wifi&quot;/&gt;">
   <stack w=52 h=32 radius=full transition=220
-         fill={value ? ($platform == 'android' ? $primary : $success) : $surface-2}
+         fill={value ? (color || ($platform == 'android' ? $primary : $success)) : $surface-3}
          stroke={$platform == 'android' && !value ? '2 ' + $muted + ' inside' : 'none'}>
     <ellipse if={$platform != 'android'} name=knob absolute x={value ? 23 : 3} y=3 size=26 fill=#fff shadow="0 2 6 rgba(0,0,0,.18)" transition=220/>
     <ellipse if={$platform == 'android'} name=knob absolute x={value ? 24 : 8} y={value ? 4 : 8} size={value ? 24 : 16} fill={value ? $on-primary : $muted} transition=220/>
@@ -218,7 +218,7 @@
 <component name="SwipeRow" props="title='Élément' subtitle='' open=false action='Supprimer' reveal=0" desc="Ligne à balayer vers la gauche pour révéler une action (alternative : appui long ou bouton). open = état révélé, reveal = progression 0..1 du balayage.">
   <stack w=fill h=64 fill=$surface radius=$radius-md clip>
     <row absolute x=0 y=0 w=fill h=64 fill=$danger if={reveal > 0.01 || open} justify=end align=center pr=16 on:click="change open=false">
-      <text color=#fff weight=600 size=15>{action}</text>
+      <text color={onColor($danger)} weight=600 size=16>{action}</text>
     </row>
     <row name=face w=fill h=64 px=16 gap=12 align=center fill=$surface drag=x bounds="-104..0" snap="0, -104" drag-index=open drag-progress=reveal on:longpress="change open={!open}">
       <col w=fill gap=2>

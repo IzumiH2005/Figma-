@@ -307,6 +307,9 @@ export function fillToCss(v, ctx) {
   return { image: images.join(', ') || null, color, size: sizes.join(', '), anim };
 }
 
+// the screen's own background colour, as set inline (the element isn't attached yet)
+function getComputedStyleSafe(el) { return el.style.backgroundColor || (/^(#|rgb|hsl)/.test(el.style.background || '') ? el.style.background : ''); }
+
 export function imageSrc(src, ctx) {
   if (!src) return '';
   if (/^(gen|avatar|initials|photo):/.test(src)) return genImage(src);
@@ -1067,7 +1070,7 @@ export function renderScreen(screen, ctx) {
   fixedLayer.className = 'mq-fixed'; fixedLayer.style.cssText = 'position:absolute;inset:0;pointer-events:none;display:grid;grid-template:minmax(0,1fr)/minmax(0,1fr);';
   for (const el of renderChildren(fixedKids, ctx.scope, 'stack', ctx)) { el.style.pointerEvents = 'auto'; fixedLayer.appendChild(el); }
   outer.appendChild(fixedLayer);
-  if (a.statusbar) outer.appendChild(makeStatusBar(a.statusbar === true ? 'auto' : String(a.statusbar), device, outer.style.color));
+  if (a.statusbar) outer.appendChild(makeStatusBar(a.statusbar === true ? 'auto' : String(a.statusbar), device, outer.style.color, getComputedStyleSafe(outer)));
   if (a.homebar) outer.appendChild(makeHomeBar(a.homebar === true ? 'auto' : String(a.homebar), outer.style.color, ctx.device));
   if (a.stagger) applyStagger([...inner.children].filter((k) => k.tagName !== 'STYLE'), a.stagger, ctx);
   if (Object.keys(events).length && ctx.runtime) ctx.runtime.bind(outer, events);

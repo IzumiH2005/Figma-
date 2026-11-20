@@ -136,6 +136,8 @@ const BUILTINS = {
   len: (x) => (x == null ? 0 : x.length ?? Object.keys(x).length),
   upper: (s) => String(s).toUpperCase(), lower: (s) => String(s).toLowerCase(),
   fixed: (n, d = 2) => Number(n).toFixed(d),
+  // nombre à la française : fmt(1.8, 2) → « 1,80 », fmt(4088) → « 4 088 »
+  fmt: (n, d = 0) => Number(n).toLocaleString('fr-FR', { minimumFractionDigits: d, maximumFractionDigits: d }),
   money: (n, cur = '€', d = 2) => { const v = Number(n); const s = Math.abs(v).toLocaleString('fr-FR', { minimumFractionDigits: d, maximumFractionDigits: d }); return (v < 0 ? '−' : '') + s + ' ' + cur; },
   pad: (n, w = 2) => String(n).padStart(w, '0'),
   range: (a, b) => { if (b === undefined) { b = a; a = 0; } const r = []; for (let k = a; k < b; k++) r.push(k); return r; },
