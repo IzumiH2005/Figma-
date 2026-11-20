@@ -42,11 +42,21 @@ export async function buildEditorJS() {
 
 const esc = (s) => s.replace(/<\/script/gi, '<\\/script');
 
-export async function buildEditorHTML({ projects = [], title = 'Maquette', open = null } = {}) {
+export async function buildEditorHTML({ projects = [], title = 'Maquette Studio', open = null, artifact = false } = {}) {
   const [runtime, editor] = await Promise.all([buildRuntime(), buildEditorJS()]);
   const css = fs.readFileSync(path.join(ROOT, 'src/editor/editor.css'), 'utf8');
   const tpl = fs.readFileSync(path.join(ROOT, 'src/editor/index.html'), 'utf8');
   const embeds = projects.map((p) => `<script type="text/x-maquette" data-file="${p.file}"${open === p.file ? ' data-open' : ''}>${esc(p.source)}</script>`).join('\n');
+  if (artifact) {
+    // the artifact host provides doctype/html/head/body: emit content only
+    return `<title>${title}</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>${css}</style>
+${embeds}
+<script id="mq-runtime">${esc(runtime)}</script>
+<script>${esc(editor)}</script>
+`;
+  }
   return tpl
     .replace('{{TITLE}}', title)
     .replace('/*{{CSS}}*/', css)
@@ -66,5 +76,6 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   fs.writeFileSync(path.join(DIST, 'runtime.js'), runtime);
   const html = await buildEditorHTML({ projects: readExamples(), open: 'orbit-banking.mq' });
   fs.writeFileSync(path.join(DIST, 'maquette.html'), html);
+  fs.writeFileSync(path.join(DIST, 'maquette-artifact.html'), await buildEditorHTML({ projects: readExamples(), open: 'orbit-banking.mq', artifact: true }));
   console.log(`dist/runtime.js ${(runtime.length / 1024).toFixed(0)} Ko · dist/maquette.html ${(html.length / 1024).toFixed(0)} Ko`);
 }

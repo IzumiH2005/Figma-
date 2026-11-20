@@ -60,10 +60,40 @@ export function store(key, val) {
   return null;
 }
 
+function modal(title, body, actions) {
+  document.querySelectorAll('.mq-modal').forEach((m) => m.remove());
+  const close = () => wrap.remove();
+  const wrap = h('div.mq-modal', { onpointerdown: (e) => { if (e.target === wrap) close(); }, onkeydown: (e) => { e.stopPropagation(); if (e.key === 'Escape') close(); } },
+    h('div.mq-dialog', null, h('div.mq-dtitle', null, title), body, h('div.mq-dactions', null, actions(close))));
+  document.body.appendChild(wrap);
+  return wrap;
+}
+
+// in-page replacement for prompt() (blocked inside artifacts)
+export function ask(title, value = '', hint = '') {
+  return new Promise((resolve) => {
+    const inp = h('input.inp', { value, id: 'mq-ask' });
+    let done = false;
+    let m;
+    const finish = (v) => { if (done) return; done = true; m.remove(); resolve(v); };
+    m = modal(title, h('div.mq-dbody', null, inp, hint ? h('div.hint', null, hint) : null), () => [
+      h('button.btn', { onclick: () => finish(null) }, 'Annuler'),
+      h('button.btn.primary', { onclick: () => finish(inp.value) }, 'Valider'),
+    ]);
+    inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') finish(inp.value); });
+    new MutationObserver((_, obs) => { if (!m.isConnected) { obs.disconnect(); if (!done) { done = true; resolve(null); } } }).observe(document.body, { childList: true });
+    setTimeout(() => { inp.focus(); inp.select(); });
+  });
+}
+
+// downloads are inert inside artifacts: try, and always offer copy as a fallback
 export function download(name, text, type = 'text/plain') {
-  const b = new Blob([text], { type });
-  const a = h('a', { href: URL.createObjectURL(b), download: name });
-  document.body.appendChild(a); a.click(); a.remove();
+  try { const b = new Blob([text], { type }); const a = h('a', { href: URL.createObjectURL(b), download: name }); document.body.appendChild(a); a.click(); a.remove(); } catch (e) { /* */ }
+  const ta = h('textarea.mq-dtext', { readonly: true, spellcheck: 'false', id: 'mq-export' }, text.length > 200000 ? text.slice(0, 200000) + '\n…' : text);
+  modal(name, h('div.mq-dbody', null, h('div.hint', null, `${(text.length / 1024).toFixed(0)} Ko. Si le téléchargement ne démarre pas (c'est le cas dans un artifact), copie le contenu dans un fichier ${name}.`), ta), (close) => [
+    h('button.btn', { onclick: close }, 'Fermer'),
+    h('button.btn.primary', { onclick: (e) => { const b = e.currentTarget; const fallback = () => { ta.focus(); ta.select(); b.textContent = 'Sélectionné : Ctrl+C'; }; try { navigator.clipboard.writeText(text).then(() => { b.textContent = 'Copié'; }, fallback); } catch (er) { fallback(); } } }, 'Copier tout'),
+  ]);
 }
 
 export function menu(x, y, items, onClose) {

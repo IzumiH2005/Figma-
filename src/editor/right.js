@@ -1,5 +1,5 @@
 // Right panel: Design / Prototype / Motion / Code / Lint inspectors
-import { MQ, h, icon, clear, toast } from './dom.js';
+import { MQ, h, icon, clear, toast, ask } from './dom.js';
 import { isContainer } from './state.js';
 import { highlight } from './code.js';
 
@@ -122,7 +122,7 @@ export class RightPanel {
     if (n.tag !== 'text' && n.tag !== 'icon') b.appendChild(sec('Remplissage', colorField(app, a.fill ?? a.bg, (v) => set('fill', v), 'fill')));
     if (n.tag !== 'text' && n.tag !== 'icon') b.appendChild(sec('Contour', input('stroke', a.stroke || '', (v) => set('stroke', v || null), { placeholder: '1 $border inside', mono: true }), h('div.chips', null, ['1 $border', '1.5 $primary', '2 #000 dashed', '1 rgba(255,255,255,.12)'].map((v) => h('button.chip', { onclick: () => set('stroke', v) }, v)))));
     b.appendChild(sec('Effets',
-      h('div.prow', null, h('label', null, 'Ombre'), select([['', 'Aucune'], ['xs', 'XS'], ['sm', 'S'], ['md', 'M'], ['lg', 'L'], ['xl', 'XL'], ['2xl', '2XL'], ['inner', 'Intérieure'], ['custom', 'Personnalisée…']], ['xs', 'sm', 'md', 'lg', 'xl', '2xl', 'inner'].includes(a.shadow) || !a.shadow ? a.shadow || '' : 'custom', (v) => { if (v === 'custom') { const c = prompt('Ombre (x y flou [étendue] couleur) — séparer plusieurs avec +', a.shadow || '0 8 24 rgba(0,0,0,.2)'); if (c) set('shadow', c); } else set('shadow', v || null); })),
+      h('div.prow', null, h('label', null, 'Ombre'), select([['', 'Aucune'], ['xs', 'XS'], ['sm', 'S'], ['md', 'M'], ['lg', 'L'], ['xl', 'XL'], ['2xl', '2XL'], ['inner', 'Intérieure'], ['custom', 'Personnalisée…']], ['xs', 'sm', 'md', 'lg', 'xl', '2xl', 'inner'].includes(a.shadow) || !a.shadow ? a.shadow || '' : 'custom', async (v) => { if (v === 'custom') { const c = await ask('Ombre personnalisée', a.shadow || '0 8 24 rgba(0,0,0,.2)', 'x y flou [étendue] couleur ; plusieurs ombres séparées par +'); if (c) set('shadow', c); } else set('shadow', v || null); })),
       h('div.grid2', null, numOpt('Flou', a.blur, (v) => set('blur', v)), numOpt('Flou fond', a.bgblur, (v) => set('bgblur', v))),
       h('div.prow', null, h('label', null, 'Fusion'), select([['', 'Normal'], ['multiply', 'Produit'], ['screen', 'Superposition'], ['overlay', 'Incrustation'], ['soft-light', 'Lumière douce'], ['difference', 'Différence'], ['color-dodge', 'Densité -']], a.blend || '', (v) => set('blend', v || null)))));
 
@@ -190,7 +190,7 @@ easings : ${EASES.join(' ')}`)));
     const set = (k, v) => app.change(() => { if (k !== key) delete n.attrs[key]; n.attrs[k] = v; });
     const m = /^(go|overlay)\s+("[^"]+"|\S+)\s*(.*)$/.exec(action.trim());
     const trig = TRIGGERS.find(([t]) => t === key) ? key : key;
-    const trigSel = select(TRIGGERS.some(([t]) => t === key) ? TRIGGERS : [...TRIGGERS, [key, key]], trig, (v) => { if (v === 'on:after-2000') { const ms = prompt('Délai (ms)', '2000'); v = 'on:after-' + (ms || 2000); } if (v === 'on:key-Enter') { const kk = prompt('Touche (Enter, ArrowRight, Escape, a…)', 'Enter'); v = 'on:key-' + (kk || 'Enter'); } set(v, action); });
+    const trigSel = select(TRIGGERS.some(([t]) => t === key) ? TRIGGERS : [...TRIGGERS, [key, key]], trig, async (v) => { if (v === 'on:after-2000') { const ms = await ask('Délai (ms)', '2000'); v = 'on:after-' + (ms || 2000); } if (v === 'on:key-Enter') { const kk = await ask('Touche', 'Enter', 'Enter, ArrowRight, Escape, a…'); v = 'on:key-' + (kk || 'Enter'); } set(v, action); });
     const del = h('button.mini', { title: 'Supprimer', onclick: () => app.change(() => { delete n.attrs[key]; }) }, icon('trash-2', 13));
     let body;
     if (m || /^(back|close)(\s|$)/.test(action.trim())) {

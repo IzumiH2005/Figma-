@@ -1,5 +1,5 @@
 // Maquette editor bootstrap
-import { MQ, h, icon, clear, toast, store, download, menu } from './dom.js';
+import { MQ, h, icon, clear, toast, store, download, menu, ask } from './dom.js';
 import { App, isContainer, hashStr } from './state.js';
 import { Canvas } from './canvas.js';
 import { LeftPanel } from './left.js';
@@ -218,9 +218,9 @@ function boot() {
     const n = app.selNodes[0]; if (!n) return;
     app.change(() => { const sib = app.siblings(n.id); const i = sib.indexOf(n); const j = Math.max(0, Math.min(sib.length - 1, i + dir)); sib.splice(i, 1); sib.splice(j, 0, n); });
   }
-  function makeComponent() {
+  async function makeComponent() {
     const n = app.selNodes[0]; if (!n || n.tag === 'screen') return;
-    let name = prompt('Nom du composant (Majuscule, ex: ProductCard)', (n.attrs.name || 'MonComposant').replace(/[^\w]/g, '').replace(/^./, (c) => c.toUpperCase()));
+    let name = await ask('Nom du composant', (n.attrs.name || 'MonComposant').replace(/[^\w]/g, '').replace(/^./, (c) => c.toUpperCase()), 'Commence par une majuscule, ex : ProductCard.');
     if (!name) return; name = name.replace(/[^\w]/g, ''); if (!/^[A-Z]/.test(name)) name = name[0].toUpperCase() + name.slice(1);
     app.change(() => {
       const root = MQ.clone(n, true); const pos = {};

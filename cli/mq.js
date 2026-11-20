@@ -18,7 +18,7 @@ const HELP = `Maquette CLI
   mq lint    <file.mq>                                               contraste, zones tactiles, débordements, liens
   mq video   <file.mq> [--flow nom|fichier.flow] [-o demo.mp4] [--gif] [--scale 2] [--no-frame]
   mq anim    <file.mq> -s Écran [-o anim.mp4] [--ms 2500]            enregistre les animations d'entrée
-  mq build   <file.mq...> [-o maquette.html]                         éditeur autonome avec projets intégrés
+  mq build   <file.mq...> [-o maquette.html] [--artifact]            éditeur autonome avec projets intégrés (--artifact : pour publication)
   mq export  <file.mq> [-o proto.html]                               prototype HTML autonome (lecture seule)
   mq fmt     <file.mq> [--write]                                     reformate le source
   mq kit                                                             liste les composants du kit + props
@@ -361,7 +361,7 @@ async function cmdVideo(o, animOnly = false) {
 async function cmdBuild(o) {
   const files = o._.slice(1);
   const projects = files.length ? files.map((f) => ({ file: path.basename(f), source: fs.readFileSync(f, 'utf8') })) : readExamples();
-  const html = await buildEditorHTML({ projects, open: projects[0] && projects[0].file, title: o.title || 'Maquette' });
+  const html = await buildEditorHTML({ projects, open: projects[0] && projects[0].file, title: o.title || 'Maquette Studio', artifact: !!o.artifact });
   const out = o.o || 'dist/maquette.html';
   fs.mkdirSync(path.dirname(out), { recursive: true });
   fs.writeFileSync(out, html);

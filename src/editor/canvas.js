@@ -72,7 +72,7 @@ export class Canvas {
       const el = this.screenEl(n.id); if (!el) continue;
       const r = this.local(el.getBoundingClientRect());
       const sel = app.selection.includes(n.id);
-      const lab = h('div.ov.cv-label' + (sel ? '.sel' : ''), { style: { left: r.x + 'px', top: r.y - 22 + 'px', maxWidth: Math.max(60, r.w) + 'px' } }, (n.attrs.start ? '▶ ' : '') + (n.attrs.name || 'Écran'));
+      const lab = h('div.ov.cv-label' + (sel ? '.sel' : ''), { style: { left: r.x + 'px', top: r.y - 22 + 'px', maxWidth: Math.max(24, r.w) + 'px' } }, (n.attrs.start ? '▶ ' : '') + (n.attrs.name || 'Écran'));
       lab.dataset.screenLabel = n.id;
       this.overlay.appendChild(lab);
     }

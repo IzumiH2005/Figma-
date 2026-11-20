@@ -295,9 +295,23 @@ body.proto .cv-sel, body.proto .cv-handle { --ui-sel: var(--ui-proto); }
 
 /* ---------- responsive */
 @media (max-width: 900px) {
-  .main { grid-template-columns: 0 1fr 0; }
+  .main { grid-template-columns: minmax(0, 1fr); }
   .left, .right { display: none; }
   body.show-left .left { display: block; position: absolute; left: 0; top: 0; bottom: 0; width: min(280px, 85vw); z-index: 30; box-shadow: var(--shadow); }
   .tools { display: none; } .pagename { display: none; }
   .filebtn { max-width: 120px; }
 }
+
+/* ---------- dialogs */
+.mq-modal { position: fixed; inset: 0; z-index: 3000; background: rgba(10,10,14,.45); display: grid; place-items: center; padding: 16px; }
+.mq-dialog { width: min(440px, 100%); background: var(--ui-panel); border-radius: 14px; box-shadow: var(--shadow); padding: 18px; display: flex; flex-direction: column; gap: 14px; }
+.mq-dtitle { font-weight: 600; font-size: 14px; }
+.mq-dbody { display: flex; flex-direction: column; gap: 8px; }
+.mq-dactions { display: flex; justify-content: flex-end; gap: 8px; }
+.mq-dtext { width: 100%; height: 220px; font: 11px/1.5 "JetBrains Mono", monospace; background: var(--ui-input); color: var(--ui-text); border: 0; border-radius: 8px; padding: 10px; resize: vertical; }
+@media (max-width: 640px) {
+  .topbar .modes, .topbar .zoom, .topbar [title="Timeline Motion"], .topbar [title^="Mode prototype"], .topbar [title^="Exporter"] { display: none; }
+  .brand b { display: none; }
+  .playbtn { padding: 0 10px; }
+}
+@media (prefers-reduced-motion: reduce) { .toast, .tgl, .tgl i { animation: none; transition: none; } }

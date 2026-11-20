@@ -1,5 +1,5 @@
 // Left panel: pages, layers tree, assets (components / icons / images / devices), tokens & variables
-import { MQ, h, icon, clear, debounce, menu } from './dom.js';
+import { MQ, h, icon, clear, debounce, menu, ask } from './dom.js';
 import { isContainer, uniqueName } from './state.js';
 
 const TAG_ICON = { screen: 'smartphone', frame: 'square-dashed', row: 'columns-3', col: 'rows-3', grid: 'grid-3x3', stack: 'layers', text: 'type', icon: 'smile', image: 'image', rect: 'square', ellipse: 'circle', note: 'sticky-note', input: 'text-cursor-input', divider: 'minus', spacer: 'move-horizontal', vector: 'pen-tool', box: 'square', card: 'credit-card', button: 'mouse-pointer-click' };
@@ -40,9 +40,9 @@ export class LeftPanel {
     });
     app.pageIndex = app.project.pages.length - 1; app.emit('page');
   }
-  renamePage(pg, el) {
+  async renamePage(pg, el) {
     if (pg.virtual) return;
-    const v = prompt('Nom de la page', pg.attrs.name || '');
+    const v = await ask('Nom de la page', pg.attrs.name || '');
     if (v) this.app.change(() => { pg.attrs.name = v; });
   }
 
@@ -102,8 +102,8 @@ export class LeftPanel {
     });
   }
 
-  rename(n) {
-    const v = prompt('Nom du calque (sert aussi de clé Smart Animate)', n.attrs.name || '');
+  async rename(n) {
+    const v = await ask('Nom du calque', n.attrs.name || '', 'Sert aussi de clé pour le smart animate entre écrans et états.');
     if (v === null) return;
     const app = this.app;
     if (n.tag === 'screen') { import('./canvas.js').then(({ renameScreenEverywhere }) => app.change(() => renameScreenEverywhere(app, n.attrs.name, v, n))); return; }
@@ -216,12 +216,12 @@ export class LeftPanel {
     return wrap;
   }
 
-  editToken(name) {
+  async editToken(name) {
     const app = this.app; const p = app.project;
     const cur = name ? p.tokens[name].join(' | ') : '';
-    const key = name || prompt('Nom du token (ex: accent)');
+    const key = name || await ask('Nom du token', '', 'Ex : accent, card-radius…');
     if (!key) return;
-    const v = prompt(`Valeur de $${key}${p.modes.length > 1 ? ` (modes : ${p.modes.join(' | ')})` : ''}`, cur);
+    const v = await ask(`Valeur de $${key}`, cur, p.modes.length > 1 ? `Une valeur par mode, séparées par | (${p.modes.join(' | ')})` : '');
     if (v === null) return;
     app.change(() => {
       const top = p.rootNode ? p.rootNode.children : p.nodes;
