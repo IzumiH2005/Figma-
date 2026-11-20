@@ -199,6 +199,30 @@ Tout ce qui se dessine dans Figma (formes, plume, booléens, texte sur chemin) e
   - `texture=3` : bords irréguliers, effet fait main (`seed=`) ;
   - `glass` ou `glass="frost=14 refraction=6 tint=… light=-45"` : verre dépoli, réfraction et reflet ;
   - `pblur="18 bottom"` : flou d'arrière-plan progressif.
+- **Filtres non destructifs** (Figma : effets d'image, plugins Halftone, Dither, Glass…) : `fx="effet k=v …; effet2 …"` empile des filtres SVG sur n'importe quel calque (image, texte, groupe, vecteur). L'ordre compte, de gauche à droite.
+
+  | Effet | Paramètres principaux |
+  |---|---|
+  | `adjust` | `exposure` (stops), `contrast brightness highlights shadows black white gamma temperature tint saturation vibrance hue definition` sur l'échelle Figma −100..100 |
+  | `preset` | `grayscale · sepia · vintage · warm · cool · noir · fade · vivid · invert`, `intensity` |
+  | `gradmap` / `duotone` | `colors=#000,#f06,#fff offset repeat mirror mix` · `dark light` |
+  | `channels` | `r=#f00 g=#0f0 b=#00f` ou `swap=gbr` |
+  | `halftone` | `size angle shape=dot\|line\|square\|diamond mode=bw\|dark\|color\|cmyk\|rgb ink paper softness contrast` |
+  | `dither` | `mode=bayer\|noise\|threshold levels size mono ink paper` |
+  | `pixelate` | `size shape=square\|circle gap` |
+  | `hatching` | `style=lines\|waves\|zigzag\|circles\|cross density angle frequency amplitude ink paper` |
+  | `outlines` / `edges` | `mode=luma\|inverse\|alpha levels spacing thickness ink paper` · `width color bg gain` |
+  | `bloom` / `bokeh` | `threshold intensity radius color` · `radius highlights` |
+  | `rgb-split` | `amount angle` |
+  | `lens` / `warp` | `distortion cx cy aberration zoom` · `type=sine\|ripple\|twist\|swirl\|bulge\|pinch\|flag\|squeeze cx cy amount frequency angle phase radius` |
+  | `refract` | `pattern=lenticular\|zigzag\|waves\|grid\|circular size strength angle frost dispersion` (verre cannelé) |
+  | `stretch` / `slice` | `position angle` · `slices shift angle random seed` |
+  | `metal` | `rounding depth roughness split repeats angle colors` (chrome) |
+  | autres | `gooey vignette posterize invert threshold sharpen emboss noise` |
+
+  Alias : `dots`, `mosaic`, `glow`, `chromatic`, `chrome`, `gradient-map`, `contour`… Exemple : `fx="adjust contrast=20; halftone size=6 mode=cmyk; noise amount=0.08"`.
+- **Remplissages shader** (Figma Config 2026 : shader fills) : `shader="type k=v …"` peint un fond WebGL2 animable sous le contenu, découpé par `radius` et par le contour des vecteurs. Types : `mesh` (`warp cols grain`), `clouds` (`coverage softness layers drift`), `noise` (`type=value|perlin|voronoi layers contrast warp`), `wave` (`amplitude frequency thickness glow lines`), `caustics` (`intensity depth`), `nebula` (`travel stars density`), `moire` (`mode=rings|lines offset sharpness angle`), `concentric` (`cx cy period` en px, `steps twist`), `grid` (`shape=diamond|circle|box|triangle|hex|cross|ring layout=grid|brick|hex size rotate wave gradient`). Communs : `colors=#a,#b,#c scale= speed= phase= seed= opacity= blend=`. `speed=0` fige l'image ; sans WebGL, repli en dégradé.
+- **Poignées d'effets** : quand un calque a `fx=` ou `shader=`, des pastilles roses apparaissent sur le canvas (centre de `lens`/`warp`/`vignette`, angle de `halftone`/`hatching`/`refract`/`metal`, taille de trame, position de `stretch`, centre/échelle/décalage des shaders). La souris les glisse ; le pilote aussi : `drive f.mq -e "select photo; rigs; drag rig halftone.angle by 30 0"`. L'inspecteur a une section **Effets avancés** : pile éditable (paramètres, réordonner, retirer, `+param`), ajout depuis la liste, presets (Risographie, Néon, Gravure, Rétro 1-bit, Verre cannelé, Chrome, Film) et réglages du shader.
 - **Groupes de masque** (Figma : Use as mask, Ctrl+Alt+M) : `<stack mask=first mask-type=alpha|vector|luminance>`. Le premier enfant masque les suivants. Un dégradé dans le masque alpha donne un fondu. En luminance, ce sont les zones claires qui révèlent.
 - **Pseudo-3D** : `tilt="20 -12"` (rotateX rotateY [rotateZ]), `perspective=900`, `skew="8 0"`, `depth=8` (extrusion de la vraie silhouette, `depth-color`, `depth-dir="1 1"`), `tilt=pointer` (suit le pointeur).
 

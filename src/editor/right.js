@@ -207,6 +207,8 @@ export class RightPanel {
       h('div.prow', null, h('label', null, 'Flou progressif'), input('pblur', a.pblur || '', (v) => set('pblur', v || null), { placeholder: '18 bottom' })),
       h('div.prow', null, h('label', null, 'Fusion'), select([['', 'Normal'], ['multiply', 'Produit'], ['screen', 'Superposition'], ['overlay', 'Incrustation'], ['soft-light', 'Lumière douce'], ['difference', 'Différence'], ['color-dodge', 'Densité -']], a.blend || '', (v) => set('blend', v || null)))));
 
+    if (!multi && n.tag !== 'screen' && MQ.Fx) b.appendChild(this.fxSection(n, a, set));
+
     // typography
     if (n.tag === 'text' || isContainer(n) || comp) {
       const fs = cs ? Math.round(parseFloat(cs.fontSize)) : 15;
@@ -239,6 +241,50 @@ export class RightPanel {
   }
 
   // ------------------------------------------------------------ align / distribute (absolute & top-level items)
+
+  // Filtres non destructifs (fx=) et remplissages shader (shader=) — pile éditable, paramètres, presets
+  fxSection(n, a, set) {
+    const Fx = MQ.Fx, Sh = MQ.Shader;
+    const list = Fx.parseFx(a.fx && a.fx !== true ? a.fx : '');
+    const write = (L) => set('fx', L.length ? Fx.serializeFx(L) : null);
+    const rows = [];
+    list.forEach((e, i) => {
+      const doc = Fx.FX_DOC[e.type] || '';
+      const avail = doc.split(/\s+/).map((t) => t.split('=')[0]).filter((k) => k && !/\|/.test(k) && !(k in e.o));
+      const params = Object.keys(e.o).map((k) => {
+        const v = e.o[k];
+        if (/^-?\d+(\.\d+)?$/.test(v)) return num(k, +v, (x) => { const L = Fx.parseFx(a.fx); if (x === '' || x == null) delete L[i].o[k]; else L[i].o[k] = String(x); write(L); });
+        return h('div.prow', null, h('label', null, k), input('fx-' + i + '-' + k, v, (x) => { const L = Fx.parseFx(a.fx); if (!x) delete L[i].o[k]; else L[i].o[k] = x; write(L); }, { mono: true }));
+      });
+      rows.push(h('div.fxitem', null,
+        h('div.fxhead', null, h('b', null, e.raw || e.type), e.pos.length ? h('span.mono', null, ' ' + e.pos.join(' ')) : null,
+          h('span', { style: 'flex:1' }),
+          i > 0 ? h('button.chip', { title: 'Monter', onclick: () => { const L = Fx.parseFx(a.fx); [L[i - 1], L[i]] = [L[i], L[i - 1]]; write(L); } }, '↑') : null,
+          h('button.chip', { title: 'Retirer', onclick: () => { const L = Fx.parseFx(a.fx); L.splice(i, 1); write(L); } }, '×')),
+        params.length ? h('div.grid2', null, params) : null,
+        avail.length ? h('div.chips', null, avail.slice(0, 10).map((k) => h('button.chip.ghost', { title: doc, onclick: async () => { const v = await ask(`${e.type} · ${k}`, '', doc); if (v) { const L = Fx.parseFx(a.fx); L[i].o[k] = v; write(L); } } }, '+' + k))) : null));
+    });
+    rows.push(h('div.prow', null, h('label', null, 'Ajouter'), select([['', 'Filtre…'], ...Fx.FX_NAMES.map((k) => [k, k])], '', (v) => { if (!v) return; const L = Fx.parseFx(a.fx && a.fx !== true ? a.fx : ''); L.push(...Fx.parseFx(FX_START[v] || v)); write(L); })));
+    rows.push(h('div.chips', null, FX_PRESETS.map(([l, v]) => h('button.chip', { title: v || 'aucun', onclick: () => set('fx', v) }, l))));
+    rows.push(h('div.prow', null, h('label', null, 'Pile (texte)'), input('fx', a.fx && a.fx !== true ? a.fx : '', (v) => set('fx', v || null), { placeholder: 'halftone size=6; gradmap colors=#102,#f06,#fe8', mono: true })));
+    // shader fill
+    if (Sh) {
+      const sp = a.shader && a.shader !== true ? Sh.parseShader(a.shader) : null;
+      const def = sp ? Sh.shaderDefaults(sp.type) : null;
+      const wsh = (patch) => { const P = Sh.parseShader(a.shader); Object.assign(P.o, patch); for (const k in P.o) if (P.o[k] == null || P.o[k] === '') delete P.o[k]; set('shader', [P.raw, ...P.pos, ...Object.entries(P.o).map(([k, v]) => `${k}=${/\s/.test(v) ? `"${v}"` : v}`)].join(' ')); };
+      rows.push(h('div.prow', null, h('label', null, 'Shader'), select([['', 'Aucun'], ...Sh.SHADER_NAMES.map((k) => [k, k])], sp ? sp.type : '', (v) => set('shader', v || null))));
+      if (sp && def) {
+        rows.push(h('div.grid2', null, def.params.map((p) => (p.options
+          ? h('div.prow', null, h('label', null, p.name), select(p.options.map((o) => [o, o]), sp.o[p.name] ?? p.def, (v) => wsh({ [p.name]: v })))
+          : num(p.name, sp.o[p.name] ?? p.def, (v) => wsh({ [p.name]: v })))),
+        num('scale', sp.o.scale ?? def.scale, (v) => wsh({ scale: v })), num('speed', sp.o.speed ?? 0, (v) => wsh({ speed: v || null }))));
+        rows.push(h('div.prow', null, h('label', null, 'Couleurs'), input('shader-colors', sp.o.colors || def.colors, (v) => wsh({ colors: v || null }), { mono: true })));
+      }
+      rows.push(h('div.hint', null, 'Les pastilles roses sur le canvas règlent centre, angle, échelle : glisse-les (drive : « drag rig halftone.angle by 30 0 »).'));
+    }
+    return sec('Effets avancés', ...rows);
+  }
+
   alignSection(nodes) {
     const app = this.app;
     const items = nodes.map((n) => {
@@ -553,6 +599,9 @@ easings : ${EASES.join(' ')}`)));
       i.screen && app.project.screen(i.screen) ? h('button.mini', { title: `Ignorer « ${i.code} » sur cet écran (lint-ignore)`, onclick: (e) => { e.stopPropagation(); const s = app.project.screen(i.screen); app.change(() => { const cur = String(s.attrs['lint-ignore'] || '').split(/[\s,]+/).filter(Boolean); if (!cur.includes(i.code)) cur.push(i.code); s.attrs['lint-ignore'] = cur.join(','); }); } }, icon('eye-off', 12)) : null));
   }
 }
+
+const FX_START = { adjust: 'adjust contrast=20 saturation=10', preset: 'preset vintage', gradmap: 'gradmap colors=#14112b,#e8336d,#ffd59a', duotone: 'duotone dark=#1b1035 light=#ffb38a', channels: 'channels swap=gbr', halftone: 'halftone size=6 angle=45', dither: 'dither mode=bayer levels=2 size=2', pixelate: 'pixelate size=10', hatching: 'hatching style=lines density=6', outlines: 'outlines levels=6', edges: 'edges width=1', bloom: 'bloom threshold=0.6 intensity=1.2', bokeh: 'bokeh radius=8', 'rgb-split': 'rgb-split amount=6', lens: 'lens distortion=0.4', warp: 'warp type=ripple amount=12', refract: 'refract pattern=lenticular size=24', stretch: 'stretch position=0.5', slice: 'slice slices=12 shift=24', metal: 'metal', gooey: 'gooey radius=10', vignette: 'vignette amount=0.5', posterize: 'posterize levels=4', invert: 'invert', threshold: 'threshold level=0.5', sharpen: 'sharpen amount=1', emboss: 'emboss', noise: 'noise amount=0.15' };
+const FX_PRESETS = [['Risographie', 'halftone size=5 angle=30 mode=color; noise amount=0.08'], ['Néon', 'bloom threshold=0.55 intensity=1.6; rgb-split amount=3'], ['Gravure', 'hatching style=cross density=5'], ['Rétro 1-bit', 'dither mode=bayer levels=2 size=2 ink=#1d1b3a paper=#f3e9d2'], ['Verre cannelé', 'refract pattern=lenticular size=22 strength=28'], ['Chrome', 'metal'], ['Film', 'preset vintage; noise amount=0.12; vignette amount=0.4'], ['Aucun', null]];
 
 // ------------------------------------------------------------ widgets
 const q = (s) => (/\s/.test(s) ? JSON.stringify(s) : s);

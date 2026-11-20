@@ -201,6 +201,33 @@ export function PillRow({ className, ...props }) { return <div className={cn("fl
   fs.rmSync(tmpMq);
 }
 
+// fx stack + shader fills: parse/serialize round-trip, every effect compiles to an SVG filter, mouse handles rewrite the stack
+{
+  const fx = await page.evaluate(() => {
+    const F = MQ.Fx, S = MQ.Shader;
+    const spec = 'halftone size=6 angle=30; gradmap colors=#102,#f06,#fe8; lens cx=0.4';
+    const rt = F.serializeFx(F.parseFx(spec)) === spec;
+    const ctx = { defs: new Map() }; const bad = F.FX_NAMES.filter((n) => !F.compileFx(n, ctx, { w: 200, h: 200 }).startsWith('url(#'));
+    const svgOk = [...ctx.defs.values()].every((v) => { const d = new DOMParser().parseFromString(`<svg xmlns="http://www.w3.org/2000/svg">${v.replace(/<filter /, '<filter xmlns="http://www.w3.org/2000/svg" ')}</svg>`, 'image/svg+xml'); return !d.querySelector('parsererror'); });
+    const hs = F.handles(spec, 200, 100).map((x) => x.name);
+    const moved = F.handles(spec, 200, 100).find((x) => x.name === 'lens.center').map(150, 25);
+    const sp = S.parseShader('voronoi scale=40 colors=#000,#fff');
+    return { rt, bad, svgOk, hs, moved, sh: sp.type === 'noise' && sp.o.type === 'voronoi' && sp.o.scale === '40', names: S.SHADER_NAMES.length, def: S.shaderDefaults('grid').params.length };
+  });
+  ok(fx.rt, 'fx : parse/serialize stable');
+  ok(!fx.bad.length && fx.svgOk, 'fx : chaque effet compile en filtre SVG valide' + (fx.bad.length ? ' — en échec : ' + fx.bad.join(', ') : ''));
+  ok(fx.hs.includes('halftone.angle') && fx.hs.includes('lens.center') && /lens cx=0\.75 cy=0\.25/.test(fx.moved), 'fx : poignées (angle, centre) réécrivent la pile — ' + fx.moved);
+  ok(fx.sh && fx.names >= 9 && fx.def === 6, 'shader : alias voronoi → noise type=voronoi, défauts par type');
+  const tmpMq = path.join(ROOT, 'out', '_fx.mq');
+  fs.writeFileSync(tmpMq, '<screen name=S w=400 h=400 p=40>\n  <image name=photo src="gen:landscape/3" w=320 h=320 fx="halftone size=8 angle=45"/>\n</screen>\n');
+  const log = console.log; console.log = () => {};
+  await drive({ file: tmpMq, script: 'select photo; drag rig halftone.angle by 0 60; click ui "Néon"', write: true, buildEditorHTML, chromium });
+  console.log = log;
+  const src = fs.readFileSync(tmpMq, 'utf8');
+  ok(/fx="bloom threshold=0\.55 intensity=1\.6; rgb-split amount=3"/.test(src), 'mq drive : poignée fx glissée puis preset « Néon » de l\'inspecteur\n' + src);
+  fs.rmSync(tmpMq);
+}
+
 // Component Studio: rename a prop (expressions + instances follow), add a rig, matrix with an instance-swap axis
 {
   const tmpMq = path.join(ROOT, 'out', '_studio.mq');

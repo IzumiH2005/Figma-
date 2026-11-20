@@ -3,6 +3,8 @@ import { Scope, interp, evaluate } from './expr.js';
 import { DEVICES, splitTop, withAlpha, parseColor, coerce } from './project.js';
 import { twToAttrs } from './tailwind.js';
 import { patternFill, wrapClone, applyEffects, applyMaskGroup } from './effects.js';
+import { compileFx } from './fx.js';
+import { applyShader } from './shader.js';
 import { resolveColorFns, shade as shadeC, parseColor as parseC, toCss as toCssC } from './color.js';
 const shadeColor = (c, p) => { const v = parseC(c); if (!v) throw new Error('not a colour'); return toCssC(shadeC(v, p / 100)); };
 import { VECTOR_TAGS, nodePath, boxOf, booleanSubs, booleanParts, buildVector, ROUNDABLE, cornerOf, withCorners, buildTextPath, gooFilterSvg, maskCss, threeD, parseShapeSpec } from './vector.js';
@@ -848,6 +850,8 @@ function decorate(el, node, a, states, events, scope, parentLayout, ctx) {
   if (el.classList.contains('mq-vec') && !el.style.position) el.style.position = 'relative';
   if (a.css) el.style.cssText += ';' + a.css;
   if (a.goo) { const g = gooFilterSvg(a.goo); (ctx.defs = ctx.defs || new Map()).set(g.id, g.svg); el.style.filter = `url(#${g.id})` + (el.style.filter ? ' ' + el.style.filter : ''); }
+  if (a.fx && a.fx !== true) { const f = compileFx(resolveDollars(String(a.fx), ctx), ctx, { w: a.w, h: a.h }); if (f) el.style.filter = (el.style.filter ? el.style.filter + ' ' : '') + f; }
+  if (a.shader && a.shader !== true) applyShader(el, resolveDollars(String(a.shader), ctx), ctx);
   if (a.tilt === 'pointer' && ctx.runtime) bindTilt(el, num(a['tilt-max'], 12));
   if (!ctx.owner) el.dataset.id = node.id;
   el.dataset.tag = tag;

@@ -60,7 +60,7 @@ async function browserPage({ scale = 1, viewport = { width: 1400, height: 1000 }
   const context = await browser.newContext({ viewport, deviceScaleFactor: +scale, ...(video ? { recordVideo: video } : {}) });
   const page = await context.newPage();
   page.on('pageerror', (e) => console.error('  [page]', e.message));
-  page.on('console', (m) => { if (m.type() === 'warning' || m.type() === 'error') console.error('  [console]', m.text()); });
+  page.on('console', (m) => { if ((m.type() === 'warning' || m.type() === 'error') && !/GL Driver Message|GPU stall/.test(m.text())) console.error('  [console]', m.text()); });
   await page.setContent(`<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;background:transparent}</style></head><body></body></html>`);
   await page.addScriptTag({ content: await runtime() });
   return { browser, context, page };

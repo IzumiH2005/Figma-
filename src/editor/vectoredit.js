@@ -24,6 +24,9 @@ const RIGS = {
   arrow: (w, h, p) => { const hd = +p.head || 0.42; return [{ param: 'head', x: w - w * hd, y: 4, map: (lx) => clamp((w - lx) / w, 0.1, 0.9).toFixed(2) }]; },
   bubble: (w, h, p) => { const t = +p.tail || 0.25; return [{ param: 'tail', x: w * t, y: h - 2, map: (lx) => clamp(lx / w, 0.08, 0.85).toFixed(2) }]; },
   wave: (w, h, p) => [{ param: 'amp', x: w / 4, y: 2, map: (lx, ly) => clamp(0.45 - ly / h, 0.02, 0.45).toFixed(2) }],
+  // layer effects and shader fills: centre, angle, size, scale… handles on the layer itself
+  fx: (w, h, p) => (p.fx && p.fx !== true && MQ.Fx ? MQ.Fx.handles(String(p.fx), w, h) : []),
+  shader: (w, h, p) => (p.shader && p.shader !== true && MQ.Shader ? MQ.Shader.shaderHandles(String(p.shader), w, h) : []),
 };
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
@@ -133,13 +136,17 @@ export class VectorEditor {
     const el = this.canvas.elOf(id); if (!el) return;
     this.drawCustomRigs(overlay, svg, id, el);
     const kind = n.tag === 'shape' ? n.attrs.kind || 'rect' : n.tag === 'rect' ? 'rect' : n.tag === 'ellipse' ? 'ellipse' : null;
-    if (!kind || !RIGS[kind]) return;
+    const kinds = [kind, n.attrs.fx ? 'fx' : null, n.attrs.shader ? 'shader' : null].filter((k) => k && RIGS[k]);
+    if (!kinds.length) return;
     const r = this.canvas.local(el.getBoundingClientRect());
     const vw = +el.dataset.vw || el.offsetWidth, vh = +el.dataset.vh || el.offsetHeight;
-    const params = n.tag === 'shape' ? n.attrs : { radius: n.attrs.radius, start: n.attrs.start, sweep: n.attrs.sweep, ratio: n.attrs.ratio };
-    RIGS[kind](vw, vh, params).forEach((hd, i) => {
-      overlay.appendChild(h('div.ov.ve-rig', { title: `${hd.param} (glisser)`, style: { left: r.x + hd.x * (r.w / vw) + 'px', top: r.y + hd.y * (r.h / vh) + 'px' }, dataset: { rig: `${id}|${kind}|${i}`, rigName: hd.param } }));
-    });
+    for (const k of kinds) {
+      const params = n.tag === 'shape' || k === 'fx' || k === 'shader' ? n.attrs : { radius: n.attrs.radius, start: n.attrs.start, sweep: n.attrs.sweep, ratio: n.attrs.ratio };
+      RIGS[k](vw, vh, params).forEach((hd, i) => {
+        const name = hd.name || hd.param;
+        overlay.appendChild(h('div.ov.ve-rig' + (hd.name ? '.fx' : ''), { title: `${name} (glisser)`, style: { left: r.x + hd.x * (r.w / vw) + 'px', top: r.y + hd.y * (r.h / vh) + 'px' }, dataset: { rig: `${id}|${k}|${i}`, rigName: name } }));
+      });
+    }
   }
 
   // custom rigs (rig:<target>="…") carried by the selected element or any element inside it

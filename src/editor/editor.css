@@ -398,6 +398,7 @@ body[data-view="contrast-low"] .cv-world, body[data-view="contrast-low"] .play-h
 .timeline.recording { box-shadow: inset 0 3px 0 #E5484D; }
 .timeline.recording .tl-cursor { background: #E5484D; }
 .ve-rig.custom { background: #2BD9A0; border-radius: 50%; transform: none; width: 13px; height: 13px; margin: -6.5px 0 0 -6.5px; }
+.ve-rig.fx { background: #FF5FA2; border-radius: 50%; transform: none; width: 12px; height: 12px; margin: -6px 0 0 -6px; }
 .ve-rig.custom:hover { box-shadow: 0 0 0 4px rgba(43,217,160,.3), 0 0 0 1px rgba(0,0,0,.35); }
 .ve-rig-track { fill: none; stroke: #2BD9A0; stroke-width: 1.5; stroke-dasharray: 3 3; opacity: .9; }
 .ve-rig-label { position: absolute; padding: 2px 6px; border-radius: 4px; background: #0E1512; color: #2BD9A0; font: 500 10px/14px Inter, system-ui, sans-serif; white-space: nowrap; pointer-events: none; }
@@ -468,3 +469,8 @@ body[data-view="contrast-low"] .cv-world, body[data-view="contrast-low"] .play-h
 .rigdot { width: 8px; height: 8px; border-radius: 50%; background: #2BD9A0; flex-shrink: 0; }
 .st-tools .sel { width: auto; flex: 0 0 auto; }
 .st-matrix .st-tools .sel { max-width: 140px; }
+.fxitem { display: flex; flex-direction: column; gap: 6px; padding: 8px 0; border-bottom: 1px solid var(--ui-line, rgba(127,127,127,.15)); }
+.fxitem:last-of-type { border-bottom: 0; }
+.fxhead { display: flex; align-items: center; gap: 4px; font-size: 12px; }
+.fxhead .mono { font-family: ui-monospace, monospace; color: var(--ui-muted); }
+.chip.ghost { background: transparent; }

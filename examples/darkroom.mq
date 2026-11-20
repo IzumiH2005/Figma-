@@ -1,0 +1,78 @@
+<project name="Chambre noire — filtres et shaders" typescale=web fonts="Inter:400;500;600;800">
+  <!-- Démonstration des filtres non destructifs (fx=) et des remplissages shader (shader=).
+       Chaque vignette applique une pile d'effets à la même image générée : rien n'est « cuit »,
+       la pile reste éditable dans l'inspecteur (section Effets avancés) et sur le canvas :
+       sélectionne une vignette, les pastilles roses règlent angle de trame, centre de lentille, etc.
+       Le bandeau du haut est un shader WebGL animé (mesh), le bouton change de « look ». -->
+  <tokens>
+    brand: ramp(#7B5CFF)
+    gray: neutrals(#7B5CFF, 0.03)
+    primary: $brand-600
+    bg: #100E17
+    surface: #1A1724
+    text: $gray-50
+    muted: $gray-400
+  </tokens>
+
+  <vars>
+    look: 'riso'
+  </vars>
+
+  <screen name=Planche device=desktop w=1280 h=auto fill=$bg>
+    <col w=fill maxw=1180 mx=auto px=48 py=48 gap=32>
+      <stack name=hero w=fill h=360 radius=24 shader="mesh warp=0.5 speed=0.4 colors=#1b0f3b,#5a2bd6,#ff5fa2,#ffb36b,#2a1166,#0d0a1f" anim="fade 700 expo">
+        <col w=fill h=fill p=40 gap=24 justify=between>
+        <col maxw=640 gap=12 anim="fade-up 600 expo delay=200">
+          <text class=t-caption weight=600 color=$text ls=0.16em>CHAMBRE NOIRE · 2026</text>
+          <text class=t-h1 weight=800 color=$on-primary ls=-0.02em>Une image, vingt traitements</text>
+          <text class=t-body color="alpha(#FFFFFF, 80)" maxw=520>Trames, dithering, verre cannelé, chrome : des filtres non destructifs empilés sur le même calque.</text>
+        </col>
+        <row gap=12 anim="fade-up 600 expo delay=360">
+          <Button label={$look == 'riso' ? 'Passer en gravure' : 'Passer en risographie'} icon=wand-sparkles on:click="set $look {$look == 'riso' ? 'gravure' : 'riso'} smart 500"/>
+        </row>
+        </col>
+      </stack>
+
+      <grid cols=3 gap=24 w=fill stagger="70 fade-up 480 expo drag=1.1">
+        <col gap=12>
+          <image name=trame src="gen:landscape/3" w=fill h=280 radius=16 fx={$look == 'riso' ? 'halftone size=6 angle=30 mode=color; noise amount=0.08' : 'hatching style=cross density=5'}/>
+          <text class=t-small weight=600 color=$text>Trame</text>
+        </col>
+        <col gap=12>
+          <image name=carte src="gen:landscape/3" w=fill h=280 radius=16 fx="gradmap colors=#14112b,#e8336d,#ffd59a"/>
+          <text class=t-small weight=600 color=$text>Gradient map</text>
+        </col>
+        <col gap=12>
+          <image name=bitmap src="gen:landscape/3" w=fill h=280 radius=16 fx="dither mode=bayer levels=2 size=2 ink=#1d1b3a paper=#f3e9d2"/>
+          <text class=t-small weight=600 color=$text>Rétro 1-bit</text>
+        </col>
+        <col gap=12>
+          <image name=verre src="gen:landscape/3" w=fill h=280 radius=16 fx="refract pattern=lenticular size=22 strength=28"/>
+          <text class=t-small weight=600 color=$text>Verre cannelé</text>
+        </col>
+        <col gap=12>
+          <image name=lentille src="gen:landscape/3" w=fill h=280 radius=16 fx="lens distortion=0.6 aberration=0.5 cx=0.6 cy=0.4; vignette amount=0.5"/>
+          <text class=t-small weight=600 color=$text>Lentille</text>
+        </col>
+        <col gap=12>
+          <stack name=eau w=fill h=280 radius=16 shader="caustics intensity=1.2 speed=0.6"/>
+          <text class=t-small weight=600 color=$text>Shader caustiques</text>
+        </col>
+      </grid>
+
+      <row w=fill align=center justify=between>
+        <text class=t-small color=$muted>Sélectionne une vignette : les pastilles roses se glissent.</text>
+        <text class=t-small color=$muted>fx= · shader=</text>
+      </row>
+    </col>
+  </screen>
+
+  <flow name="demo">
+    start Planche
+    wait 1400
+    click "Passer en gravure"
+    wait 1400
+    click "Passer en risographie"
+    wait 1200
+  </flow>
+</project>

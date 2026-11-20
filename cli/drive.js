@@ -84,12 +84,20 @@ window.__D = {
       const box = R.toBox(R.rigBox(c.el, c.grp.rigs[0].r)); const values = Object.fromEntries(c.grp.rigs.map((g) => [g.target, v.rigValue(g)]));
       out.push({ where: 'editor', name: c.grp.rigs.map((g) => g.target).join(','), owner, grp: c.grp, box, values, handle: this.center(el) }); });
     document.querySelectorAll('.ve-rig:not(.custom)').forEach((el) => { const [id] = el.dataset.rig.split('|'); const n = app.node(id); const p = el.dataset.rigName;
-      out.push({ where: 'editor', name: p, owner, builtin: true, values: { [p]: n && n.attrs[p] }, handle: this.center(el) }); });
+      let val = n && n.attrs[p];
+      if (n && el.classList.contains('fx')) { const [tag, key] = p.split('.'); const src = n.attrs[tag === 'shader' ? 'shader' : 'fx'] || '';
+        if (tag === 'shader') { const o = MQ.Shader.parseShader(src).o; val = key === 'center' ? (o.cx ?? 0.5) + ',' + (o.cy ?? 0.5) : o[key] ?? '(défaut)'; }
+        else { const e = MQ.Fx.parseFx(src).find((x) => (x.raw || x.type) === tag); val = key === 'center' ? (e ? (e.o.cx ?? 0.5) + ',' + (e.o.cy ?? 0.5) : '') : e ? e.o[key] ?? '(défaut)' : ''; } }
+      out.push({ where: 'editor', name: p, owner, builtin: true, values: { [p]: val }, handle: this.center(el) }); });
     return out;
   },
   findRig(spec) {
     const q = String(spec).trim().split(/\s+/); let name = q[0]; const nth = q[1] !== undefined && /^\d+$/.test(q[1]) ? +q[1] : 0;
-    let owner = null; if (name.includes('.') && !/^\d/.test(name)) { const i = name.lastIndexOf('.'); owner = name.slice(0, i); name = name.slice(i + 1); }
+    let owner = null;
+    if (name.includes('.') && !/^\d/.test(name) && !this.rigList().some((r) => r.name === name)) { // "halftone.angle" is itself a rig name (fx/shader handles)
+      const dots = [...name].map((c, i) => (c === '.' ? i : -1)).filter((i) => i >= 0);
+      const known = (o) => this.playing() || !!this.byName(o);
+      const i = dots.find((d) => known(name.slice(0, d))); if (i === undefined) { const l = this.rigList(); throw new Error('rig introuvable : ' + spec + (l.length ? ' — visibles : ' + l.map((r) => (r.owner ? r.owner + '.' : '') + r.name).join(' · ') : '')); } owner = name.slice(0, i); name = name.slice(i + 1); }
     if (owner && !this.playing()) { const r = this.ensureSel(owner); if (r) return r; }
     const list = this.rigList();
     if (/^\d+$/.test(name)) { const r = list[+name]; if (!r) throw new Error('rig ' + name + ' introuvable (' + list.length + ' visibles)'); return r; }
