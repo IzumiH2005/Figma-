@@ -158,6 +158,18 @@ Tout ce qui se dessine dans Figma (formes, plume, booléens, texte sur chemin) e
   - Ces modificateurs se combinent. « Figer les modificateurs » les transforme en vecteurs simples.
 - **Vectoriser le contour** (Outline Stroke, Ctrl+Alt+O) : transforme un contour en forme pleine (centré, intérieur ou extérieur, profils et pinceaux compris). Si la forme a un remplissage, il est conservé à part.
 - **Shape Builder** (Maj+M sur des formes qui se chevauchent) : la sélection est découpée en régions. Glisser sur des régions les fusionne, Alt+clic en retire une, Entrée applique et produit des vecteurs éditables.
+- **Motifs** (Pattern fill) : `fill="pattern(star, 10, 8, #7C5CFF, grid, 15) + #EDE9FF"`. Les arguments sont : forme (toute forme paramétrique, ou `icon:nom`), taille, espacement, couleur, pavage (`grid | brick | brick-v | half-drop`), rotation.
+- **Répétitions** (Figma Draw : Repeat) :
+  - `clone="radial 12 r=60"` (`angle=120 start=-60` pour un éventail) ;
+  - `clone="linear 6 dx=24 dy=0 rotate=8 scale=0.9 opacity=0.85"` : progression à chaque copie ;
+  - `clone="grid 4 3 gap=12"`.
+  L'élément garde sa place dans la mise en page.
+- **Effets** :
+  - `grain=0.15` : bruit ;
+  - `texture=3` : bords irréguliers, effet fait main (`seed=`) ;
+  - `glass` ou `glass="frost=14 refraction=6 tint=… light=-45"` : verre dépoli, réfraction et reflet ;
+  - `pblur="18 bottom"` : flou d'arrière-plan progressif.
+- **Groupes de masque** (Figma : Use as mask, Ctrl+Alt+M) : `<stack mask=first mask-type=alpha|vector|luminance>`. Le premier enfant masque les suivants. Un dégradé dans le masque alpha donne un fondu. En luminance, ce sont les zones claires qui révèlent.
 - **Pseudo-3D** : `tilt="20 -12"` (rotateX rotateY [rotateZ]), `perspective=900`, `skew="8 0"`, `depth=8` (extrusion de la vraie silhouette, `depth-color`, `depth-dir="1 1"`), `tilt=pointer` (suit le pointeur).
 
 **Dans l'éditeur** : outil Formes (S) avec un menu de 15 formes, Plume (P : clic = angle, glisser = courbe, clic sur le premier point = fermer), Crayon (Maj+P : tracé lissé automatiquement). Double-clic ou Entrée sur une forme = édition des points (glisser un point ou une poignée, Alt casse la symétrie, clic sur le tracé ajoute un point, double-clic bascule angle/courbe, Suppr retire). Les losanges orange sont les poignées de rig (branches d'étoile, arc, rayon…). Sélection multiple → Union / Soustraire / Intersection / Exclure ; Ctrl+E aplatit en vecteur. Panneaux Forme, Tracé (Lisser, Simplifier, Miroirs), 3D (presets Carte posée / Isométrique / Relief) et Masque & fusion.

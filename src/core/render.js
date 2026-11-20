@@ -2,6 +2,7 @@
 import { Scope, interp, evaluate } from './expr.js';
 import { DEVICES, splitTop, withAlpha, parseColor, coerce } from './project.js';
 import { twToAttrs } from './tailwind.js';
+import { patternFill, wrapClone, applyEffects, applyMaskGroup } from './effects.js';
 import { resolveColorFns, shade as shadeC, parseColor as parseC, toCss as toCssC } from './color.js';
 const shadeColor = (c, p) => { const v = parseC(c); if (!v) throw new Error('not a colour'); return toCssC(shadeC(v, p / 100)); };
 import { VECTOR_TAGS, nodePath, boxOf, booleanSubs, buildVector, buildTextPath, gooFilterSvg, maskCss, threeD, parseShapeSpec } from './vector.js';
@@ -235,6 +236,7 @@ export function fillToCss(v, ctx) {
         break;
       }
       case 'noise': images.push(NOISE(num(args[0], 0.12), num(args[1], 0.9))); sizes.push('220px 220px'); break;
+      case 'pattern': { const pf = patternFill(args, (name, size, color) => { try { return iconSvg(name, { size, sw: 2 }); } catch (e) { return ''; } }); images.push(pf.image); sizes.push(pf.size); break; }
       case 'dots': { const col = args[0] || 'rgba(127,127,127,.35)', s = num(args[1], 2), g = num(args[2], 16); images.push(`radial-gradient(${col} ${s / 2}px, transparent ${s / 2 + 0.5}px)`); sizes.push(`${g}px ${g}px`); break; }
       case 'grid': { const col = args[0] || 'rgba(127,127,127,.18)', g = num(args[1], 24), w = num(args[2], 1); images.push(`linear-gradient(${col} ${w}px, transparent ${w}px), linear-gradient(90deg, ${col} ${w}px, transparent ${w}px)`); sizes.push(`${g}px ${g}px, ${g}px ${g}px`); break; }
       case 'stripes': { const col = args[0] || 'rgba(127,127,127,.15)', w = num(args[1], 8), ang = num(args[2], 45); images.push(`repeating-linear-gradient(${ang}deg, ${col} 0 ${w}px, transparent ${w}px ${w * 2}px)`); sizes.push('auto'); break; }
@@ -493,7 +495,7 @@ export function cssFor(tag, a, parentLayout, ctx, isText) {
     s.filter = [s.filter, Array.from({ length: n }, () => `drop-shadow(${dx}px ${dy}px 0 ${col})`).join(' ')].filter(Boolean).join(' ');
   } else if (depth) { if (isText) s.textShadow = [s.textShadow, depth].filter(Boolean).join(', '); else s.boxShadow = [s.boxShadow, depth].filter(Boolean).join(', '); }
   if (a.tilt || a.preserve3d) s.transformStyle = 'preserve-3d';
-  if (a.mask && a.mask !== true) { const m = maskCss(a.mask); if (m) { s.webkitMaskImage = m.image; s.maskImage = m.image; s.webkitMaskSize = m.size; s.maskSize = m.size; s.webkitMaskRepeat = 'no-repeat'; s.maskRepeat = 'no-repeat'; } }
+  if (a.mask && a.mask !== true && a.mask !== 'first') { const m = maskCss(a.mask); if (m) { s.webkitMaskImage = m.image; s.maskImage = m.image; s.webkitMaskSize = m.size; s.maskSize = m.size; s.webkitMaskRepeat = 'no-repeat'; s.maskRepeat = 'no-repeat'; } }
 
   // ---------- typography (cascades)
   if (a.font) s.fontFamily = fontStack(a.font);
@@ -607,7 +609,7 @@ export function renderNode(node, scope, parentLayout, ctx, overrides) {
   const el = createElementFor(node, a, scope, parentLayout, ctx);
   if (!el) return [];
   decorate(el, node, a, states, events, scope, parentLayout, ctx);
-  return [el];
+  return [a.clone && a.clone !== true ? wrapClone(el, a.clone) : el];
 }
 
 function renderInstance(node, comp, scope, parentLayout, ctx, outerOverrides) {
@@ -825,6 +827,8 @@ function decorate(el, node, a, states, events, scope, parentLayout, ctx) {
     const kids = renderChildren(node.children, scope, layout, ctx, el);
     if (a.stagger) applyStagger(kids, a.stagger, ctx);
   }
+  if (a.grain || a.texture || a.glass || a.pblur) applyEffects(el, a, ctx);
+  if (a.mask === 'first' || a['mask-group']) { const run = (k) => { if (el.isConnected && el.offsetWidth) applyMaskGroup(el, a); else if (k < 30 && typeof requestAnimationFrame !== 'undefined') requestAnimationFrame(() => run(k + 1)); }; run(0); }
 }
 
 // Cascade (overlapping action): "60 fade-up 450 from=center drag=1.1"

@@ -42,7 +42,7 @@ export class RightPanel {
     b.appendChild(sec('Projet', h('div.kv', null, h('span', null, 'Nom'), h('b', null, p.name)), h('div.kv', null, h('span', null, 'Écrans'), h('b', null, p.screens().length)), h('div.kv', null, h('span', null, 'Composants'), h('b', null, Object.values(p.components).filter((c) => !c.fromKit).length + ' (+ kit)')), h('div.kv', null, h('span', null, 'Modes'), h('b', null, p.modes.join(' · ')))));
     b.appendChild(sec('Raccourcis', ...[
       ['V / H', 'Déplacer / Main'], ['F R O T', 'Frame, Rect, Ellipse, Texte'], ['I N', 'Image, Note'], ['Ctrl+G', 'Grouper (stack)'], ['Maj+A', 'Auto layout (col)'], ['Ctrl+Alt+K', 'Créer un composant'],
-      ['Ctrl+D', 'Dupliquer'], ['Alt+glisser', 'Dupliquer en déplaçant'], ['Alt+survol', 'Mesurer les distances'], ['Entrée / Maj+Entrée', 'Enfant / parent'], ['Maj+1 / Maj+2', 'Tout voir / sélection'], ['Maj+E', 'Mode prototype'], ['P / Maj+P', 'Plume / crayon'], ['S', 'Formes'], ['Entrée', 'Éditer les points'], ['Ctrl+E', 'Aplatir'], ['Maj+M', 'Shape Builder'], ['Ctrl+Alt+O', 'Vectoriser le contour'], ['Ctrl+Entrée', 'Présenter'], ['Ctrl+/', 'Code complet'],
+      ['Ctrl+D', 'Dupliquer'], ['Alt+glisser', 'Dupliquer en déplaçant'], ['Alt+survol', 'Mesurer les distances'], ['Entrée / Maj+Entrée', 'Enfant / parent'], ['Maj+1 / Maj+2', 'Tout voir / sélection'], ['Maj+E', 'Mode prototype'], ['P / Maj+P', 'Plume / crayon'], ['S', 'Formes'], ['Entrée', 'Éditer les points'], ['Ctrl+E', 'Aplatir'], ['Maj+M', 'Shape Builder'], ['Ctrl+Alt+M', 'Utiliser comme masque'], ['Ctrl+Alt+O', 'Vectoriser le contour'], ['Ctrl+Entrée', 'Présenter'], ['Ctrl+/', 'Code complet'],
     ].map(([k, v]) => h('div.kv', null, h('kbd', null, k), h('span', null, v)))));
   }
 
@@ -171,14 +171,20 @@ export class RightPanel {
         h('div.chips', null, [['Carte posée', { tilt: '24 0', depth: null }], ['Isométrique', { tilt: '55 0 -45', depth: '8' }], ['Relief', { depth: '6', 'depth-color': null }], ['Aucun', { tilt: null, skew: null, depth: null, perspective: null, 'depth-color': null }]].map(([l, v]) => h('button.chip', { onclick: () => setMany(v) }, l))),
       ];
       b.appendChild(sec('3D', ...rows));
+      b.appendChild(sec('Répétition', input('clone', a.clone || '', (v) => set('clone', v || null), { placeholder: 'radial 12 r=60 · linear 6 dx=24 rotate=8 scale=0.9', mono: true }),
+        h('div.chips', null, [['Radiale ×12', 'radial 12 r=60'], ['Éventail', 'radial 7 r=80 angle=120 start=-60'], ['Linéaire ×6', 'linear 6 dx=28'], ['Spirale', 'linear 10 dx=14 dy=6 rotate=24 scale=0.92 opacity=0.9'], ['Grille 4×3', 'grid 4 3 gap=12'], ['Aucune', null]].map(([l, v]) => h('button.chip', { onclick: () => set('clone', v) }, l)))));
       const mrows = [h('div.prow', null, h('label', null, 'Masque'), input('mask', a.mask || '', (v) => set('mask', v || null), { placeholder: 'star points=6 · fade bottom', mono: true })),
         h('div.chips', null, ['circle', 'squircle', 'blob seed=4', 'star points=8 inner=0.7', 'fade bottom', 'fade edges'].map((v) => h('button.chip', { onclick: () => set('mask', v) }, v)))];
+      if (a.mask === 'first') mrows.push(h('div.prow', null, h('label', null, 'Type de masque'), select([['alpha', 'Alpha'], ['vector', 'Vecteur'], ['luminance', 'Luminance']], a['mask-type'] || 'alpha', (v) => set('mask-type', v === 'alpha' ? null : v))));
       if (isContainer(n)) mrows.push(h('div.prow', null, h('label', null, 'Fusion goo (métaballes)'), numOpt('force', a.goo === true ? 10 : a.goo, (v) => set('goo', v))));
       b.appendChild(sec('Masque & fusion', ...mrows));
     }
     b.appendChild(sec('Effets',
       h('div.prow', null, h('label', null, 'Ombre'), select([['', 'Aucune'], ['xs', 'XS'], ['sm', 'S'], ['md', 'M'], ['lg', 'L'], ['xl', 'XL'], ['2xl', '2XL'], ['inner', 'Intérieure'], ['custom', 'Personnalisée…']], ['xs', 'sm', 'md', 'lg', 'xl', '2xl', 'inner'].includes(a.shadow) || !a.shadow ? a.shadow || '' : 'custom', async (v) => { if (v === 'custom') { const c = await ask('Ombre personnalisée', a.shadow || '0 8 24 rgba(0,0,0,.2)', 'x y flou [étendue] couleur ; plusieurs ombres séparées par +'); if (c) set('shadow', c); } else set('shadow', v || null); })),
       h('div.grid2', null, numOpt('Flou', a.blur, (v) => set('blur', v)), numOpt('Flou fond', a.bgblur, (v) => set('bgblur', v))),
+      h('div.grid2', null, numOpt('Grain', a.grain, (v) => set('grain', v)), numOpt('Texture', a.texture, (v) => set('texture', v))),
+      h('div.prow', null, h('label', null, 'Verre'), toggle(!!a.glass, (v) => set('glass', v ? 'frost=14 refraction=6' : null))),
+      h('div.prow', null, h('label', null, 'Flou progressif'), input('pblur', a.pblur || '', (v) => set('pblur', v || null), { placeholder: '18 bottom' })),
       h('div.prow', null, h('label', null, 'Fusion'), select([['', 'Normal'], ['multiply', 'Produit'], ['screen', 'Superposition'], ['overlay', 'Incrustation'], ['soft-light', 'Lumière douce'], ['difference', 'Différence'], ['color-dodge', 'Densité -']], a.blend || '', (v) => set('blend', v || null)))));
 
     // typography

@@ -212,6 +212,7 @@ function boot() {
       { label: 'Dégrouper', key: 'Ctrl+Maj+G', icon: 'ungroup', disabled: !n || !isContainer(n) || n.tag === 'screen', run: () => unwrap() },
       '-',
       n && ['vector', 'shape', 'rect', 'ellipse', 'boolean'].includes(n.tag) ? { label: 'Éditer les points', key: 'Entrée', icon: 'spline', run: () => canvas.vedit.enter(n.id) } : null,
+      sel.length > 1 ? { label: 'Utiliser comme masque', key: 'Ctrl+Alt+M', icon: 'venetian-mask', run: () => useAsMask() } : null,
       sel.length > 1 ? { label: 'Union', icon: 'squares-unite', run: () => booleanOp('union') } : null,
       sel.length > 1 ? { label: 'Soustraire', icon: 'squares-subtract', run: () => booleanOp('subtract') } : null,
       sel.length > 1 ? { label: 'Intersection', icon: 'squares-intersect', run: () => booleanOp('intersect') } : null,
@@ -272,6 +273,22 @@ function boot() {
   function placeVector(geo, x0, y0, attrs) {
     const P = MQ.Path; const bb = P.bbox(geo);
     return { id: MQ.newId(), tag: 'vector', attrs: { x: String(Math.round((x0 + bb.x) * 10) / 10), y: String(Math.round((y0 + bb.y) * 10) / 10), w: String(Math.max(1, Math.round(bb.w * 10) / 10)), h: String(Math.max(1, Math.round(bb.h * 10) / 10)), ...attrs, d: P.serializePath(P.translatePath(geo, -bb.x, -bb.y)) }, children: [] };
+  }
+  // Figma "Use as mask": the bottom-most selected layer masks the others (mask group = <stack mask=first>)
+  function useAsMask() {
+    const nodes = app.selNodes.filter((n) => n.tag !== 'screen'); if (nodes.length < 2) { toast('Sélectionne le masque et les calques à masquer'); return; }
+    const parent = app.parent(nodes[0].id); if (!nodes.every((n) => app.parent(n.id) === parent)) { toast('Sélectionne des calques du même parent'); return; }
+    const sib = app.siblings(nodes[0].id); nodes.sort((x, y) => sib.indexOf(x) - sib.indexOf(y));
+    const z = app.zoom; const pel = canvas.elOf(nodes[0].id).parentElement; const pr = pel.getBoundingClientRect();
+    const boxes = nodes.map((n) => { const r = canvas.elOf(n.id).getBoundingClientRect(); return { n, x: (r.left - pr.left) / z, y: (r.top - pr.top) / z, w: r.width / z, h: r.height / z }; });
+    const m = boxes[0]; const x0 = Math.min(...boxes.map((b) => b.x)), y0 = Math.min(...boxes.map((b) => b.y)), x1 = Math.max(...boxes.map((b) => b.x + b.w)), y1 = Math.max(...boxes.map((b) => b.y + b.h));
+    app.change(() => {
+      const idx = sib.indexOf(nodes[0]);
+      const g = { id: MQ.newId(), tag: 'stack', attrs: { name: 'masque', mask: 'first', x: String(Math.round(x0)), y: String(Math.round(y0)), w: String(Math.round(x1 - x0)), h: String(Math.round(y1 - y0)) }, children: [] };
+      for (const b of boxes) { app.remove([b.n.id]); b.n.attrs.x = String(Math.round(b.x - x0)); b.n.attrs.y = String(Math.round(b.y - y0)); if (!/^\d/.test(String(b.n.attrs.w))) b.n.attrs.w = String(Math.round(b.w)); if (!/^\d/.test(String(b.n.attrs.h))) b.n.attrs.h = String(Math.round(b.h)); for (const k of ['absolute', 'place', 'top', 'left', 'right', 'bottom']) delete b.n.attrs[k]; g.children.push(b.n); }
+      sib.splice(Math.min(idx, sib.length), 0, g); app.selection = [g.id];
+    });
+    toast(`« ${m.n.attrs.name || m.n.tag} » sert de masque (alpha). Change le type dans Masque & fusion.`);
   }
   function outlineStroke(id) {
     const n = app.node(id); const el = canvas.elOf(id); if (!n || !el || !el._path) { toast('Sélectionne une forme vectorielle avec un contour'); return; }
@@ -406,6 +423,7 @@ function boot() {
     if (e.shiftKey && k === 'a') { wrap('col', { gap: '8' }); return; }
     if (e.shiftKey && k === 'p') { app.tool = 'pencil'; app.emit('tool'); return; }
     if (e.shiftKey && k === 'm' && !mod) { canvas.sbuild.start(app.selection); return; }
+    if (mod && e.altKey && k === 'm') { e.preventDefault(); useAsMask(); return; }
     if (mod && e.altKey && k === 'o') { e.preventDefault(); const n = app.selNodes[0]; if (n) outlineStroke(n.id); return; }
     if (e.shiftKey && k === 'e') { app.protoView = !app.protoView; app.emit('proto'); return; }
     if (e.shiftKey && k === 'g') { toggleGrid(); return; }
