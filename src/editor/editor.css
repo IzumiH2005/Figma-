@@ -382,3 +382,10 @@ body[data-view="contrast-low"] .cv-world, body[data-view="contrast-low"] .play-h
 .ve-rig { position: absolute; width: 11px; height: 11px; margin: -5.5px 0 0 -5.5px; background: #FFB547; border: 2px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.35); transform: rotate(45deg); pointer-events: auto; cursor: grab; }
 .ve-anchor-svg { fill: #fff; stroke: var(--ui-sel); stroke-width: 1.5; } .ve-anchor-svg.first { fill: var(--ui-sel); }
 .ve-help { position: absolute; background: var(--ui-panel); color: var(--ui-muted); font-size: 11px; padding: 4px 8px; border-radius: 6px; box-shadow: var(--shadow); white-space: nowrap; }
+
+/* shape builder */
+.sb-region { fill: rgba(91,140,255,.06); stroke: rgba(91,140,255,.55); stroke-width: 1; stroke-dasharray: 3 3; pointer-events: all; cursor: crosshair; }
+.sb-region.hot { fill: rgba(91,140,255,.22); }
+.sb-region.merged { fill: color-mix(in srgb, var(--sb) 35%, transparent); stroke: var(--sb); stroke-dasharray: none; stroke-width: 1.5; }
+.sb-region.removed { fill: repeating-linear-gradient(45deg, rgba(229,72,77,.25) 0 4px, transparent 4px 8px); fill: rgba(229,72,77,.18); stroke: #E5484D; }
+.canvas.sbuild .cv-svg { pointer-events: auto; }

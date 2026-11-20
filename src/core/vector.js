@@ -1,5 +1,6 @@
 // Vector layers: <shape>, <vector>, <boolean>, <textpath>, masks, goo (shape fusion), morphing, pseudo-3D.
 import { parsePath, serializePath, shapePath, booleanPaths, scalePath, translatePath, rotatePath, bbox, SHAPES } from './pathkit.js';
+import { offsetPath, widthProfile, scatterBrush } from './pathops.js';
 import { splitTop } from './project.js';
 import { interpolate as flubberInterpolate } from 'flubber';
 
@@ -75,9 +76,10 @@ function strokeSpec(v) {
 
 // Build the visual of a vector element. `a` = resolved attrs, subs = local path, fillCss = (value) => {image,color,size}
 export function buildVector(el, node, a, subs, box, ctx, fillCss) {
+  if (!a._inner && (a.offset || a['width-profile'] || a.profile || a.brush)) return buildModified(el, node, a, subs, box, ctx, fillCss);
   const { w, h } = box;
   const d = serializePath(subs);
-  const evenodd = a['fill-rule'] === 'evenodd' || a.evenodd || subs.length > 1 && node.tag !== 'shape';
+  const evenodd = a['fill-rule'] !== 'nonzero' && (a['fill-rule'] === 'evenodd' || a.evenodd || subs.length > 1 && node.tag !== 'shape');
   el.classList.add('mq-vec');
   el.dataset.d = d; el.dataset.vw = w; el.dataset.vh = h;
   el._path = subs; el._box = box;
@@ -227,4 +229,34 @@ export function morphBetween(el, fromD, toD, duration, easeFn) {
   const fn = morpher(fromD, toD); const t0 = performance.now();
   const tick = (now) => { const p = Math.min(1, (now - t0) / duration); setVectorD(el, fn(easeFn ? easeFn(p) : p)); if (p < 1 && el.isConnected) requestAnimationFrame(tick); else setVectorD(el, toD); };
   setVectorD(el, fromD); requestAnimationFrame(tick);
+}
+
+// ---------------------------------------------------------------- non-destructive path modifiers
+// offset=8|-6 (grow/shrink), width-profile=taper|brush|ink|calligraphy|"0:0.2 0.5:1 1:0" (variable-width stroke),
+// brush="scatter star size=10 spacing=16 jitter=0.3 rotate=follow|random" (scatter brush). The element keeps its
+// box and editable path; the modified geometry is drawn in positioned layers (it may overflow the box).
+function buildModified(el, node, a, subs, box, ctx, fillCss) {
+  const { w, h } = box;
+  el.classList.add('mq-vec');
+  el.dataset.d = serializePath(subs); el.dataset.vw = w; el.dataset.vh = h; el._path = subs; el._box = box;
+  if (a.w === undefined && a.size === undefined) el.style.width = w + 'px';
+  if (a.h === undefined && a.size === undefined) el.style.height = h + 'px';
+  el.style.flexShrink = '0'; el.style.overflow = 'visible';
+  const stV = a.stroke ?? a.border; const st = stV !== undefined && stV !== 'none' && stV !== false ? strokeSpec(stV) : null;
+  const base = a.offset ? offsetPath(subs, num(a.offset), { smooth: !!a['offset-smooth'] }) : subs;
+  const prof = a['width-profile'] || a.profile;
+  const strip = { ...a, _inner: true }; for (const k of ['offset', 'width-profile', 'profile', 'brush', 'w', 'h', 'size']) delete strip[k];
+  const layer = (geo, attrs) => {
+    if (!geo || !geo.length) return; const bb = bbox(geo); if (!bb.w && !bb.h) return;
+    const inner = document.createElement('div');
+    inner.style.cssText = `position:absolute;left:${bb.x}px;top:${bb.y}px;width:${Math.max(1, bb.w)}px;height:${Math.max(1, bb.h)}px;pointer-events:none`;
+    buildVector(inner, node, attrs, translatePath(geo, -bb.x, -bb.y), { w: Math.max(1, bb.w), h: Math.max(1, bb.h) }, ctx, fillCss);
+    el.appendChild(inner);
+  };
+  const baseAttrs = { ...strip }; if (prof || a.brush) { baseAttrs.stroke = 'none'; delete baseAttrs.border; }
+  const fillV = a.fill ?? a.bg;
+  if ((fillV !== undefined && fillV !== 'none') || baseAttrs.stroke !== 'none' && st) layer(base, baseAttrs);
+  const ink = a['brush-fill'] || (st ? st.color : 'currentColor');
+  if (prof) layer(widthProfile(base, st ? st.w : 4, prof, { seed: num(a.seed, 3) }), { _inner: true, fill: ink, 'fill-rule': 'nonzero', opacity: undefined });
+  if (a.brush) layer(scatterBrush(base, a.brush), { _inner: true, fill: ink, 'fill-rule': 'nonzero' });
 }

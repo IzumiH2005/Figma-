@@ -42,7 +42,7 @@ export class RightPanel {
     b.appendChild(sec('Projet', h('div.kv', null, h('span', null, 'Nom'), h('b', null, p.name)), h('div.kv', null, h('span', null, 'Écrans'), h('b', null, p.screens().length)), h('div.kv', null, h('span', null, 'Composants'), h('b', null, Object.values(p.components).filter((c) => !c.fromKit).length + ' (+ kit)')), h('div.kv', null, h('span', null, 'Modes'), h('b', null, p.modes.join(' · ')))));
     b.appendChild(sec('Raccourcis', ...[
       ['V / H', 'Déplacer / Main'], ['F R O T', 'Frame, Rect, Ellipse, Texte'], ['I N', 'Image, Note'], ['Ctrl+G', 'Grouper (stack)'], ['Maj+A', 'Auto layout (col)'], ['Ctrl+Alt+K', 'Créer un composant'],
-      ['Ctrl+D', 'Dupliquer'], ['Alt+glisser', 'Dupliquer en déplaçant'], ['Alt+survol', 'Mesurer les distances'], ['Entrée / Maj+Entrée', 'Enfant / parent'], ['Maj+1 / Maj+2', 'Tout voir / sélection'], ['Maj+E', 'Mode prototype'], ['P / Maj+P', 'Plume / crayon'], ['S', 'Formes'], ['Entrée', 'Éditer les points'], ['Ctrl+E', 'Aplatir'], ['Ctrl+Entrée', 'Présenter'], ['Ctrl+/', 'Code complet'],
+      ['Ctrl+D', 'Dupliquer'], ['Alt+glisser', 'Dupliquer en déplaçant'], ['Alt+survol', 'Mesurer les distances'], ['Entrée / Maj+Entrée', 'Enfant / parent'], ['Maj+1 / Maj+2', 'Tout voir / sélection'], ['Maj+E', 'Mode prototype'], ['P / Maj+P', 'Plume / crayon'], ['S', 'Formes'], ['Entrée', 'Éditer les points'], ['Ctrl+E', 'Aplatir'], ['Maj+M', 'Shape Builder'], ['Ctrl+Alt+O', 'Vectoriser le contour'], ['Ctrl+Entrée', 'Présenter'], ['Ctrl+/', 'Code complet'],
     ].map(([k, v]) => h('div.kv', null, h('kbd', null, k), h('span', null, v)))));
   }
 
@@ -149,11 +149,14 @@ export class RightPanel {
         h('div.prow', null, select([['', 'Début'], ['arrow', 'Flèche'], ['triangle', 'Triangle'], ['circle', 'Cercle'], ['square', 'Carré'], ['bar', 'Barre']], a.start && a.start !== true ? a.start : '', (v) => set('start', v || null))),
         h('div.prow', null, select([['', 'Fin'], ['arrow', 'Flèche'], ['triangle', 'Triangle'], ['circle', 'Cercle'], ['square', 'Carré'], ['bar', 'Barre']], a.end || '', (v) => set('end', v || null)))));
       rows.push(h('div.prow', null, h('label', null, 'Pointillés'), input('dash', a.dash || '', (v) => set('dash', v || null), { placeholder: '6 4' })));
+      rows.push(h('div.grid2', null, numOpt('Offset', a.offset, (v) => set('offset', v)), h('div.prow', null, select([['', 'Largeur fixe'], ['taper', 'Effilé'], ['taper-start', 'Effilé début'], ['taper-end', 'Effilé fin'], ['brush', 'Pinceau'], ['ink', 'Encre'], ['calligraphy', 'Calligraphie'], ['bulge', 'Renflé'], ['wedge', 'Biseau'], ['marker', 'Marqueur']], a['width-profile'] || '', (v) => set('width-profile', v || null)))));
+      rows.push(h('div.prow', null, h('label', null, 'Pinceau (scatter)'), input('brush', a.brush || '', (v) => set('brush', v || null), { placeholder: 'scatter star size=10 spacing=16', mono: true })));
+      rows.push(h('div.chips', null, h('button.chip', { onclick: () => this.hooks.outlineStroke(n.id) }, 'Vectoriser le contour'), (a.offset || a['width-profile'] || a.brush) ? h('button.chip', { onclick: () => this.hooks.bakeMods(n.id) }, 'Figer les modificateurs') : null));
       rows.push(h('div.prow', null, h('label', null, 'Morph vers'), input('morph', a.morph || '', (v) => set('morph', v || null), { placeholder: 'blob seed=9 | heart', mono: true })));
       b.appendChild(sec(n.tag === 'boolean' ? 'Booléen & tracé' : 'Tracé', ...rows));
     }
     if (multi && nodes.every((x) => ['vector', 'shape', 'boolean', 'rect', 'ellipse', 'path'].includes(x.tag))) {
-      b.appendChild(sec('Booléens', seg([['union', 'squares-unite', 'Union'], ['subtract', 'squares-subtract', 'Soustraire'], ['intersect', 'squares-intersect', 'Intersection'], ['exclude', 'squares-exclude', 'Exclure']], '', (v) => this.hooks.booleanOp(v)), h('div.hint', null, 'Le résultat reste un groupe <boolean> éditable ; « Aplatir » (Ctrl+E) le fige en vecteur.')));
+      b.appendChild(sec('Booléens', h('button.btn.ghost', { onclick: () => this.hooks.shapeBuilder() }, icon('shapes', 13), 'Shape Builder (Maj+M)'), seg([['union', 'squares-unite', 'Union'], ['subtract', 'squares-subtract', 'Soustraire'], ['intersect', 'squares-intersect', 'Intersection'], ['exclude', 'squares-exclude', 'Exclure']], '', (v) => this.hooks.booleanOp(v)), h('div.hint', null, 'Le résultat reste un groupe <boolean> éditable ; « Aplatir » (Ctrl+E) le fige en vecteur.')));
     }
     // ---- pseudo-3D, masks, fusion
     if (!multi && n.tag !== 'screen') {

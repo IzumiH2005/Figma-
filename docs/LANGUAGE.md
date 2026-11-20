@@ -151,6 +151,13 @@ Tout ce qui se dessine dans Figma (formes, plume, booléens, texte sur chemin) e
 - **Masques** (tout élément) : `mask="star points=6"`, `mask="blob seed=3"`, `mask="fade bottom|edges"`.
 - **Fusion de formes** : `goo=10` sur un conteneur fond les enfants qui se touchent (métaballes ; à animer pour un effet liquide).
 - **Morphing** : `morph="heart"` (forme cible) + `loop="morph 2s"`, ou deux écrans dont un vecteur nommé change de `d` (smart animate interpole le tracé).
+- **Modificateurs de tracé (non destructifs)** :
+  - `offset=10` grossit et `offset=-6` rétrécit la forme, avec des jonctions arrondies. `offset-smooth` lisse le résultat. Figma n'a pas cette fonction en natif.
+  - `width-profile=taper|taper-start|taper-end|brush|ink|calligraphy|bulge|wedge|marker`, ou des points `"0:0.1 0.3:1 1:0.2"`, donne une épaisseur variable au contour (`stroke="14 $ink"`).
+  - `brush="scatter star size=12 spacing=18 jitter=0.3 scale=0.6..1.2 rotate=follow|random|30"` est un pinceau scatter : la forme est répétée le long du tracé.
+  - Ces modificateurs se combinent. « Figer les modificateurs » les transforme en vecteurs simples.
+- **Vectoriser le contour** (Outline Stroke, Ctrl+Alt+O) : transforme un contour en forme pleine (centré, intérieur ou extérieur, profils et pinceaux compris). Si la forme a un remplissage, il est conservé à part.
+- **Shape Builder** (Maj+M sur des formes qui se chevauchent) : la sélection est découpée en régions. Glisser sur des régions les fusionne, Alt+clic en retire une, Entrée applique et produit des vecteurs éditables.
 - **Pseudo-3D** : `tilt="20 -12"` (rotateX rotateY [rotateZ]), `perspective=900`, `skew="8 0"`, `depth=8` (extrusion de la vraie silhouette, `depth-color`, `depth-dir="1 1"`), `tilt=pointer` (suit le pointeur).
 
 **Dans l'éditeur** : outil Formes (S) avec un menu de 15 formes, Plume (P : clic = angle, glisser = courbe, clic sur le premier point = fermer), Crayon (Maj+P : tracé lissé automatiquement). Double-clic ou Entrée sur une forme = édition des points (glisser un point ou une poignée, Alt casse la symétrie, clic sur le tracé ajoute un point, double-clic bascule angle/courbe, Suppr retire). Les losanges orange sont les poignées de rig (branches d'étoile, arc, rayon…). Sélection multiple → Union / Soustraire / Intersection / Exclure ; Ctrl+E aplatit en vecteur. Panneaux Forme, Tracé (Lisser, Simplifier, Miroirs), 3D (presets Carte posée / Isométrique / Relief) et Masque & fusion.

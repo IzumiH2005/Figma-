@@ -2,6 +2,7 @@
 import { MQ, h, clear, menu, toast } from './dom.js';
 import { isContainer, uniqueName } from './state.js';
 import { VectorEditor } from './vectoredit.js';
+import { ShapeBuilder } from './shapebuilder.js';
 
 const SNAP = 6;
 const round = (v) => Math.round(v);
@@ -18,6 +19,7 @@ export class Canvas {
     this.items = new Map(); this.links = [];
     this.drag = null; this.spaceDown = false;
     this.vedit = new VectorEditor(this, app);
+    this.sbuild = new ShapeBuilder(this, app);
     this.bind();
   }
 
@@ -89,7 +91,7 @@ export class Canvas {
     }
     // selection
     const single = app.selection.length === 1;
-    for (const id of app.selection) {
+    for (const id of (this.sbuild && this.sbuild.active ? [] : app.selection)) {
       const els = this.world.querySelectorAll(`[data-id="${CSS.escape(id)}"]`);
       els.forEach((el, k) => {
         const r = this.local(el.getBoundingClientRect());
@@ -131,6 +133,7 @@ export class Canvas {
     if (this.drag && this.drag.noodle) { const { a, b } = this.drag.noodle; this.curve(a.x, a.y, b.x, b.y, true); }
     if (this.measure) this.drawMeasure(this.measure);
     this.vedit.draw(this.overlay, this.svg);
+    this.sbuild.draw(this.overlay, this.svg);
     if (this.trails && this.trails.length) {
       const NS = 'http://www.w3.org/2000/svg'; const R = this.rect;
       const toS = (p) => ({ x: p.x * this.app.zoom + this.app.panX, y: p.y * this.app.zoom + this.app.panY });
@@ -276,6 +279,7 @@ export class Canvas {
     if (document.activeElement && document.activeElement !== document.body && !this.root.contains(document.activeElement)) document.activeElement.blur();
     if (e.button === 1 || this.spaceDown || app.tool === 'hand') { this.drag = { pan: true, sx: e.clientX, sy: e.clientY, px: app.panX, py: app.panY }; this.root.classList.add('panning'); return; }
     if (e.button !== 0) return;
+    if (this.sbuild.down(e)) return;
     if (this.vedit.down(e)) return;
     // handles / noodle / labels
     if (t.dataset && t.dataset.handle) return this.startResize(e, t.dataset.handle);
@@ -332,6 +336,7 @@ export class Canvas {
   }
 
   move(e) {
+    if (this.sbuild.active) { this.sbuild.move(e); return; }
     if (this.vedit.move(e)) return;
     const app = this.app; const d = this.drag;
     if (!d) {
@@ -498,6 +503,7 @@ export class Canvas {
   }
 
   up(e) {
+    if (this.sbuild.up(e)) return;
     if (this.vedit.up(e)) return;
     const app = this.app; const d = this.drag;
     if (!d) return;

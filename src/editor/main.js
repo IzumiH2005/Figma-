@@ -91,6 +91,9 @@ function boot() {
     flatten: (id) => flatten(id),
     booleanOp: (op) => booleanOp(op),
     pathOp: (id, op) => pathOp(id, op),
+    outlineStroke: (id) => outlineStroke(id),
+    bakeMods: (id) => bakeMods(id),
+    shapeBuilder: () => canvas.sbuild.start(app.selection),
   };
   canvas = new Canvas(app, canvasEl, hooks);
   left = new LeftPanel(app, leftEl, hooks);
@@ -214,6 +217,9 @@ function boot() {
       sel.length > 1 ? { label: 'Intersection', icon: 'squares-intersect', run: () => booleanOp('intersect') } : null,
       sel.length > 1 ? { label: 'Exclure', icon: 'squares-exclude', run: () => booleanOp('exclude') } : null,
       n && ['shape', 'boolean', 'rect', 'ellipse', 'textpath'].includes(n.tag) ? { label: 'Aplatir en vecteur', key: 'Ctrl+E', icon: 'layers-2', run: () => flatten(n.id) } : null,
+      sel.length >= 1 && n && ['vector', 'shape', 'boolean', 'rect', 'ellipse'].includes(n.tag) ? { label: 'Shape Builder', key: 'Maj+M', icon: 'shapes', run: () => canvas.sbuild.start(app.selection) } : null,
+      n && ['vector', 'shape', 'boolean', 'rect', 'ellipse', 'path'].includes(n.tag) && (n.attrs.stroke || n.attrs['width-profile'] || n.attrs.brush) ? { label: 'Vectoriser le contour', key: 'Ctrl+Alt+O', icon: 'pen-line', run: () => outlineStroke(n.id) } : null,
+      n && (n.attrs.offset || n.attrs['width-profile'] || n.attrs.brush) ? { label: 'Figer les modificateurs', icon: 'stamp', run: () => bakeMods(n.id) } : null,
       '-',
       { label: 'Créer un composant', key: 'Ctrl+Alt+K', icon: 'component', disabled: !n || n.tag === 'screen' || isComp, run: () => makeComponent() },
       isComp && !isComp.fromKit ? { label: `Éditer ${n.tag}`, icon: 'pencil', run: () => editComponent(n.tag) } : null,
@@ -252,6 +258,47 @@ function boot() {
     if (op === 'flipx') subs = P.transformPath(subs, (q) => ({ x: w - q.x, y: q.y }));
     if (op === 'flipy') subs = P.transformPath(subs, (q) => ({ x: q.x, y: hh - q.y }));
     app.change(() => { n.attrs.d = P.serializePath(subs); });
+  }
+  // stroke → filled vector (center/inside/outside, caps & joins kept; width profiles and brushes included)
+  function strokeGeometry(n, el) {
+    const O = MQ.PathOps; const P = MQ.Path; const subs = el._path; if (!subs) return null;
+    const st = String(n.attrs.stroke || '').split(/\s+/); const w = parseFloat(st.find((x) => /^\d/.test(x))) || 2;
+    const align = st.find((x) => ['inside', 'outside', 'center'].includes(x)) || 'center';
+    const color = st.find((x) => !/^\d/.test(x) && !['inside', 'outside', 'center', 'dashed', 'dotted'].includes(x)) || n.attrs.color || '#000000';
+    const base = n.attrs.offset ? O.offsetPath(subs, parseFloat(n.attrs.offset)) : subs;
+    let geo = n.attrs.brush ? O.scatterBrush(base, n.attrs.brush) : n.attrs['width-profile'] ? O.widthProfile(base, w, n.attrs['width-profile'], { seed: +n.attrs.seed || 3 }) : O.outlineStroke(base, w, { cap: n.attrs.cap === 'butt' ? 'butt' : n.attrs.cap === 'square' ? 'square' : 'round', join: 'round', align });
+    return { geo, color, base };
+  }
+  function placeVector(geo, x0, y0, attrs) {
+    const P = MQ.Path; const bb = P.bbox(geo);
+    return { id: MQ.newId(), tag: 'vector', attrs: { x: String(Math.round((x0 + bb.x) * 10) / 10), y: String(Math.round((y0 + bb.y) * 10) / 10), w: String(Math.max(1, Math.round(bb.w * 10) / 10)), h: String(Math.max(1, Math.round(bb.h * 10) / 10)), ...attrs, d: P.serializePath(P.translatePath(geo, -bb.x, -bb.y)) }, children: [] };
+  }
+  function outlineStroke(id) {
+    const n = app.node(id); const el = canvas.elOf(id); if (!n || !el || !el._path) { toast('Sélectionne une forme vectorielle avec un contour'); return; }
+    const g = strokeGeometry(n, el); if (!g || !g.geo.length) return;
+    const vw = +el.dataset.vw || el.offsetWidth, vh = +el.dataset.vh || el.offsetHeight; const sx = el.offsetWidth / vw, sy = el.offsetHeight / vh;
+    const x0 = parseFloat(n.attrs.x) || 0, y0 = parseFloat(n.attrs.y) || 0;
+    const geo = MQ.Path.scalePath(g.geo, sx, sy);
+    const keepFill = n.attrs.fill && n.attrs.fill !== 'none';
+    const out = []; const common = n.attrs.absolute ? { absolute: true } : {};
+    if (keepFill) out.push(placeVector(MQ.Path.scalePath(g.base, sx, sy), x0, y0, { ...common, fill: n.attrs.fill, ...(n.attrs.name ? { name: n.attrs.name } : {}) }));
+    out.push(placeVector(geo, x0, y0, { ...common, fill: g.color, ...(n.attrs.name && !keepFill ? { name: n.attrs.name } : { name: (n.attrs.name || 'forme') + '-contour' }) }));
+    app.change(() => { const sib = app.siblings(id); const i = sib.indexOf(n); sib.splice(i, 1, ...out); app.selection = out.map((o) => o.id); });
+    toast('Contour vectorisé : c’est maintenant une forme pleine éditable');
+  }
+  // bake offset / width-profile / brush into plain vectors
+  function bakeMods(id) {
+    const n = app.node(id); const el = canvas.elOf(id); if (!n || !el || !el._path) return;
+    const O = MQ.PathOps; const P = MQ.Path;
+    const x0 = parseFloat(n.attrs.x) || 0, y0 = parseFloat(n.attrs.y) || 0; const common = n.attrs.absolute ? { absolute: true } : {};
+    const base = n.attrs.offset ? O.offsetPath(el._path, parseFloat(n.attrs.offset)) : el._path;
+    const out = [];
+    if (n.attrs.fill && n.attrs.fill !== 'none') out.push(placeVector(base, x0, y0, { ...common, fill: n.attrs.fill, ...(n.attrs.stroke && !n.attrs['width-profile'] && !n.attrs.brush ? { stroke: n.attrs.stroke } : {}) }));
+    if (n.attrs['width-profile'] || n.attrs.brush) { const g = strokeGeometry(n, el); out.push(placeVector(g.geo, x0, y0, { ...common, fill: g.color })); }
+    if (!out.length) return;
+    if (n.attrs.name) out[0].attrs.name = n.attrs.name;
+    app.change(() => { const sib = app.siblings(id); sib.splice(sib.indexOf(n), 1, ...out); app.selection = out.map((o) => o.id); });
+    toast('Modificateurs figés en vecteurs');
   }
   function flatten(id) {
     const n = app.node(id); const el = canvas.elOf(id); if (!n || !el || !el._path) return;
@@ -332,6 +379,7 @@ function boot() {
     if (play.root) return;
     const t = e.target;
     if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+    if (canvas.sbuild.key(e)) { e.preventDefault(); return; }
     if (canvas.vedit.key(e)) { e.preventDefault(); canvas.drawOverlay(); return; }
     const mod = e.metaKey || e.ctrlKey; const k = e.key.toLowerCase();
     if (k === ' ') { canvas.spaceDown = true; canvasEl.classList.add('grab'); e.preventDefault(); return; }
@@ -357,6 +405,8 @@ function boot() {
     if (e.shiftKey && (e.code === 'Digit0')) { canvas.zoomTo(1); return; }
     if (e.shiftKey && k === 'a') { wrap('col', { gap: '8' }); return; }
     if (e.shiftKey && k === 'p') { app.tool = 'pencil'; app.emit('tool'); return; }
+    if (e.shiftKey && k === 'm' && !mod) { canvas.sbuild.start(app.selection); return; }
+    if (mod && e.altKey && k === 'o') { e.preventDefault(); const n = app.selNodes[0]; if (n) outlineStroke(n.id); return; }
     if (e.shiftKey && k === 'e') { app.protoView = !app.protoView; app.emit('proto'); return; }
     if (e.shiftKey && k === 'g') { toggleGrid(); return; }
     if (k === 'delete' || k === 'backspace') { del(); return; }
