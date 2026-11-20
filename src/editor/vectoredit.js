@@ -138,7 +138,7 @@ export class VectorEditor {
       const p = this.toScreen(nd, F);
       overlay.appendChild(h('div.ov.ve-anchor' + (sel ? '.sel' : '') + (nd.in || nd.out ? '.smooth' : ''), { style: { left: p.x + 'px', top: p.y + 'px' }, dataset: { va: key }, title: 'Glisser · double-clic : angle/courbe · Suppr : supprimer' }));
     }));
-    overlay.appendChild(h('div.ov.ve-help', { style: { left: F.r.x + 'px', top: F.r.y + F.r.h + 12 + 'px' } }, 'Points : glisser · Alt casse les poignées · clic sur le tracé ajoute un point · double-clic angle/courbe · Entrée pour terminer'));
+    overlay.appendChild(h('div.ov.ve-help', { style: { left: F.r.x + 'px', top: F.r.y + F.r.h + 12 + 'px' } }, 'Points : glisser · Alt casse les poignées · glisser le tracé le courbe · clic dessus ajoute un point · double-clic angle/courbe · Entrée pour terminer'));
   }
 
   drawRig(overlay, svg) {
@@ -272,7 +272,9 @@ export class VectorEditor {
     if (t.dataset && t.dataset.vh) { const [si, ni, hk] = t.dataset.vh.split(':'); this.drag = { handle: [+si, +ni, hk], F, alt: e.altKey }; return true; }
     if (t.dataset && t.dataset.vseg) {
       const l = this.toLocal(e.clientX, e.clientY, F); const nr = P().nearest(this.subs, l.x, l.y);
-      if (nr) { const s = this.subs[nr.sub]; const N = s.nodes; const bi = nr.k; const ai = (bi - 1 + N.length) % N.length; const mid = P().splitAt(N[ai], N[bi], nr.t); N.splice(bi === 0 ? N.length : bi, 0, mid); this.sel.clear(); this.sel.add(nr.sub + ':' + (bi === 0 ? N.length - 1 : bi)); this.commit(); }
+      // Figma "Bend": dragging the segment curves it; a simple click (no movement) adds a point
+      if (nr) { const N = this.subs[nr.sub].nodes; const bi = nr.k; const ai = (bi - 1 + N.length) % N.length;
+        this.drag = { seg: { sub: nr.sub, ai, bi, t: nr.t }, sx: e.clientX, sy: e.clientY, orig: JSON.parse(JSON.stringify(this.subs)), F, moved: false }; }
       return true;
     }
     // click outside the path: leave edit mode
@@ -309,6 +311,13 @@ export class VectorEditor {
       }
       this.preview(); return true;
     }
+    if (D.seg) {
+      const dx = (e.clientX - D.sx) / F.sx, dy = (e.clientY - D.sy) / F.sy;
+      if (!D.moved && Math.hypot(e.clientX - D.sx, e.clientY - D.sy) < 3) return true;
+      D.moved = true; this.subs = JSON.parse(JSON.stringify(D.orig));
+      const N = this.subs[D.seg.sub].nodes; P().bendSegment(N[D.seg.ai], N[D.seg.bi], D.seg.t, dx, dy);
+      this.preview(); return true;
+    }
     if (D.handle) {
       const [si, ni, hk] = D.handle; const nd = this.subs[si].nodes[ni]; const l = this.toLocal(e.clientX, e.clientY, F);
       nd[hk] = { x: l.x, y: l.y };
@@ -328,6 +337,11 @@ export class VectorEditor {
     if (!D) return !!this.pen;
     if (D.rig || D.crig) { this.app.commit(); return true; }
     if (D.anchors || D.handle) { this.commit(); return true; }
+    if (D.seg) {
+      if (D.moved) { this.commit(); return true; }
+      const N = this.subs[D.seg.sub].nodes; const { ai, bi, t } = D.seg; const mid = P().splitAt(N[ai], N[bi], t);
+      N.splice(bi === 0 ? N.length : bi, 0, mid); this.sel.clear(); this.sel.add(D.seg.sub + ':' + (bi === 0 ? N.length - 1 : bi)); this.commit(); return true;
+    }
     return false;
   }
 

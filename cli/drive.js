@@ -23,7 +23,7 @@
 //          ui "<text>" on its panels (controls, variant matrix, properties) · exit closes it
 //   check  info <name> · expect <name> <attr> <op> <value>   (op: = != < > <= >= ~)  · anchors · js <expr>
 //   out    shot <file> [<name>] · save · diff on|off · wait <ms>|idle
-// Targets: anchor <i> | anchor <s:i> | handle <i>.in|out | rig <name|i> | node <name> [fx fy] | local <x> <y>
+// Targets: anchor <i> | anchor <s:i> | handle <i>.in|out | segment <i> [t] (drag = Bend) | rig <name|i> | node <name> [fx fy] | local <x> <y>
 //          | corner <name> nw|n|ne|e|se|s|sw|w | rotate <name> | layer <name> | ui "<text>" | css <selector> [n]
 //          | proto <key|"text"> [n] | <x> <y>
 import fs from 'node:fs';
@@ -135,6 +135,10 @@ window.__D = {
       const raw = t.trim().slice(k.length).trim(); const m = /^"(.*)"(?:\s+(\d+))?$/.exec(raw) || /^(.*?)(?:\s+(\d+))?$/.exec(raw); const key = m[1]; const n = +(m[2] || 0);
       const byKey = [...play.player.host.querySelectorAll('[data-key="' + key + '"]')].filter((e) => this.visible(e));
       return this.center(byKey[n] || this.byText(play.player.host, key, n)); }
+    if (k === 'segment') { // segment i = from anchor i to anchor i+1 (s:i for another subpath), at t (default 0.5)
+      const v = window.__canvas.vedit; if (!v.active) throw new Error('pas en mode édition de points'); const [si, i] = q[1].includes(':') ? q[1].split(':').map(Number) : [0, +q[1]];
+      const N = v.subs[si].nodes; const a = N[i], b = N[(i + 1) % N.length]; if (!a || !b) throw new Error('segment introuvable : ' + q[1]); const t = q[2] !== undefined ? +q[2] : 0.5;
+      const p = MQ.Path.cubicPoint(a, a.out || a, b.in || b, b, t); const F = this.frame(); return { x: F.x + p.x * F.sx, y: F.y + p.y * F.sy }; }
     if (k === 'local') { const F = this.frame(); if (F) return { x: F.x + +q[1] * F.sx, y: F.y + +q[2] * F.sy }; const o = this.origin(); return { x: o.x + +q[1] * app.zoom, y: o.y + +q[2] * app.zoom }; }
     if (/^-?[\d.]+$/.test(k)) return { x: +k, y: +q[1] };
     throw new Error('cible inconnue : ' + t);

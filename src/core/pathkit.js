@@ -136,6 +136,38 @@ export function splitAt(a, b, t) {
   if (curved) { a.out = q0; b.in = q2; return { x: s.x, y: s.y, in: r0, out: r1, smooth: true }; }
   return { x: s.x, y: s.y, in: null, out: null };
 }
+// Figma "Bend": drag the point at parameter t of segment a→b by (dx, dy). Only a.out and b.in move, so the
+// grabbed point follows the pointer exactly and the anchors keep their other handle (corners stay corners;
+// a smooth anchor keeps its tangent by rotating its opposite arm).
+export function bendSegment(a, b, t, dx, dy) {
+  t = Math.min(0.95, Math.max(0.05, t));
+  const isSmooth = (nd, arm, other) => { if (nd.smooth) return !!nd[other]; if (!nd[arm] || !nd[other]) return false;
+    const u = [nd[arm].x - nd.x, nd[arm].y - nd.y], v = [nd[other].x - nd.x, nd[other].y - nd.y]; const lu = Math.hypot(...u), lv = Math.hypot(...v);
+    return lu > 1e-6 && lv > 1e-6 && (u[0] * v[0] + u[1] * v[1]) / (lu * lv) < -0.998; };
+  const sa = isSmooth(a, 'out', 'in'), sb = isSmooth(b, 'in', 'out');
+  if (!a.out) a.out = { x: a.x + (b.x - a.x) / 3, y: a.y + (b.y - a.y) / 3 };
+  if (!b.in) b.in = { x: b.x + (a.x - b.x) / 3, y: b.y + (a.y - b.y) / 3 };
+  const c1 = 3 * (1 - t) * (1 - t) * t, c2 = 3 * (1 - t) * t * t; const k = 1 / (c1 * (1 - t) + c2 * t);
+  a.out = { x: a.out.x + dx * (1 - t) * k, y: a.out.y + dy * (1 - t) * k };
+  b.in = { x: b.in.x + dx * t * k, y: b.in.y + dy * t * k };
+  const keep = (nd, arm, other, on) => { if (!on) return; const len = Math.hypot(nd[other].x - nd.x, nd[other].y - nd.y); const ang = Math.atan2(nd[arm].y - nd.y, nd[arm].x - nd.x) + Math.PI; nd[other] = { x: nd.x + Math.cos(ang) * len, y: nd.y + Math.sin(ang) * len }; };
+  keep(a, 'out', 'in', sa); keep(b, 'in', 'out', sb);
+}
+
+// Interpolate between several paths (keyframes) with t in 0..1. Same structure → node by node (exact, no
+// resampling, handles included); otherwise null (caller falls back to a resampling morph).
+export function pathMixSame(t, ds) {
+  const P = ds.map((d) => parsePath(String(d)));
+  const same = P.every((s) => s.length === P[0].length && s.every((sub, i) => sub.nodes.length === P[0][i].nodes.length && !!sub.closed === !!P[0][i].closed));
+  if (!same) return null;
+  const n = ds.length - 1; const x = Math.min(1, Math.max(0, +t || 0)) * n; const i = Math.min(n - 1, Math.floor(x)); const u = x - i;
+  const A = P[i], B = P[i + 1]; const L = (p, q) => ({ x: p.x + (q.x - p.x) * u, y: p.y + (q.y - p.y) * u });
+  const out = A.map((sub, si) => ({ closed: sub.closed, nodes: sub.nodes.map((a, ni) => { const b = B[si].nodes[ni];
+    const ai = a.in || a, bi = b.in || b, ao = a.out || a, bo = b.out || b; const hasIn = a.in || b.in, hasOut = a.out || b.out;
+    const p = L(a, b); return { x: p.x, y: p.y, in: hasIn ? L(ai, bi) : null, out: hasOut ? L(ao, bo) : null }; }) }));
+  return serializePath(out);
+}
+
 // nearest point on path: { sub, seg index k (index of b in nodes), t, x, y, dist }
 export function nearest(subs, px, py) {
   let best = null;

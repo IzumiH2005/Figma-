@@ -1,0 +1,54 @@
+<project name="Humeur — slider d'émotion" modes="light dark" typescale=material>
+  <!-- L'« emotion slider » des vidéos Figma : on glisse un curseur et la bouche du visage se courbe en continu,
+       de triste à content. Dans Figma il faut trois frames et Smart Animate (qui ne sait morpher un tracé que si
+       les points correspondent un à un). Ici, une seule expression : d={pathmix($mood, triste, neutre, content)}
+       interpole les points ET les poignées, image par image, pendant que le doigt glisse.
+       Pour redessiner une bouche : double-clic sur le tracé, puis tire directement sur le segment (outil Bend). -->
+  <system brand=#7A3FB0 accent=#E0567A neutral=warm radius=round density=comfortable elevation=soft motion=playful type="Roboto/Roboto"/>
+
+  <vars>
+    mood: 0.5
+  </vars>
+
+  <page name="Humeur">
+    <screen name="Humeur" device=galaxy-s25 start statusbar homebar fill=$bg>
+      <NavBar title="Journal" back=false/>
+      <col w=fill px=16 pt=8 pb=104 gap=24 align=center>
+        <col w=fill gap=8 align=center>
+          <text class=t-h2 align=center>Comment te sens-tu aujourd'hui ?</text>
+          <text class=t-body color=$text-2 align=center>Glisse le curseur, ou touche une humeur.</text>
+        </col>
+
+        <stack name=visage w=200 h=200 radius=full center transition=200
+               fill={$mood < 0.5 ? mix('#B9C6F2', '#F6D6A8', $mood * 2) : mix('#F6D6A8', '#FFB3C7', ($mood - 0.5) * 2)}>
+          <row name=yeux absolute x=56 y={round(60 + (0.5 - $mood) * 8)} w=88 gap=32 justify=center>
+            <frame w=28 h={round(44 - abs($mood - 0.5) * 16)} radius=full fill=#2B1B3D/>
+            <frame w=28 h={round(44 - abs($mood - 0.5) * 16)} radius=full fill=#2B1B3D/>
+          </row>
+          <vector name=bouche absolute x=52 y=120 w=96 h=40 fill=none stroke="8 #2B1B3D" cap=round
+                  d={pathmix($mood, "M8 32C32 4 64 4 88 32", "M8 20C32 20 64 20 88 20", "M8 8C32 40 64 40 88 8")}/>
+        </stack>
+
+        <text name=humeur class=t-h3 align=center>{$mood < 0.34 ? 'Pas terrible' : $mood < 0.67 ? 'Neutre' : 'Plutôt bien'}</text>
+
+        <col w=fill gap=8>
+          <Slider name=curseur value={$mood} on:scrub="set $mood = {px}"/>
+          <row w=fill justify=between>
+            <text class=t-label color=$text-2>Triste</text>
+            <text class=t-label color=$text-2>Content</text>
+          </row>
+        </col>
+
+        <row w=fill gap=8 justify=center>
+          <!-- zone tactile de 48 dp autour de chaque puce (Material) -->
+          <stack minw=48 h=48 center on:click="set $mood = 0 smart 400"><Chip label="Triste" selected={$mood < 0.34}/></stack>
+          <stack minw=48 h=48 center on:click="set $mood = 0.5 smart 400"><Chip label="Neutre" selected={$mood >= 0.34 && $mood < 0.67}/></stack>
+          <stack minw=48 h=48 center on:click="set $mood = 1 smart 400"><Chip label="Content" selected={$mood >= 0.67}/></stack>
+        </row>
+      </col>
+      <row fixed place=bottom w=fill px=16 pt=12 pb=safe+16 fill=$bg>
+        <Button label="Enregistrer l'humeur" w=fill/>
+      </row>
+    </screen>
+  </page>
+</project>

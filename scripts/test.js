@@ -464,6 +464,21 @@ export function PillRow({ className, ...props }) { return <div className={cn("fl
   ok(r.bg, 'meshgrid : rendu en image de fond');
 }
 
+// bend + pathmix
+{
+  const P = await import('../src/core/pathkit.js');
+  const a = { x: 0, y: 0, in: null, out: null }, b = { x: 90, y: 0, in: null, out: null };
+  P.bendSegment(a, b, 0.5, 0, 20); const m = P.cubicPoint(a, a.out, b.in, b, 0.5);
+  ok(Math.abs(m.x - 45) < 1e-6 && Math.abs(m.y - 20) < 1e-6, 'bend: grabbed point follows the pointer');
+  const c = { x: 0, y: 0, in: { x: -10, y: 0 }, out: { x: 10, y: 0 } }, d2 = { x: 60, y: 0, in: null, out: null };
+  P.bendSegment(c, d2, 0.3, 0, 15); ok(Math.abs(Math.atan2(c.in.y, c.in.x) - Math.atan2(-c.out.y, -c.out.x)) < 1e-6, 'bend: smooth anchor keeps its tangent');
+  ok(P.pathMixSame(0.5, ['M0 0C10 10 20 10 30 0', 'M0 10C10 0 20 0 30 10']) === 'M0 5C10 5 20 5 30 5', 'pathmix: node-wise midpoint');
+  ok(P.pathMixSame(0.75, ['M0 0L10 0', 'M0 10L10 10', 'M0 20L10 20']) === 'M0 15L10 15', 'pathmix: keyframes');
+  ok(P.pathMixSame(0.5, ['M0 0L10 0', 'M0 0L10 0L10 10']) === null, 'pathmix: different structure → fallback');
+  const { evaluate, Scope } = await import('../src/core/expr.js');
+  ok(evaluate('pathmix(0.5, "M0 0L10 0", "M0 10L10 10")', new Scope({})) === 'M0 5L10 5', 'pathmix() in expressions');
+}
+
 // editor boots
 const html = await buildEditorHTML({ projects: examples });
 const tmp = path.join(ROOT, 'out', '_test-editor.html');

@@ -2,6 +2,7 @@ import { fake, fakeList } from './plugins.js';
 // Tiny safe expression language (no eval): literals, $vars, idents, member access,
 // arrays/objects, arithmetic, comparisons, logic, ternary, function calls on builtins.
 
+import { pathMixSame } from './pathkit.js';
 import { parseColor, shade as _shade, tint as _tint, mix as _mix, toCss, contrast as _contrast } from './color.js';
 
 const cache = new Map();
@@ -95,11 +96,17 @@ function parseExpr(src) {
 
 const pc = (c) => parseColor(String(c)) || [0, 0, 0, 1];
 const pct = (p, d) => { const n = Number(p ?? d); return n > 1 ? n / 100 : n; };
+export const FALLBACK = { morph: null };
 const BUILTINS = {
   fake: (k, seed) => fake(k, seed), fakeList: (n, fields, seed) => fakeList(n, fields, seed),
   shade: (c, p) => toCss(_shade(pc(c), pct(p, 10))), tint: (c, p) => toCss(_tint(pc(c), pct(p, 10))),
   mix: (a, b, p) => toCss(_mix(pc(a), pc(b), pct(p, 50))), alpha: (c, p) => { const x = pc(c); return toCss([x[0], x[1], x[2], x[3] * pct(p, 50)]); },
   onColor: (c, light = '#FFFFFF', dark = '#111114') => (_contrast(pc(c), pc(light)) >= _contrast(pc(c), pc(dark)) ? light : dark),
+  // pathmix(t, d0, d1, …): interpolate between path keyframes (t 0..1). Same structure → exact node-by-node;
+  // otherwise a resampling morph registered by vector.js (flubber)
+  pathmix: (t, ...ds) => { ds = ds.flat().map(String); if (ds.length < 2) return ds[0] || ''; const r = pathMixSame(t, ds); if (r != null) return r;
+    const n = ds.length - 1; const x = Math.min(1, Math.max(0, +t || 0)) * n; const i = Math.min(n - 1, Math.floor(x)); const u = x - i;
+    return FALLBACK.morph ? FALLBACK.morph(ds[i], ds[i + 1])(u) : (u < 0.5 ? ds[i] : ds[i + 1]); },
   min: (...a) => Math.min(...a.flat()), max: (...a) => Math.max(...a.flat()), round: Math.round, floor: Math.floor, ceil: Math.ceil, abs: Math.abs,
   len: (x) => (x == null ? 0 : x.length ?? Object.keys(x).length),
   upper: (s) => String(s).toUpperCase(), lower: (s) => String(s).toLowerCase(),

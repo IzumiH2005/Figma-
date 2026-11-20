@@ -2,6 +2,7 @@
 import { parsePath, serializePath, shapePath, booleanPaths, scalePath, translatePath, rotatePath, bbox, SHAPES, roundCorners } from './pathkit.js';
 import { offsetPath, widthProfile, scatterBrush } from './pathops.js';
 import { splitTop } from './project.js';
+import { FALLBACK } from './expr.js';
 import { interpolate as flubberInterpolate } from 'flubber';
 
 export const VECTOR_TAGS = new Set(['shape', 'vector', 'svg', 'boolean', 'textpath', 'path']);
@@ -276,6 +277,7 @@ export function morpher(a, b) {
   let fn; try { fn = flubberInterpolate(a, b, { maxSegmentLength: 6, string: true }); } catch (e) { fn = (t) => (t < 0.5 ? a : b); }
   if (interpCache.size > 200) interpCache.clear(); interpCache.set(k, fn); return fn;
 }
+FALLBACK.morph = morpher;
 // drive a morph cycle through el._morphTargets, synced to a (possibly paused/scrubbed) WAAPI animation
 export function attachMorph(el, anim, duration, iterations) {
   const base = el.dataset.d; const targets = [base, ...(el._morphTargets || [])];
