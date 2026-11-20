@@ -241,6 +241,24 @@ export function PillRow({ className, ...props }) { return <div className={cn("fl
   fs.rmSync(tmpMq);
 }
 
+// built-in plugins: fake content, charts, connectors, smooth shadows
+{
+  const r = await page.evaluate(async () => {
+    const p = MQ.loadProject(`<project><screen name="S" w=600 h=300><stack w=fill h=fill>
+      <text name=n x=0 y=0>{fake('name', 3)}</text>
+      <chart name=c x=10 y=40 type=bar w=200 h=100 data={[1,3,2]} labels="a,b,c"/>
+      <frame name=a x=300 y=20 w=60 h=40/><frame name=b x=480 y=200 w=60 h=40/>
+      <connector from=a to=b curve=elbow label="go"/>
+      <frame name=s x=10 y=200 w=40 h=40 shadow="smooth(12)"/>
+    </stack></screen></project>`);
+    MQ.ensureStyles(); document.body.innerHTML = ''; const el = MQ.screenElement(p, 'S'); document.body.appendChild(el);
+    await new Promise((res) => setTimeout(res, 120));
+    const k = (n) => el.querySelector(`[data-key="${n}"]`);
+    return { name: k('n').textContent, bars: k('c').querySelectorAll('.mq-chart-bar').length, conn: !!el.querySelector('.mq-connector-path'), label: el.querySelector('.mq-connector-label')?.textContent, shadow: getComputedStyle(k('s')).boxShadow.split('rgba').length - 1, list: MQ.fakeList(3, 'name,email', 1).map((x) => x.name) };
+  });
+  ok(/^\S+ \S+$/.test(r.name) && r.bars === 3 && r.conn && r.label === 'go' && r.shadow === 5 && new Set(r.list).size === 3, `Plugins intégrés : fake, chart, connector, ombre douce ${JSON.stringify(r)}`);
+}
+
 // editor boots
 const html = await buildEditorHTML({ projects: examples });
 const tmp = path.join(ROOT, 'out', '_test-editor.html');

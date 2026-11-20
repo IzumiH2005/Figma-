@@ -280,6 +280,8 @@ function boot() {
       n && (n.attrs.offset || n.attrs['width-profile'] || n.attrs.brush) ? { label: 'Figer les modificateurs', icon: 'stamp', run: () => bakeMods(n.id) } : null,
       '-',
       n && (/^(\w+\.)?[A-Z]/.test(n.tag) || n.tag === 'instance') ? { label: 'Remplacer l’instance…', icon: 'replace', run: () => swapInstance(n.id) } : null,
+      { label: sel.length > 1 ? 'Renommer en lot…' : 'Renommer…', key: 'Ctrl+R', icon: 'pencil-line', run: () => renameLayers() },
+      n ? { label: 'Contenu réaliste', icon: 'sparkles', submenu: true, run: (ev) => { const r = canvasEl.getBoundingClientRect(); menu(r.left + 260, r.top + 120, [['name', 'Nom'], ['first', 'Prénom'], ['email', 'E-mail'], ['phone', 'Téléphone'], ['job', 'Métier'], ['company', 'Entreprise'], ['city', 'Ville'], ['address', 'Adresse'], ['price', 'Prix'], ['amount', 'Montant'], ['date', 'Date'], ['ago', 'Il y a…'], ['title', 'Titre'], ['sentence', 'Phrase'], ['paragraph', 'Paragraphe'], ['tag', 'Étiquette'], ['rating', 'Note']].map(([k, l]) => ({ label: l, run: () => fillContent(k) }))); } } : null,
       { label: 'Créer un composant', key: 'Ctrl+Alt+K', icon: 'component', disabled: !n || n.tag === 'screen' || isComp, run: () => makeComponent() },
       isComp ? { label: `Ouvrir ${n.tag} dans le Studio`, icon: 'component', run: () => studio.open(n.tag) } : null,
       isComp && !isComp.fromKit ? { label: `Éditer ${n.tag}`, icon: 'pencil', run: () => editComponent(n.tag) } : null,
@@ -352,6 +354,40 @@ function boot() {
     const k = key(n); const out = [];
     const walk = (x) => { if (!x || x.tag === '#text') return; if (x.attrs && key(x) === k) out.push(x.id); (x.children || []).forEach(walk); };
     walk(root); app.select(out); toast(`${out.length} calque${out.length > 1 ? 's' : ''} correspondant${out.length > 1 ? 's' : ''}`);
+  }
+  // Batch rename (Figma: Cmd+R on several layers / plugin Rename It): $n number, $nn padded, $name current name, $tag, $text
+  async function renameLayers() {
+    const nodes = app.selNodes; if (!nodes.length) return;
+    const pat = await ask(nodes.length > 1 ? `Renommer ${nodes.length} calques` : 'Renommer le calque', nodes.length > 1 ? 'carte-$n' : (nodes[0].attrs.name || ''), '$n numéro (1, 2…), $nn (01, 02…), $name nom actuel, $tag type, $text texte. Vide = retirer le nom.');
+    if (pat === null) return;
+    app.change(() => nodes.forEach((n, i) => {
+      const txt = (n.children || []).filter((c) => c.tag === '#text').map((c) => c.text).join(' ').trim().slice(0, 24);
+      const v = pat.replace(/\$nn/g, String(i + 1).padStart(2, '0')).replace(/\$n/g, String(i + 1)).replace(/\$name/g, n.attrs.name || n.tag).replace(/\$tag/g, n.tag).replace(/\$text/g, txt.toLowerCase().replace(/[^\w-]+/g, '-'));
+      if (v) n.attrs.name = v; else delete n.attrs.name;
+    }));
+    toast(`${nodes.length} calque(s) renommé(s)`);
+  }
+  // Find & replace in texts (and optionally layer names) of the current page — or the whole project
+  async function findReplace() {
+    const find = await ask('Rechercher', '', 'Texte à chercher dans les textes et les noms de calques de la page');
+    if (!find) return;
+    const nodes = []; const walk = (n) => { if (!n) return; nodes.push(n); (n.children || []).forEach(walk); };
+    (app.page ? app.page.children : app.project.nodes).forEach(walk);
+    const hits = nodes.filter((n) => (n.tag === '#text' && n.text.includes(find)) || (n.attrs && n.attrs.name && n.attrs.name.includes(find)));
+    if (!hits.length) { toast(`« ${find} » introuvable sur cette page`); return; }
+    const repl = await ask(`Remplacer « ${find} » (${hits.length} occurrence(s))`, find, 'Laisse tel quel pour seulement sélectionner les calques trouvés');
+    if (repl === null) return;
+    if (repl === find) { const ids = [...new Set(hits.map((n) => (n.tag === '#text' ? app.parent(n.id)?.id : n.id)).filter(Boolean))]; app.select(ids); toast(`${ids.length} calque(s) sélectionné(s)`); return; }
+    app.change(() => hits.forEach((n) => { if (n.tag === '#text') n.text = n.text.split(find).join(repl); else n.attrs.name = n.attrs.name.split(find).join(repl); }));
+    toast(`${hits.length} remplacement(s)`);
+  }
+  // Content fill (Content Reel): realistic, deterministic text for the selected text layers
+  async function fillContent(kind) {
+    const texts = []; const walk = (n) => { if (n.tag === 'text') texts.push(n); (n.children || []).forEach(walk); };
+    app.selNodes.forEach(walk); if (!texts.length) { toast('Sélectionne des textes (ou leurs conteneurs)'); return; }
+    const seed = Math.floor(Math.random() * 1000);
+    app.change(() => texts.forEach((t, i) => { const v = String(MQ.fake(kind, seed + i)); const tn = (t.children || []).find((c) => c.tag === '#text'); if (tn) tn.text = v; else t.children = [{ id: MQ.newId(), tag: '#text', text: v }]; }));
+    toast(`${texts.length} texte(s) remplis : ${kind}`);
   }
   function useAsMask() {
     const nodes = app.selNodes.filter((n) => n.tag !== 'screen'); if (nodes.length < 2) { toast('Sélectionne le masque et les calques à masquer'); return; }
@@ -504,6 +540,8 @@ function boot() {
     if (e.shiftKey && k === 'm' && !mod) { canvas.sbuild.start(app.selection); return; }
     if (mod && e.altKey && k === 'm') { e.preventDefault(); useAsMask(); return; }
     if (mod && e.altKey && k === 's') { e.preventDefault(); versions(); return; }
+    if (mod && !e.altKey && !e.shiftKey && k === 'r') { e.preventDefault(); renameLayers(); return; }
+    if (mod && !e.altKey && !e.shiftKey && k === 'f') { e.preventDefault(); findReplace(); return; }
     if (mod && e.altKey && k === 't') { e.preventDefault(); if (tidyFn && app.selection.length > 1) tidyFn(); return; }
     if (mod && e.altKey && k === 'o') { e.preventDefault(); const n = app.selNodes[0]; if (n) outlineStroke(n.id); return; }
     if (e.shiftKey && k === 'e') { app.protoView = !app.protoView; app.emit('proto'); return; }

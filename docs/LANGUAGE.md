@@ -320,6 +320,15 @@ Les tokens acceptent des **modes nommés** (`sh-primary: light: #171717 | dark: 
 
 **Instance swap** : `<instance of={done ? 'Badge' : 'Chip'} label="…"/>` affiche le composant nommé avec les mêmes props. Une prop déclarée `icon: swap(IconButton|FAB)` dans `desc` (ou dont la valeur par défaut est le nom d'un composant) propose une liste de remplacement, avec ses valeurs préférées en tête. Clic droit sur une instance › « Remplacer l'instance… ».
 
+## Plugins intégrés
+
+Les plugins Figma les plus utilisés existent ici en natif :
+- **Contenu réaliste** (Content Reel) : `{fake('name', 3)}`. Les types sont `name first last initials email username phone company job city address product price amount number percent rating date time ago word title tag sentence paragraph color avatar image`. La graine rend le résultat stable. `{fakeList(5, 'name,job,avatar', 7)}` produit 5 fiches pour un `each`. Dans l'éditeur : clic droit › Contenu réaliste, qui remplit les textes sélectionnés.
+- **Ombre douce** (Smooth Shadow) : `shadow="smooth(14)"`, avec l'élévation, puis en option la couleur et l'intensité (`smooth(20, rgba(91,91,247,1), .25)`). Cinq couches progressives remplacent une ombre dure.
+- **Connecteurs** (Autoflow) : `<connector from=a to=b curve=curve|elbow|straight end=arrow|dot|none start=… label="…" color= width= dash="4 4" flow reveal/>` relie deux calques nommés de l'écran, en se recalculant d'après leur position. `flow` anime le pointillé, `reveal` dessine le trait.
+- **Graphiques** (Chart) : `<chart type=bar|line|area|spark|donut|pie data={[…]} labels="a,b,c" colors="$primary,$accent" w h reveal dots center="45 %"/>`. Une série multiple s'écrit `data={[[…],[…]]}`. Avec `reveal`, les barres poussent en cascade avec un léger dépassement, la courbe se trace, les points rebondissent.
+- **Renommer en lot** (Rename It) : Ctrl+R, motifs `carte-$n`, `$nn`, `$name`, `$tag`, `$text`. **Rechercher et remplacer** : Ctrl+F, dans les textes et les noms de calques de la page.
+
 ## Données, boucles, conditions
 
 ```xml

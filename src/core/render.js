@@ -2,6 +2,7 @@
 import { Scope, interp, evaluate } from './expr.js';
 import { DEVICES, splitTop, withAlpha, parseColor, coerce } from './project.js';
 import { twToAttrs } from './tailwind.js';
+import { smoothShadow, buildConnector, buildChart } from './plugins.js';
 import { patternFill, wrapClone, applyEffects, applyMaskGroup } from './effects.js';
 import { compileFx } from './fx.js';
 import { applyShader } from './shader.js';
@@ -16,7 +17,7 @@ import { genImage } from './gen.js';
 import { makeStatusBar, makeHomeBar } from './chrome.js';
 import { parseRig } from './rig.js';
 
-export const FRAME_TAGS = new Set(['shape', 'boolean', 'textpath', 'path', 'frame', 'row', 'col', 'grid', 'stack', 'box', 'screen', 'rect', 'ellipse', 'button', 'card', 'section', 'header', 'footer', 'nav', 'list']);
+export const FRAME_TAGS = new Set(['connector', 'chart', 'shape', 'boolean', 'textpath', 'path', 'frame', 'row', 'col', 'grid', 'stack', 'box', 'screen', 'rect', 'ellipse', 'button', 'card', 'section', 'header', 'footer', 'nav', 'list']);
 export const INLINE_TEXT = new Set(['span', 'b', 'i', 'u', 's', 'a', 'code', 'br']);
 const BP = { sm: 640, md: 768, lg: 1024, xl: 1280, '2xl': 1536 };
 const STATE_PREFIX = { hover: ':hover', press: ':active', active: ':active', focus: ':focus-within' };
@@ -273,6 +274,7 @@ function shadowToCss(v) {
   return splitTop(String(v), '+').map((s) => {
     if (SHADOWS[s]) return SHADOWS[s];
     const f = fnArgs(s);
+    if (s === 'smooth' || (f && f[0] === 'smooth')) return smoothShadow(f ? num(f[1][0], 12) : 12, f && f[1][1] ? String(f[1][1]) : 'rgba(0,0,0,1)', f && f[1][2] ? num(f[1][2], 0.16) : 0.16);
     if (f && f[0] === 'tinted') { const c = parseColor(f[1][0]); const a = f[1][1] ? parseFloat(f[1][1]) / (parseFloat(f[1][1]) > 1 ? 100 : 1) : 0.2; return c ? `0 15px 20px rgba(${c[0]},${c[1]},${c[2]},${a})` : ''; }
     if (f && f[0] === 'halo') return `0 0 0 1px ${f[1][0] || 'rgba(255,255,255,.08)'}, 0 0 ${num(f[1][1], 40)}px ${f[1][0] || 'rgba(255,255,255,.08)'}`;
     if (f && f[0] === 'glow') return `0 0 ${num(f[1][1], 24)}px ${f[1][2] || 0}px ${f[1][0]}`;
@@ -744,6 +746,14 @@ function createElementFor(node, a, scope, parentLayout, ctx) {
       if (a.w === undefined && a.h === undefined && a.aspect === undefined && a.inset === undefined) { el.style.width = '100%'; el.style.aspectRatio = '4/3'; }
       break;
     }
+    case 'connector': { el = document.createElement('div'); buildConnector(el, a); break; }
+    case 'chart': {
+      el = document.createElement('div');
+      const cw = /^\d/.test(String(a.w ?? '')) ? num(a.w) : 320, ch = /^\d/.test(String(a.h ?? '')) ? num(a.h) : 180;
+      buildChart(el, a, cw, ch, (c) => String(resolveDollars(c, ctx)));
+      if (a.w === undefined) el.style.width = cw + 'px'; if (a.h === undefined) el.style.height = ch + 'px';
+      break;
+    }
     case 'shape': case 'boolean': case 'textpath': case 'path': {
       el = document.createElement('div'); el.className = 'mq-vector';
       const box = boxOf(a, tag === 'textpath' ? 200 : 100);
@@ -882,7 +892,7 @@ function decorate(el, node, a, states, events, scope, parentLayout, ctx) {
   if (a.anim && a.anim !== true) ctx.anims.push({ el, spec: String(a.anim), kind: 'in', id: ctx.owner || node.id });
   if (a.loop && a.loop !== true) ctx.anims.push({ el, spec: String(a.loop), kind: 'loop', id: ctx.owner || node.id });
   // children
-  if (!isText && !['icon', 'image', 'img', 'vector', 'svg', 'input', 'textarea', 'divider', 'line', 'shape', 'boolean', 'textpath', 'path'].includes(tag)) {
+  if (!isText && !['icon', 'image', 'img', 'vector', 'svg', 'input', 'connector', 'chart', 'textarea', 'divider', 'line', 'shape', 'boolean', 'textpath', 'path'].includes(tag)) {
     const layout = layoutOf(tag, a);
     const kids = renderChildren(node.children, scope, layout, ctx, el);
     if (a.stagger) applyStagger(kids, a.stagger, ctx);
@@ -1000,7 +1010,8 @@ function bindTilt(el, max) {
   el.addEventListener('pointerleave', () => { el.style.transform = base; });
 }
 
-export const BASE_CSS = `
+export const BASE_CSS = `.mq-flow{animation:mq-flow 1s linear infinite}@keyframes mq-flow{to{stroke-dashoffset:-12}}
+
 .mq-screen *,.mq-screen *::before,.mq-screen *::after{box-sizing:border-box}
 .mq-screen-body::-webkit-scrollbar,.mq-frame::-webkit-scrollbar{display:none}
 .mq-text{white-space:pre-line;overflow-wrap:break-word;min-width:0}
