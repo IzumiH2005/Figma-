@@ -155,6 +155,34 @@ Tout ce qui se dessine dans Figma (formes, plume, booléens, texte sur chemin) e
 
 **Dans l'éditeur** : outil Formes (S) avec un menu de 15 formes, Plume (P : clic = angle, glisser = courbe, clic sur le premier point = fermer), Crayon (Maj+P : tracé lissé automatiquement). Double-clic ou Entrée sur une forme = édition des points (glisser un point ou une poignée, Alt casse la symétrie, clic sur le tracé ajoute un point, double-clic bascule angle/courbe, Suppr retire). Les losanges orange sont les poignées de rig (branches d'étoile, arc, rayon…). Sélection multiple → Union / Soustraire / Intersection / Exclure ; Ctrl+E aplatit en vecteur. Panneaux Forme, Tracé (Lisser, Simplifier, Miroirs), 3D (presets Carte posée / Isométrique / Relief) et Masque & fusion.
 
+## Tailwind et composants shadcn/ui
+
+**Classes Tailwind** : n'importe quel élément accepte `tw="…"` (Tailwind v4, 1 unité = 4 px). Les attributs explicites restent prioritaires.
+```xml
+<row tw="items-center gap-2 px-4 h-9 rounded-md text-sm font-medium bg-primary hover:bg-primary/90 dark:bg-input/30">…</row>
+```
+Couleurs sémantiques → tokens `$sh-*` (background, foreground, primary, muted, accent, destructive, border, input, ring, card, popover, chart-1…5, sidebar-*), opacité `/90`, rayons `rounded-sm|md|lg|xl` dérivés de `$sh-radius`, états `hover:` `focus-visible:` `active:`, `dark:` (mode nommé *dark*), breakpoints `sm: md: lg:`. Les classes de comportement (transition, ring, animate, sélecteurs arbitraires) sont ignorées.
+
+**Importer shadcn/ui** (registre officiel, licence MIT conservée) : les composants sont téléchargés, convertis et ajoutés au projet sous `ui.*`.
+```bash
+mq shadcn list                                   # les 61 composants du registre
+mq shadcn add button card dialog --into app.mq   # + dépendances du registre + thème (tokens sh-*)
+mq shadcn add all --into app.mq --theme zinc     # tout le registre (≈ 330 composants)
+mq shadcn theme globals.css --into app.mq        # ton propre thème (:root / .dark, oklch ou HSL)
+```
+Dans l'éditeur : Assets › shadcn/ui › Importer (en ligne), ou colle le JSON d'un élément du registre / un `.tsx` (hors ligne, dans l'artifact).
+
+Conversion : `cva` → props (`variant`, `size`…) avec leurs valeurs par défaut ; `data-[state=…]:` → prop `state` (repos : `unchecked`, `closed`, `inactive`) ; `data-[k]:`, `disabled:`, `aria-invalid:` → props `k`, `disabled`, `invalid` ; `{children}` → `<slot/>` ; icônes lucide → `<icon>` ; `className` → prop `className` (classes Tailwind ajoutées à la racine). La composition se lit comme en React :
+```xml
+<ui.Card className="w-96">
+  <ui.CardHeader><ui.CardTitle>Créer un projet</ui.CardTitle><ui.CardDescription>En un clic.</ui.CardDescription></ui.CardHeader>
+  <ui.CardContent><ui.Label>Nom</ui.Label><ui.Input placeholder="Mon projet"/></ui.CardContent>
+  <ui.CardFooter className="justify-between"><ui.Button variant=outline>Annuler</ui.Button><ui.Button>Déployer</ui.Button></ui.CardFooter>
+</ui.Card>
+<ui.Switch state=checked/>  <ui.TabsTrigger state=active>Compte</ui.TabsTrigger>
+```
+Les tokens acceptent des **modes nommés** (`sh-primary: light: #171717 | dark: #E5E5E5`) indépendants de l'ordre des modes du projet, et les couleurs `oklch()` / `hsl()`.
+
 ## Composants
 
 ```xml

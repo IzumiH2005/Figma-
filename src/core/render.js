@@ -1,6 +1,7 @@
 // DOM renderer: Maquette node tree -> live HTML elements.
 import { Scope, interp, evaluate } from './expr.js';
 import { DEVICES, splitTop, withAlpha, parseColor, coerce } from './project.js';
+import { twToAttrs } from './tailwind.js';
 import { resolveColorFns, shade as shadeC, parseColor as parseC, toCss as toCssC } from './color.js';
 const shadeColor = (c, p) => { const v = parseC(c); if (!v) throw new Error('not a colour'); return toCssC(shadeC(v, p / 100)); };
 import { VECTOR_TAGS, nodePath, boxOf, booleanSubs, buildVector, buildTextPath, gooFilterSvg, maskCss, threeD, parseShapeSpec } from './vector.js';
@@ -55,6 +56,12 @@ export function rootScope(project, state) {
 }
 
 // resolve "$token" refs inside a plain attribute string
+// Tailwind environment: radius scale from $sh-radius, colour/opacity through the project's tokens
+function twEnv(ctx) {
+  if (ctx._tw) return ctx._tw;
+  const r = parseFloat(ctx.project.token('sh-radius', ctx.mode)); 
+  return (ctx._tw = { prefix: 'sh-', radius: isNaN(r) ? 10 : r, alpha: (c, op) => { const str = String(resolveDollars(c, ctx)); return parseColor(str) ? withAlpha(str, op / 100) : c; } });
+}
 export function resolveDollars(v, ctx) {
   if (typeof v !== 'string') return v;
   if (!v.includes('$')) return resolveColorFns(v);
@@ -128,6 +135,22 @@ export function resolveAttrs(node, scope, ctx, overrides) {
     apply(k, val(v));
   }
   deferred.sort((a, b) => a[2] - b[2]).forEach(([k, v]) => apply(k, val(v)));
+  // Tailwind utilities (tw="flex items-center gap-2 bg-primary hover:bg-primary/90") — explicit attributes win
+  if (base.tw && typeof base.tw === 'string') {
+    const tw = twToAttrs(base.tw, twEnv(ctx));
+    const has = (k) => raw[k] !== undefined;
+    if (tw.layout && !['row', 'col', 'grid', 'stack', 'layout'].some(has)) base.layout = tw.layout === 'block' ? 'col' : tw.layout;
+    if (tw.layout === 'block' && base.align === undefined) base.align = 'stretch';
+    for (const [k, v] of Object.entries(tw.attrs)) if (!k.startsWith('$') && !has(k)) base[k] = typeof v === 'string' ? resolveDollars(v, ctx) : v;
+    for (const [k, v] of Object.entries(tw.prefixed)) {
+      const ci = k.indexOf(':'); const p = k.slice(0, ci), rest = k.slice(ci + 1); if (rest.startsWith('$') || rest.includes(':')) continue;
+      const vv = typeof v === 'string' ? resolveDollars(v, ctx) : v;
+      if (STATE_PREFIX[p]) { if (!(states[p] && rest in states[p])) (states[p] = states[p] || {})[rest] = vv; }
+      else if (p === 'dark') { if (/dark/i.test(ctx.modeName || '')) base[rest] = vv; }
+      else if (BP[p]) { if (ctx.screenW >= BP[p]) base[rest] = vv; }
+    }
+    delete base.tw;
+  }
   if (overrides) {
     for (const [k, v] of Object.entries(overrides.base)) base[k] = v;
     Object.assign(events, overrides.events);
@@ -384,6 +407,9 @@ export function cssFor(tag, a, parentLayout, ctx, isText) {
   if (a.shrink !== undefined) s.flexShrink = num(a.shrink, 1);
   if (a.self) s.alignSelf = alignMap[a.self] || a.self;
   if (a.span) s.gridColumn = a.span === 'all' ? '1 / -1' : `span ${a.span}`;
+  if (a.gcol !== undefined) s.gridColumnStart = String(a.gcol);
+  if (a.grst !== undefined) s.gridRowStart = String(a.grst);
+  if (a.rspan !== undefined) s.gridRow = `span ${a.rspan}`;
   if (a.rowspan) s.gridRow = `span ${a.rowspan}`;
   if (a.z !== undefined) s.zIndex = a.z;
   if (a.order !== undefined) s.order = a.order;
@@ -456,6 +482,7 @@ export function cssFor(tag, a, parentLayout, ctx, isText) {
   if (a.roty !== undefined) tf.push(`rotateY(${num(a.roty)}deg)`);
   if (a.scale !== undefined) tf.push(`scale(${num(a.scale, 1)})`);
   if (a.flipx) tf.push('scaleX(-1)'); if (a.flipy) tf.push('scaleY(-1)');
+  if (a.tx !== undefined || a.ty !== undefined) tf.unshift(`translate(${a.tx === undefined ? '0px' : px(a.tx)}, ${a.ty === undefined ? '0px' : px(a.ty)})`);
   if (tf.length) s.transform = tf.join(' ');
   if (a.origin) s.transformOrigin = a.origin;
   const depth = threeD(a, s);
@@ -535,7 +562,9 @@ export function renderChildren(children, scope, parentLayout, ctx, parentEl) {
 }
 
 export function renderNode(node, scope, parentLayout, ctx, overrides) {
-  if (!node || node.tag === '#text') return [];
+  if (!node) return [];
+  // bare text inside a container (e.g. <ui.Button>Enregistrer</ui.Button>) renders as an implicit <text>
+  if (node.tag === '#text') return node.text && node.text.trim() ? renderNode({ id: node.id, tag: 'text', attrs: {}, children: [{ ...node, text: node.text.trim() }] }, scope, parentLayout, ctx) : [];
   if (node.tag === 'note' && !ctx.editor) return [];
   if (ctx.depth > 40) { ctx.errors.push('Récursion de composants trop profonde'); return []; }
   const at = node.attrs || {};
@@ -571,7 +600,7 @@ export function renderNode(node, scope, parentLayout, ctx, overrides) {
   }
 
   // component instance
-  const comp = /^[A-Z]/.test(node.tag) ? ctx.project.components[node.tag] : null;
+  const comp = /^(\w+\.)?[A-Z]/.test(node.tag) ? ctx.project.components[node.tag] : null;
   if (comp) return [renderInstance(node, comp, scope, parentLayout, ctx, overrides)];
 
   const { a, states, events } = resolveAttrs(node, scope, ctx, overrides);
@@ -715,8 +744,8 @@ function createElementFor(node, a, scope, parentLayout, ctx) {
     default: {
       el = document.createElement('div');
       el.className = 'mq-frame';
-      if (!FRAME_TAGS.has(tag) && !/^[A-Z]/.test(tag) && tag !== 'page') ctx.errors.push(`Balise inconnue <${tag}> (rendue comme <frame>)`);
-      if (/^[A-Z]/.test(tag)) ctx.errors.push(`Composant inconnu <${tag}>`);
+      if (!FRAME_TAGS.has(tag) && !/^(\w+\.)?[A-Z]/.test(tag) && tag !== 'page') ctx.errors.push(`Balise inconnue <${tag}> (rendue comme <frame>)`);
+      if (/^(\w+\.)?[A-Z]/.test(tag)) ctx.errors.push(`Composant inconnu <${tag}>`);
     }
   }
   return el;

@@ -169,7 +169,7 @@ export class App {
     if (n.attrs && (n.attrs.name || n.attrs.key) && n.tag !== 'icon') return n.attrs.name || n.attrs.key;
     if (n.tag === 'text' || n.tag === 'note') { const t = MQ.textOf(n).trim().replace(/\s+/g, ' '); return t.length > 28 ? t.slice(0, 26) + '…' : t || 'Texte'; }
     if (n.tag === 'icon') return 'icon · ' + (n.attrs.name || '');
-    if (/^[A-Z]/.test(n.tag)) return n.tag + (n.attrs.label ? ' · ' + n.attrs.label : n.attrs.title ? ' · ' + n.attrs.title : '');
+    if (/^(\w+\.)?[A-Z]/.test(n.tag)) return n.tag + (n.attrs.label ? ' · ' + n.attrs.label : n.attrs.title ? ' · ' + n.attrs.title : '');
     return n.tag;
   }
 }

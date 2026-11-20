@@ -6,6 +6,8 @@ import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { buildRuntime, buildEditorHTML, readExamples, iconSubset } from '../scripts/build.js';
+import { importShadcnTheme } from '../src/core/themes.js';
+import { importShadcn, SHADCN_REGISTRY } from '../src/core/shadcn-import.js';
 
 const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -23,7 +25,9 @@ const HELP = `Maquette CLI
   mq build   <file.mq...> [-o maquette.html] [--artifact]            éditeur autonome avec projets intégrés (--artifact : pour publication)
   mq export  <file.mq> [-o proto.html]                               prototype HTML autonome (lecture seule)
   mq fmt     <file.mq> [--write]                                     reformate le source
-  mq kit                                                             liste les composants du kit + props
+  mq kit     [préfixe]                                               liste les composants du kit + props (mq kit ui. : pack shadcn)
+  mq shadcn  add <noms…|all> [--into f.mq] [--theme neutral|zinc|slate|stone|gray]   importe les composants du registre shadcn/ui (ui.*)
+  mq shadcn  list | theme <globals.css> [--into f.mq]                  liste le registre · importe un thème (:root/.dark) en tokens sh-*
   mq icons   [recherche]                                             cherche des noms d'icônes (lucide)
   mq scenes                                                          liste les générateurs d'images
 
@@ -480,14 +484,65 @@ async function cmdFmt(o) {
   if (o.write) { fs.writeFileSync(o._[1], res.ok); console.log('✓ reformaté'); } else process.stdout.write(res.ok);
 }
 
-async function cmdKit() {
+async function cmdKit(o) {
   const { browser, page } = await browserPage();
-  const txt = await page.evaluate(() => {
+  const filter = o._[1] || '';
+  const txt = await page.evaluate((filter) => {
     const p = MQ.loadProject('');
-    return Object.values(p.components).map((c) => `<${c.name} ${Object.entries(c.props).map(([k, v]) => `${k}=${typeof v === 'object' ? JSON.stringify(v) : JSON.stringify(v)}`).join(' ')}/>\n    ${c.desc}`).join('\n');
-  });
+    return Object.values(p.components).filter((c) => !filter || c.name.toLowerCase().startsWith(filter.toLowerCase())).map((c) => `<${c.name} ${Object.entries(c.props).map(([k, v]) => `${k}=${typeof v === 'object' ? JSON.stringify(v) : JSON.stringify(v)}`).join(' ')}/>\n    ${c.desc}`).join('\n');
+  }, filter);
   console.log(txt);
   await browser.close();
+}
+
+// merge sh-* token lines into a project's <tokens> block (created if missing)
+function mergeTokens(src, lines) {
+  const m = /<tokens>([\s\S]*?)<\/tokens>/.exec(src);
+  if (!m) return src.replace(/(<project[^>]*>)/, `$1\n  <tokens>\n${lines.map((l) => '    ' + l).join('\n')}\n  </tokens>`);
+  let body = m[1];
+  for (const l of lines) { const k = l.trim().split(':')[0]; const re = new RegExp(`^[ \\t]*${k.replace(/[-]/g, '\\-')}\\s*:.*$`, 'm'); body = re.test(body) ? body.replace(re, '    ' + l) : body.replace(/\s*$/, '\n    ' + l + '\n  '); }
+  return src.slice(0, m.index) + '<tokens>' + body + '</tokens>' + src.slice(m.index + m[0].length);
+}
+
+// mq shadcn add <names…|all> [--into f.mq] [-o f.mq] [--style new-york-v4] [--theme neutral]
+// mq shadcn list | mq shadcn theme <globals.css> [--into f.mq]
+async function cmdShadcn(o) {
+  const sub = o._[1];
+  const base = o.style ? SHADCN_REGISTRY.replace(/new-york-v4$/, o.style) : SHADCN_REGISTRY;
+  const get = async (name) => { const r = await fetch(`${base}/${name}.json`); if (!r.ok) throw new Error(`${name} : HTTP ${r.status} (${base})`); return r.json(); };
+  if (sub === 'theme') return cmdShadcnTheme({ ...o, _: ['shadcn-theme', o._[2]] });
+  const index = await get('registry'); const uiNames = index.items.filter((i) => i.type === 'registry:ui').map((i) => i.name);
+  if (sub === 'list' || !sub) { console.log(`${uiNames.length} composants (${base}) :\n` + uiNames.join(' ')); return; }
+  if (sub !== 'add') throw new Error('usage : mq shadcn add <noms…|all> [--into f.mq] | mq shadcn list | mq shadcn theme globals.css');
+  const want = o._.slice(2).length ? o._.slice(2) : ['all'];
+  const r = await importShadcn({ names: want, theme: o.theme || 'neutral', style: o.style || 'new-york-v4', fetchJson: async (u) => { const res = await fetch(u); if (!res.ok) throw new Error(`HTTP ${res.status} ${u}`); return res.json(); } });
+  for (const c of r.converted) console.log(`  ✓ ${c.item.padEnd(16)} ${c.names.join(', ')}`);
+  const known = r.names.map((x) => x.slice(3)); const total = r.names.length; const items = r.converted; const warns = r.warnings; const theme = r.themeLines || [];
+  const block = r.mq;
+  if (o.into) {
+    let src = fs.readFileSync(o.into, 'utf8');
+    for (const name of known) src = src.replace(new RegExp(`(<!-- [\\w-]+ -->\\s*)?<component name="ui\\.${name}"[\\s\\S]*?</component>\\s*`, 'g'), '');
+    src = src.replace(/<!-- shadcn\/ui — MIT[^>]*-->\s*/g, '');
+    if (!/^\s*sh-background\s*:/m.test(src) || o.theme) src = mergeTokens(src, theme);
+    src = src.replace(/<\/project>\s*$/, `${block.replace(/^/gm, '  ').replace(/^\s+$/gm, '')}\n</project>\n`);
+    fs.writeFileSync(o.into, src);
+    console.log(`✓ ${total} composants ui.* (${items.length} entrées du registre) et le thème ${o.theme || 'neutral'} ajoutés à ${o.into}`);
+  } else {
+    const out = `<!-- tokens du thème ${o.theme || 'neutral'} : colle-les dans <tokens> -->\n<tokens>\n${theme.map((l) => '  ' + l).join('\n')}\n</tokens>\n\n${block}\n`;
+    if (o.o) { fs.writeFileSync(o.o, out); console.log(`✓ ${total} composants écrits dans ${o.o}`); } else console.log(out);
+  }
+  if (warns.length) console.warn(`  ${warns.length} avertissement(s) : ` + [...new Set(warns)].slice(0, 6).join(' · '));
+}
+
+// shadcn/ui globals.css → <tokens> (sh-*), printed or merged into a .mq file (--into)
+async function cmdShadcnTheme(o) {
+  const f = o._[1]; if (!f) throw new Error('usage : mq shadcn-theme globals.css [--into projet.mq]');
+  const r = importShadcnTheme(fs.readFileSync(f, 'utf8'));
+  if (!r.count) throw new Error('aucune variable --x trouvée dans :root / .dark');
+  if (!o.into) { console.log(r.tokens); return; }
+  const src = mergeTokens(fs.readFileSync(o.into, 'utf8'), r.tokens.split('\n').slice(1, -1).map((l) => l.trim()));
+  fs.writeFileSync(o.into, src);
+  console.log(`✓ ${r.count} tokens shadcn fusionnés dans ${o.into}${r.skipped.length ? ` (ignorés : ${r.skipped.join(', ')})` : ''}`);
 }
 
 async function cmdIcons(o) {
@@ -506,6 +561,6 @@ async function cmdScenes() {
 
 const o = args(process.argv.slice(2));
 const cmd = o._[0];
-const table = { motion: cmdMotion, render: cmdRender, board: cmdBoard, inspect: cmdInspect, lint: (x) => cmdLint(x), audit: (x) => cmdLint(x, true), video: (x) => cmdVideo(x), anim: (x) => cmdVideo(x, true), build: cmdBuild, export: cmdExport, fmt: cmdFmt, kit: cmdKit, icons: cmdIcons, scenes: cmdScenes };
+const table = { motion: cmdMotion, render: cmdRender, board: cmdBoard, inspect: cmdInspect, lint: (x) => cmdLint(x), audit: (x) => cmdLint(x, true), video: (x) => cmdVideo(x), anim: (x) => cmdVideo(x, true), build: cmdBuild, export: cmdExport, fmt: cmdFmt, kit: cmdKit, 'shadcn-theme': cmdShadcnTheme, shadcn: cmdShadcn, icons: cmdIcons, scenes: cmdScenes };
 if (!cmd || !table[cmd]) { console.log(HELP); process.exit(cmd ? 1 : 0); }
 try { await table[cmd](o); } catch (e) { console.error('✖ ' + (e && e.message || e)); process.exit(1); }

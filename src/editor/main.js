@@ -196,7 +196,7 @@ function boot() {
   // ---------------- actions
   function contextMenu(x, y) {
     const sel = app.selNodes; const n = sel[0];
-    const isComp = n && /^[A-Z]/.test(n.tag) && app.project.components[n.tag];
+    const isComp = n && /^(\w+\.)?[A-Z]/.test(n.tag) && app.project.components[n.tag];
     menu(x, y, [
       { label: 'Copier', key: 'Ctrl+C', icon: 'copy', disabled: !n, run: () => copy() },
       { label: 'Coller', key: 'Ctrl+V', icon: 'clipboard', disabled: !app.clipboard, run: () => paste() },

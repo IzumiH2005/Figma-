@@ -267,7 +267,7 @@ export function lintProject(project) {
         }
       } else for (const nm of names) if (val.includes(`'${nm}'`) || val.includes(`"${nm}"`) || val.includes(`:${nm}`)) out.add(nm);
     }
-    if (/^[A-Z]/.test(n.tag)) used.add(n.tag);
+    if (/^(\w+\.)?[A-Z]/.test(n.tag)) used.add(n.tag);
     (n.children || []).forEach((c) => collect(c, out, used, owner));
   };
   for (const c of Object.values(project.components)) { if (c.fromKit) continue; const out = new Set(), used = new Set(); collect(c.node, out, used, '◆ ' + c.name); compLinks.set(c.name, { out, used }); }
@@ -301,7 +301,7 @@ export function lintProject(project) {
   Object.values(project.components).filter((c) => !c.fromKit).forEach((c) => tVisit(c.node, '◆ ' + c.name));
 
   // smart animate without shared layer names
-  const keysOf = (n, acc = new Set()) => { if (n.attrs && (n.attrs.name || n.attrs.key) && n.tag !== 'screen' && n.tag !== 'icon') acc.add(String(n.attrs.name || n.attrs.key)); if (/^[A-Z]/.test(n.tag) && project.components[n.tag] && project.components[n.tag].root) keysOf(project.components[n.tag].root, acc); (n.children || []).forEach((c) => keysOf(c, acc)); return acc; };
+  const keysOf = (n, acc = new Set()) => { if (n.attrs && (n.attrs.name || n.attrs.key) && n.tag !== 'screen' && n.tag !== 'icon') acc.add(String(n.attrs.name || n.attrs.key)); if (/^(\w+\.)?[A-Z]/.test(n.tag) && project.components[n.tag] && project.components[n.tag].root) keysOf(project.components[n.tag].root, acc); (n.children || []).forEach((c) => keysOf(c, acc)); return acc; };
   for (const s of project.screens()) {
     const walk = (n) => {
       for (const [k, v] of Object.entries(n.attrs || {})) {
@@ -343,7 +343,7 @@ export function lintProject(project) {
         if (+v % 2 !== 0 && +v > 3) push('info', 'off-grid', `${k}=${v} impair : préfère un multiple de 4 → ${snap4(+v)}`, { id: n.id, screen: nodeScreen(n.id), fix: { id: n.id, attrs: { [k]: String(snap4(+v)) } } });
       }
       // font sizes off the type scale
-      if (isLiteral(a.size) && /^\d+(\.\d+)?$/.test(a.size) && !['icon', 'ellipse', 'rect', 'box', 'spacer'].includes(n.tag) && !/^[A-Z]/.test(n.tag)) {
+      if (isLiteral(a.size) && /^\d+(\.\d+)?$/.test(a.size) && !['icon', 'ellipse', 'rect', 'box', 'spacer'].includes(n.tag) && !/^(\w+\.)?[A-Z]/.test(n.tag)) {
         const s = +a.size;
         if (!scaleSizes.includes(s)) {
           const nearest = scaleSizes.reduce((b, x) => (Math.abs(x - s) < Math.abs(b - s) ? x : b), scaleSizes[0]);

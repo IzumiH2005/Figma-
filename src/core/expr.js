@@ -98,7 +98,7 @@ const BUILTINS = {
   shade: (c, p) => toCss(_shade(pc(c), pct(p, 10))), tint: (c, p) => toCss(_tint(pc(c), pct(p, 10))),
   mix: (a, b, p) => toCss(_mix(pc(a), pc(b), pct(p, 50))), alpha: (c, p) => { const x = pc(c); return toCss([x[0], x[1], x[2], x[3] * pct(p, 50)]); },
   onColor: (c, light = '#FFFFFF', dark = '#111114') => (_contrast(pc(c), pc(light)) >= _contrast(pc(c), pc(dark)) ? light : dark),
-  min: Math.min, max: Math.max, round: Math.round, floor: Math.floor, ceil: Math.ceil, abs: Math.abs,
+  min: (...a) => Math.min(...a.flat()), max: (...a) => Math.max(...a.flat()), round: Math.round, floor: Math.floor, ceil: Math.ceil, abs: Math.abs,
   len: (x) => (x == null ? 0 : x.length ?? Object.keys(x).length),
   upper: (s) => String(s).toUpperCase(), lower: (s) => String(s).toLowerCase(),
   fixed: (n, d = 2) => Number(n).toFixed(d),

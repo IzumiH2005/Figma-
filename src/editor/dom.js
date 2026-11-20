@@ -60,7 +60,7 @@ export function store(key, val) {
   return null;
 }
 
-function modal(title, body, actions) {
+export function modal(title, body, actions) {
   document.querySelectorAll('.mq-modal').forEach((m) => m.remove());
   const close = () => wrap.remove();
   const wrap = h('div.mq-modal', { onpointerdown: (e) => { if (e.target === wrap) close(); }, onkeydown: (e) => { e.stopPropagation(); if (e.key === 'Escape') close(); } },
@@ -70,9 +70,10 @@ function modal(title, body, actions) {
 }
 
 // in-page replacement for prompt() (blocked inside artifacts)
-export function ask(title, value = '', hint = '') {
+export function ask(title, value = '', hint = '', opts = {}) {
   return new Promise((resolve) => {
-    const inp = h('input.inp', { value, id: 'mq-ask' });
+    const inp = opts.multiline ? h('textarea.inp.mono', { id: 'mq-ask', rows: 12, style: { width: '100%', minHeight: '220px', fontSize: '12px' } }) : h('input.inp', { value, id: 'mq-ask' });
+    if (opts.multiline) inp.value = value;
     let done = false;
     let m;
     const finish = (v) => { if (done) return; done = true; m.remove(); resolve(v); };
@@ -80,7 +81,7 @@ export function ask(title, value = '', hint = '') {
       h('button.btn', { onclick: () => finish(null) }, 'Annuler'),
       h('button.btn.primary', { onclick: () => finish(inp.value) }, 'Valider'),
     ]);
-    inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') finish(inp.value); });
+    inp.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter' && (!opts.multiline || e.metaKey || e.ctrlKey)) finish(inp.value); });
     new MutationObserver((_, obs) => { if (!m.isConnected) { obs.disconnect(); if (!done) { done = true; resolve(null); } } }).observe(document.body, { childList: true });
     setTimeout(() => { inp.focus(); inp.select(); });
   });

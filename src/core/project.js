@@ -136,7 +136,13 @@ export class Project {
     for (const n of top) {
       switch (n.tag) {
         case 'tokens':
-          for (const [k, v] of parseKeyLines(n.raw || '')) { const arr = splitTop(v, '|').map(unq); if (fromKit) arr._kit = true; this.tokens[k] = arr; }
+          for (const [k, v] of parseKeyLines(n.raw || '')) {
+            let arr = splitTop(v, '|').map(unq);
+            // named modes: `light: #fff | dark: #0a0a0a` (independent of the order of the project's modes)
+            const named = arr.length > 1 && arr.every((x) => /^[a-z][\w-]*\s*:\s*\S/.test(x) && !/^(url|data|linear|radial|conic)\s*:/.test(x));
+            if (named) { const map = {}; for (const x of arr) { const i = x.indexOf(':'); map[x.slice(0, i).trim()] = unq(x.slice(i + 1).trim()); } arr = Object.values(map); arr._named = map; }
+            if (fromKit) arr._kit = true; this.tokens[k] = arr;
+          }
           break;
         case 'vars':
           for (const [k, v] of parseKeyLines(n.raw || '')) this.vars[k] = v;
@@ -204,7 +210,9 @@ export class Project {
   token(name, mode = 0, depth = 0) {
     const t = this.tokens[name];
     if (!t) return undefined;
-    let v = t[Math.min(mode, t.length - 1)];
+    let v;
+    if (t._named) { const nm = this.modes[mode] || 'light'; v = t._named[nm] ?? t._named[/dark/i.test(nm) ? 'dark' : 'light'] ?? t[0]; }
+    else v = t[Math.min(mode, t.length - 1)];
     if (typeof v === 'string' && v.startsWith('$') && depth < 8) {
       const r = this.token(v.slice(1).split('/')[0], mode, depth + 1);
       if (r !== undefined) return v.includes('/') ? withAlpha(r, v.split('/')[1]) : r;

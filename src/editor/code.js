@@ -12,7 +12,7 @@ export function highlight(src) {
     last = re.lastIndex;
     if (m[1] || (m[2] && /(^|\s)$/.test(src[m.index - 1] || ' ') && !inTag)) { out += `<span class="hl-c">${esc(m[0])}</span>`; continue; }
     if (m[2]) { out += esc(m[0]); continue; }
-    if (m[3]) { inTag = true; const comp = /^[A-Z]/.test(m[4]); out += `<span class="hl-p">${esc(m[3])}</span><span class="${comp ? 'hl-comp' : 'hl-t'}">${esc(m[4])}</span>`; continue; }
+    if (m[3]) { inTag = true; const comp = /^(\w+\.)?[A-Z]/.test(m[4]); out += `<span class="hl-p">${esc(m[3])}</span><span class="${comp ? 'hl-comp' : 'hl-t'}">${esc(m[4])}</span>`; continue; }
     if (m[5]) { inTag = false; out += `<span class="hl-p">${esc(m[5])}</span>`; continue; }
     if (m[6]) { out += `<span class="hl-s">${esc(m[6])}</span>`; continue; }
     if (m[7]) { out += `<span class="hl-e">${esc(m[7])}</span>`; continue; }

@@ -5,6 +5,8 @@ import path from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { buildRuntime, buildEditorHTML, readExamples } from './build.js';
+import { convertRegistryItem } from '../src/core/shadcn-import.js';
+import { twToAttrs } from '../src/core/tailwind.js';
 
 const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -102,6 +104,30 @@ const proto = await page.evaluate(async () => {
 });
 ok(proto.n === 1 && proto.txt === '1', 'Player: inc $n re-rend le texte');
 ok(proto.screen === 'B', 'Player: go B (smart)');
+
+// Tailwind → attributes, and TSX (shadcn conventions) → .mq components, offline
+{
+  const t = twToAttrs('inline-flex items-center gap-2 px-4 h-9 rounded-md text-sm font-medium bg-primary/90 hover:bg-accent border dark:bg-input', { radius: 10 });
+  ok(t.layout === 'row' && t.attrs.gap === 8 && t.attrs.px === 16 && t.attrs.h === 36 && t.attrs.radius === 8 && t.attrs.size === 14 && t.attrs.weight === 500 && t.attrs.stroke === '1 $sh-border' && t.prefixed['hover:fill'] === '$sh-accent' && t.prefixed['dark:fill'] === '$sh-input', 'Tailwind → attributs (layout, espacements, rayon dérivé du thème, états, dark:)');
+  const tsx = `import { cva } from "class-variance-authority"
+import { CheckIcon } from "lucide-react"
+const pillVariants = cva("inline-flex items-center gap-1 rounded-full px-2 text-xs", { variants: { tone: { solid: "bg-primary text-primary-foreground", soft: "bg-muted" } }, defaultVariants: { tone: "solid" } })
+export function Pill({ className, tone, done = false, ...props }: Props) {
+  return <span className={cn(pillVariants({ tone }), "data-[state=on]:ring-2", className)} {...props}>{done && <CheckIcon className="size-3" />}{props.children}</span>
+}
+export function PillRow({ className, ...props }) { return <div className={cn("flex gap-2", className)}><Pill tone="soft">A</Pill>{props.children}</div> }`;
+  const r = convertRegistryItem({ name: 'pill', files: [{ path: 'pill.tsx', content: tsx }] });
+  ok(r.names.join() === 'ui.Pill,ui.PillRow' && r.mq.includes(`props="tone='solid' done=false state='' className=''"`) && r.mq.includes('if={done}') && r.mq.includes('name=check size=12') && r.mq.includes('<ui.Pill tone=soft>') && r.mq.includes('<slot/>'), 'TSX → composants .mq (cva → props, data-[state] → state, icône lucide, composition, slot) ' + r.warnings.join(' | '));
+  const out = await page.evaluate((mq) => {
+    const p = MQ.loadProject(`<project><tokens>\n sh-primary: #171717\n sh-primary-foreground: #FAFAFA\n sh-muted: #F5F5F5\n sh-radius: 10\n</tokens>${mq}<screen name="S" w=300 h=100><ui.PillRow><ui.Pill done>Fait</ui.Pill></ui.PillRow></screen></project>`);
+    MQ.ensureStyles(); document.body.innerHTML = '';
+    const el = MQ.screenElement(p, 'S'); document.body.appendChild(el);
+    const pills = [...el.querySelectorAll('[data-comp="ui.Pill"], [data-tag="ui.Pill"]')];
+    const cs = pills.map((x) => getComputedStyle(x));
+    return { n: pills.length, errs: el._mq.errors, bg: cs.map((c) => c.backgroundColor), radius: cs[0] && cs[0].borderTopLeftRadius, text: el.textContent.replace(/\s+/g, ' ').trim() };
+  }, r.mq);
+  ok(out.n === 2 && !out.errs.length && out.bg[0] === 'rgb(245, 245, 245)' && out.bg[1] === 'rgb(23, 23, 23)' && out.radius === '9999px' && out.text.replace(/ /g, '') === 'AFait', `Composants importés rendus (variantes, slot, texte) ${JSON.stringify(out)}`);
+}
 
 // editor boots
 const html = await buildEditorHTML({ projects: examples });

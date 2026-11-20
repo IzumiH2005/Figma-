@@ -1,5 +1,6 @@
 // Left panel: pages, layers tree, assets (components / icons / images / devices), tokens & variables
-import { MQ, h, icon, clear, debounce, menu, ask } from './dom.js';
+import { MQ, h, icon, clear, debounce, menu, ask, toast, modal } from './dom.js';
+import { importShadcn } from '../core/shadcn-import.js';
 import { isContainer, uniqueName } from './state.js';
 
 const TAG_ICON = { screen: 'smartphone', frame: 'square-dashed', row: 'columns-3', col: 'rows-3', grid: 'grid-3x3', stack: 'layers', text: 'type', icon: 'smile', image: 'image', rect: 'square', ellipse: 'circle', note: 'sticky-note', input: 'text-cursor-input', divider: 'minus', spacer: 'move-horizontal', vector: 'pen-tool', box: 'square', card: 'credit-card', button: 'mouse-pointer-click' };
@@ -65,7 +66,7 @@ export class LeftPanel {
     const hasKids = kids.length > 0 && n.tag !== 'text';
     const open = !this.collapsed.has(n.id) && (depth < 1 || this.isOnSelectedPath(n.id) || this.expanded?.has(n.id));
     const sel = app.selection.includes(n.id);
-    const comp = /^[A-Z]/.test(n.tag);
+    const comp = /^(\w+\.)?[A-Z]/.test(n.tag);
     const hidden = n.attrs.hidden === true || n.attrs.hidden === 'true';
     const row = h('div.lrow' + (sel ? '.sel' : '') + (comp ? '.comp' : '') + (hidden ? '.hid' : ''), {
       style: { paddingLeft: 8 + depth * 14 + 'px' }, draggable: 'true',
@@ -116,7 +117,9 @@ export class LeftPanel {
     const wrap = h('div.assets');
     // components
     const comps = Object.values(p.components);
-    const own = comps.filter((c) => !c.fromKit), kit = comps.filter((c) => c.fromKit);
+    const isUi = (c) => c.name.startsWith('ui.');
+    const own = comps.filter((c) => !c.fromKit && !isUi(c)), kit = comps.filter((c) => c.fromKit);
+    const ui = comps.filter((c) => !c.fromKit && isUi(c));
     const grid = (list, title) => {
       if (!list.length) return null;
       const g = h('div.agrid');
@@ -159,7 +162,17 @@ export class LeftPanel {
       }
       return [h('div.phead', null, h('span', null, title)), g];
     };
-    wrap.append(...[].concat(grid(own, 'Composants du projet') || [], grid(kit, 'Kit Maquette') || []));
+    wrap.append(...[].concat(grid(own, 'Composants du projet') || []));
+    // shadcn/ui: imported from the official registry, grouped by registry item
+    wrap.appendChild(h('div.phead', null, h('span', null, `shadcn/ui (${ui.length})`), h('button.mini', { title: 'Importer des composants shadcn/ui', onclick: () => this.shadcnDialog() }, icon('download', 14))));
+    if (!ui.length) wrap.appendChild(h('div.empty', null, 'Aucun composant shadcn importé. ', h('a', { onclick: () => this.shadcnDialog() }, 'Importer depuis le registre…')));
+    else {
+      const groups = new Map(); for (const c of ui) { const g = (/shadcn\/ui · ([\w-]+)/.exec(c.desc) || [, 'autres'])[1]; if (!groups.has(g)) groups.set(g, []); groups.get(g).push(c); }
+      const chips = h('div.chips', { style: { padding: '0 12px 8px' } }, [...groups.keys()].map((g) => h('button.chip' + (this.uiGroup === g ? '.on' : ''), { onclick: () => { this.uiGroup = this.uiGroup === g ? null : g; this.render(); } }, g)));
+      wrap.appendChild(chips);
+      if (this.uiGroup && groups.has(this.uiGroup)) wrap.append(...(grid(groups.get(this.uiGroup), `ui · ${this.uiGroup}`) || []));
+    }
+    wrap.append(...[].concat(grid(kit, 'Kit Maquette') || []));
     // icons
     wrap.appendChild(h('div.phead', null, h('span', null, 'Icônes (Lucide)')));
     const q = h('input.search', { placeholder: 'Chercher une icône…', value: this.iconQuery });
@@ -215,15 +228,24 @@ export class LeftPanel {
     if (tokNode) for (const line of (tokNode.raw || '').split('\n')) { const m = /^\s*\$?([\w.\-]+)\s*:/.exec(line); if (m) own.add(m[1]); }
     wrap.appendChild(h('div.phead', null, h('span', null, 'Tokens'), h('button.mini', { title: 'Ajouter un token', onclick: () => this.editToken(null) }, icon('plus', 14))));
     const list = h('div.tlist');
-    const names = Object.keys(p.tokens).sort((a, b) => (own.has(b) - own.has(a)) || 0);
-    for (const k of names) {
-      const vals = p.tokens[k];
-      const isColor = vals.some((v) => MQ.parseColor(String(v)) || /^(linear|radial|mesh)\(/.test(v));
-      list.appendChild(h('div.trow' + (own.has(k) ? '' : '.kit'), { onclick: () => this.editToken(k), title: own.has(k) ? 'Cliquer pour modifier' : 'Token du kit (cliquer pour le redéfinir)' },
+    const allNames = Object.keys(p.tokens).sort((a, b) => (own.has(b) - own.has(a)) || 0);
+    const names = allNames.filter((k) => own.has(k) || !k.startsWith('sh-'));
+    const shNames = allNames.filter((k) => !own.has(k) && k.startsWith('sh-'));
+    const row = (k) => {
+      const vals = p.tokens[k]; const modeNames = vals._named ? Object.keys(vals._named) : p.modes;
+      const isColor = vals.some((v) => MQ.parseColor(String(v)) || /^(linear|radial|mesh)\(/.test(v) || String(v).startsWith('$'));
+      return h('div.trow' + (own.has(k) ? '' : '.kit'), { onclick: () => this.editToken(k), title: own.has(k) ? 'Cliquer pour modifier' : 'Token du kit (cliquer pour le redéfinir)' },
         h('span.tname', null, '$' + k),
-        h('span.tvals', null, vals.map((v, i) => isColor ? h('span.sw', { title: `${p.modes[i] || ''}: ${v}`, style: { background: MQ.fillCss ? v : String(v).startsWith('$') ? (p.token(k, i) || v) : v } }) : h('span.tv', null, String(v))))));
-    }
+        h('span.tvals', null, vals.map((v, i) => isColor ? h('span.sw', { title: `${modeNames[i] || ''}: ${v}`, style: { background: String(v).startsWith('$') ? (p.token(k, vals._named ? Math.max(0, p.modes.indexOf(modeNames[i])) : i) || v) : v } }) : h('span.tv', null, String(v)))));
+    };
+    for (const k of names) list.appendChild(row(k));
+
     wrap.appendChild(list);
+    // shadcn/ui theme (components ui.*)
+    const shOpen = this.shOpen;
+    wrap.appendChild(h('div.phead', null, h('span', { style: { cursor: 'pointer' }, onclick: () => { this.shOpen = !this.shOpen; this.render(); } }, (shOpen ? '▾ ' : '▸ ') + `Thème shadcn/ui (${shNames.length})`),
+      h('button.mini', { title: 'Importer un thème shadcn (globals.css : :root et .dark)', onclick: () => this.importShadcn() }, icon('download', 14))));
+    if (shOpen) wrap.appendChild(h('div.tlist', null, shNames.map(row)));
     // vars
     const varsEntries = Object.entries(p.vars);
     wrap.appendChild(h('div.phead', null, h('span', null, 'Variables (état du prototype)')));
@@ -238,6 +260,75 @@ export class LeftPanel {
       wrap.appendChild(h('div.tlist', null, st.map((s) => h('div.trow', null, h('span.tname', null, '.' + s), h('span.tv', null, Object.entries(p.styles[s]).map(([a, b]) => b === true ? a : `${a}=${b}`).join(' ').slice(0, 60))))));
     }
     return wrap;
+  }
+
+  // merge token lines into the project's <tokens> block (replacing same names)
+  setTokenLines(pairs) {
+    const app = this.app; const p = app.project;
+    app.change(() => {
+      const top = p.rootNode ? p.rootNode.children : p.nodes;
+      let tok = top.find((n) => n.tag === 'tokens');
+      if (!tok) { tok = { id: MQ.newId(), tag: 'tokens', attrs: {}, children: [], raw: '' }; top.unshift(tok); }
+      const lines = (tok.raw || '').split('\n').filter((l) => l.trim());
+      for (const [key, v] of pairs) {
+        const re = new RegExp(`^\\s*\\$?${key.replace(/[.\-]/g, '\\$&')}\\s*:`);
+        const i = lines.findIndex((l) => re.test(l)); const line = `${key}: ${v}`;
+        if (i >= 0) lines[i] = line; else lines.push(line);
+      }
+      tok.raw = '\n' + lines.map((l) => l.trim()).join('\n') + '\n';
+    });
+  }
+
+  shadcnDialog() {
+    const names = h('input.inp', { value: this.lastShadcn || 'button card input label badge dialog tabs table', placeholder: 'button card dialog … ou all' });
+    const theme = h('select.inp', null, ['neutral', 'zinc', 'slate', 'stone', 'gray'].map((t) => h('option', { value: t }, t)));
+    const paste = h('textarea.inp.mono', { rows: 5, placeholder: 'Hors ligne : colle ici le JSON d’un élément du registre (ui.shadcn.com/r/…/button.json) ou un fichier .tsx shadcn', style: { width: '100%', fontSize: '11px' } });
+    const status = h('div.hint', null, 'Les composants sont téléchargés depuis le registre officiel, convertis (Tailwind → tokens sh-*, variantes cva → props, états data-[state] → prop state) et ajoutés au projet sous ui.*. Licence MIT conservée.');
+    const body = h('div.mq-dbody', { style: { display: 'grid', gap: '8px', minWidth: 'min(520px, 86vw)' } },
+      h('label.hint', null, 'Composants (noms du registre, « all » pour les 61)'), names, h('label.hint', null, 'Thème de base'), theme, paste, status);
+    modal('Importer shadcn/ui', body, (close) => [
+      h('button.btn', { onclick: close }, 'Annuler'),
+      h('button.btn.primary', { onclick: async (e) => {
+        const btn = e.currentTarget; btn.disabled = true; status.textContent = 'Téléchargement…';
+        const list = names.value.trim().split(/[\s,]+/).filter(Boolean); this.lastShadcn = names.value;
+        try {
+          const r = await importShadcn({ names: paste.value.trim() ? [] : list, theme: theme.value, paste: paste.value,
+            fetchJson: async (u) => { const res = await fetch(u); if (!res.ok) throw new Error(`HTTP ${res.status}`); return res.json(); },
+            onItem: (it) => { status.textContent = `Converti : ${it.name}…`; } });
+          if (!r.names.length) throw new Error(r.warnings[0] || 'rien à importer');
+          this.mergeShadcn(r); close();
+          toast(`${r.names.length} composants shadcn importés${r.warnings.length ? ` (${r.warnings.length} avertissement(s))` : ''}`);
+        } catch (err) {
+          btn.disabled = false;
+          status.textContent = `Échec : ${err.message}. ${/fetch|network|HTTP|Failed/i.test(err.message) ? 'Le registre n’est pas joignable ici (artifact sans réseau) : colle le JSON ou le .tsx dans le champ ci-dessus, ou utilise « mq shadcn add » en ligne de commande.' : ''}`;
+        }
+      } }, icon('download', 13), 'Importer'),
+    ]);
+  }
+
+  // add converted components (replacing same names) + theme tokens if the project has none
+  mergeShadcn(r) {
+    const app = this.app; const p = app.project;
+    const parsed = MQ.parse(r.mq); const comps = (parsed.children || parsed).filter ? (parsed.children || parsed).filter((n) => n.tag === 'component') : [];
+    const names = new Set(comps.map((c) => c.attrs.name));
+    if (r.themeLines && !p.tokens['sh-background']) this.setTokenLines(r.themeLines.map((l) => { const i = l.indexOf(':'); return [l.slice(0, i).trim(), l.slice(i + 1).trim()]; }));
+    app.change(() => {
+      const top = p.rootNode ? p.rootNode.children : p.nodes;
+      for (let i = top.length - 1; i >= 0; i--) if (top[i].tag === 'component' && names.has(top[i].attrs.name)) top.splice(i, 1);
+      top.push(...comps);
+    });
+    this.uiGroup = r.converted[0]?.item || null; this.tab = 'assets'; this.render();
+  }
+
+  async importShadcn() {
+    const css = await ask('Importer un thème shadcn/ui', '', 'Colle le contenu de globals.css (blocs :root et .dark, oklch ou HSL). Ctrl+Entrée pour valider. Les composants ui.* suivent le thème.', { multiline: true });
+    if (!css) return;
+    const r = MQ.importShadcnTheme(css);
+    if (!r.count) { toast('Aucune variable --x trouvée dans :root / .dark'); return; }
+    const pairs = r.tokens.split('\n').slice(1, -1).map((l) => { const i = l.indexOf(':'); return [l.slice(0, i).trim(), l.slice(i + 1).trim()]; });
+    if (!this.app.project.modes.includes('dark')) toast('Astuce : ajoute modes="light dark" au <project> pour basculer clair/sombre');
+    this.setTokenLines(pairs); this.shOpen = true;
+    toast(`${r.count} tokens shadcn importés${r.skipped.length ? ` (${r.skipped.length} ignorés)` : ''}`);
   }
 
   async editToken(name) {

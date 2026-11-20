@@ -613,7 +613,7 @@ export class Canvas {
       app.select(next);
       const nn = app.node(next);
       if (nn && (nn.tag === 'text' || nn.tag === 'note') && chain[chain.length - 1] === next) this.editText(next);
-    } else if (n && /^[A-Z]/.test(n.tag)) this.hooks.onEditComponent && this.hooks.onEditComponent(n.tag);
+    } else if (n && /^(\w+\.)?[A-Z]/.test(n.tag)) this.hooks.onEditComponent && this.hooks.onEditComponent(n.tag);
   }
 
   renameScreen(id, labelEl) {

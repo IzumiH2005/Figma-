@@ -14,11 +14,20 @@ export function parseColor(s) {
     const n = (k) => parseInt(h.slice(k, k + 2), 16);
     return [n(0), n(2), n(4), h.length === 8 ? +(n(6) / 255).toFixed(3) : 1];
   }
+  m = /^oklch\(([^)]+)\)$/i.exec(s);
+  if (m) { const p = m[1].split(/[\s,/]+/).filter(Boolean); const L = p[0].endsWith('%') ? parseFloat(p[0]) / 100 : parseFloat(p[0]); const C = parseFloat(p[1]) || 0, H = parseFloat(p[2]) || 0; const A = p[3] === undefined ? 1 : p[3].endsWith('%') ? parseFloat(p[3]) / 100 : parseFloat(p[3]); const c = fromOklch(L, C, H); return [c[0], c[1], c[2], A]; }
+  m = /^hsla?\(([^)]+)\)$/i.exec(s);
+  if (m) { const p = m[1].split(/[\s,/]+/).filter(Boolean); const A = p[3] === undefined ? 1 : p[3].endsWith('%') ? parseFloat(p[3]) / 100 : parseFloat(p[3]); return [...hslToRgb(parseFloat(p[0]), parseFloat(p[1]), parseFloat(p[2])), A]; }
   m = /^rgba?\(([^)]+)\)$/.exec(s);
   if (m) { const p = m[1].split(/[,\s/]+/).filter(Boolean).map((x) => (x.endsWith('%') ? parseFloat(x) * 2.55 : parseFloat(x))); return [p[0], p[1], p[2], p[3] ?? 1]; }
   return null;
 }
 
+export function hslToRgb(h, sat, l) {
+  sat /= 100; l /= 100; const k = (n) => (n + h / 30) % 12; const a = sat * Math.min(l, 1 - l);
+  const f = (n) => l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)));
+  return [f(0) * 255, f(8) * 255, f(4) * 255];
+}
 export function toHex([r, g, b, a = 1]) {
   const h = (v) => Math.round(Math.max(0, Math.min(255, v))).toString(16).padStart(2, '0');
   return ('#' + h(r) + h(g) + h(b) + (a < 1 ? h(a * 255) : '')).toUpperCase();

@@ -13,6 +13,7 @@ import { ICONS } from './icons.js';
 import { PACKS, registerPack, registerPacks, loadPack, ensureIconPacks, iconsUsed, getIcon, iconSvg, packIcons, packLoaded, setIconBase } from './iconpacks.js';
 import { deviceFrame } from './chrome.js';
 import { evaluate, interp, Scope } from './expr.js';
+import { importShadcnTheme } from './themes.js';
 import KIT from './kit.mq';
 
 export const VERSION = '0.1.0';
@@ -100,6 +101,7 @@ export {
   Player, TRANSITIONS, parseTransition,
   playAnims, PRESETS, ENTRANCE, LOOPS, ACCENTS, MODIFIERS, EASINGS, parseSpec, totalDuration, springEasing, resolveEasing, shapeFrames, setTimeScale, getTimeScale, prefersReducedMotion,
   inspectScreen, lintScreen, lintProject, formatIssues, contrast, scoreIssues, applyFixes, fixSource, CATEGORIES, patchSource, patchStyle,
+  importShadcnTheme,
   genImage, SCENE_NAMES, ICONS, deviceFrame, evaluate, interp, Scope, KIT,
   PACKS, registerPack, registerPacks, loadPack, ensureIconPacks, iconsUsed, getIcon, iconSvg, packIcons, packLoaded, setIconBase,
 };

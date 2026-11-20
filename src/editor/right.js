@@ -54,7 +54,7 @@ export class RightPanel {
     const a = n.attrs;
     const set = (k, v) => app.change(() => app.setAttr(ids, k, v));
     const setMany = (obj) => app.change(() => { for (const [k, v] of Object.entries(obj)) app.setAttr(ids, k, v); });
-    const comp = /^[A-Z]/.test(n.tag) ? app.project.components[n.tag] : null;
+    const comp = /^(\w+\.)?[A-Z]/.test(n.tag) ? app.project.components[n.tag] : null;
     const el = this.hooks.elOf(n.id);
     const cs = el ? getComputedStyle(el) : null;
     const parentEl = el && el.parentElement;
@@ -277,7 +277,7 @@ export class RightPanel {
   typeSection(n) {
     const app = this.app;
     const uses = new Map();
-    const walk = (x) => { const v = x.attrs && x.attrs.size; if (x.tag !== 'icon' && x.tag !== 'ellipse' && x.tag !== 'rect' && typeof v === 'string' && /^\d+(\.\d+)?$/.test(v) && !/^[A-Z]/.test(x.tag)) { if (!uses.has(v)) uses.set(v, []); uses.get(v).push(x); } (x.children || []).forEach(walk); };
+    const walk = (x) => { const v = x.attrs && x.attrs.size; if (x.tag !== 'icon' && x.tag !== 'ellipse' && x.tag !== 'rect' && typeof v === 'string' && /^\d+(\.\d+)?$/.test(v) && !/^(\w+\.)?[A-Z]/.test(x.tag)) { if (!uses.has(v)) uses.set(v, []); uses.get(v).push(x); } (x.children || []).forEach(walk); };
     walk(n);
     if (!uses.size) return h('span');
     const scale = MQ.TYPESCALES[app.project.typescale] || MQ.TYPESCALES.ui;
