@@ -33,6 +33,14 @@ Playwright et Chromium sont préinstallés dans l'environnement ; ffmpeg sert po
 
 ## Règles de conception utiles
 
+- **S'inspirer, pas recopier.** Apple HIG, Material 3, Carbon, shadcn… sont des sources d'inspiration, pas des gabarits : on n'y prend pas une valeur (« 32 px pour X ») pour la reproduire telle quelle. Chaque interface et chaque composant a son propre caractère : ses proportions, ses rayons, sa densité, sa motion, ses tokens. C'est le sens de créer son design system. Ce qui reste **non négociable** : l'hygiène UI vérifiée par `mq audit` et `mq lint`.
+  - la grille de 4/8 ;
+  - le contraste AA ;
+  - les cibles tactiles ≥ 44 ;
+  - les rayons imbriqués, les insets égaux, l'alignement au pixel ;
+  - la cohérence des tokens et de l'échelle typographique ;
+  - les principes de motion.
+
 - **Design system d'abord** : `<system brand=#hex radius=… density=… motion=…/>` génère primitives, rôles AA clair/sombre, échelles et tokens de composant ; écris tes composants avec `$primary`, `$surface`, `$card-radius`, `$space-4`, `$shadow-2`, `$dur-base`… pour qu'ils suivent le système. `mq ds f.mq` contrôle, `--guide` montre, `--export dtcg|css|tailwind` livre.
 - Fondations d'abord : `primary: ramp(#hex)`, `gray: neutrals($primary)`, `typescale=…` puis `class=t-h1` / `t-body`… plutôt que des tailles libres ; espacements dans 4 · 8 · 12 · 16 · 24 · 32 · 48 · 64.
 - Un seul `Button` primaire par vue ; verbes d'action ; `kind=danger` et `ConfirmDialog` pour le destructif ; formulaires avec `Field label=… optional error=…`.

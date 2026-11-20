@@ -123,4 +123,6 @@ Méthode pour chaque composant :
 
 Valeurs sur la grille de 4 : rail 48 = padding 4 + piste 40 ; anneau 12, écart 8. Rayons imbriqués exacts : 12 → 8 avec 4 de padding.
 
-Repères : la copie non officielle des HIG d'Apple donne pour le segmenté un padding de rail constant (2 pt), des rayons imbriqués 8 → 6 et des segments d'au moins 44 pt.
+Repères, pour s'inspirer et non pour recopier :
+- **Ce qui ne change pas d'un système à l'autre** : marge constante entre le rail et l'indicateur, rayons imbriqués, cible tactile minimale (44 pt chez Apple, 48 dp chez Material), grille de 4/8.
+- **Ce qui appartient à ton système** : les valeurs exactes (hauteur, rayon, épaisseur, densité), au service du caractère du produit. Les règles de lint vérifient des relations (inset égal, R − p, contraste, grille), jamais une taille imposée.
