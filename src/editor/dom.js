@@ -89,7 +89,7 @@ export function ask(title, value = '', hint = '') {
 // downloads are inert inside artifacts: try, and always offer copy as a fallback
 export function download(name, text, type = 'text/plain') {
   try { const b = new Blob([text], { type }); const a = h('a', { href: URL.createObjectURL(b), download: name }); document.body.appendChild(a); a.click(); a.remove(); } catch (e) { /* */ }
-  const ta = h('textarea.mq-dtext', { readonly: true, spellcheck: 'false', id: 'mq-export' }, text.length > 200000 ? text.slice(0, 200000) + '\n…' : text);
+  const ta = h('textarea.mq-dtext', { readonly: true, spellcheck: 'false', id: 'mq-export' }, text);
   modal(name, h('div.mq-dbody', null, h('div.hint', null, `${(text.length / 1024).toFixed(0)} Ko. Si le téléchargement ne démarre pas (c'est le cas dans un artifact), copie le contenu dans un fichier ${name}.`), ta), (close) => [
     h('button.btn', { onclick: close }, 'Fermer'),
     h('button.btn.primary', { onclick: (e) => { const b = e.currentTarget; const fallback = () => { ta.focus(); ta.select(); b.textContent = 'Sélectionné : Ctrl+C'; }; try { navigator.clipboard.writeText(text).then(() => { b.textContent = 'Copié'; }, fallback); } catch (er) { fallback(); } } }, 'Copier tout'),

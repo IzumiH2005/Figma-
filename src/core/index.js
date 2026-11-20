@@ -44,6 +44,43 @@ export function screenElement(project, name, opts = {}) {
   return renderScreen(s, ctx);
 }
 
+// Mount a playable prototype inside `stage` (any element with a size): device bezel centred and
+// scaled to fit (transform does not change layout, so the bezel is positioned absolutely),
+// bezel rebuilt when navigating to a screen of another device/size, refit on resize.
+export function mountPrototype(project, stage, opts = {}) {
+  ensureStyles(); ensureFonts(project);
+  if (getComputedStyle(stage).position === 'static') stage.style.position = 'relative';
+  stage.style.overflow = 'hidden';
+  const fit = document.createElement('div');
+  fit.style.cssText = 'position:absolute;left:50%;top:50%;transform-origin:center center;transform:translate(-50%,-50%)';
+  stage.appendChild(fit);
+  const host = document.createElement('div');
+  let frame = null, key = null;
+  const pad = opts.pad ?? 24;
+  const resize = () => {
+    if (!frame) return;
+    const r = stage.getBoundingClientRect(); const fw = frame.offsetWidth, fh = frame.offsetHeight;
+    if (!fw || !fh || !r.width || !r.height) return;
+    const p = r.width < 600 ? Math.min(pad, 12) : pad;
+    const k = Math.min(opts.maxScale ?? 1, (r.width - p * 2) / fw, (r.height - p * 2) / fh);
+    fit.style.transform = `translate(-50%, -50%) scale(${k})`;
+  };
+  const refit = (name) => {
+    const s = project.screen(name); if (!s) return;
+    const z = project.sizeOf(s); const k = `${s.attrs.device || ''}:${z.w}x${z.h}`;
+    if (k !== key) { frame = opts.frame === false ? host : deviceFrame(z.device, host, z); if (opts.frame === false) { host.style.width = z.w + 'px'; host.style.height = z.h + 'px'; } fit.replaceChildren(frame); key = k; }
+    resize();
+  };
+  const player = new Player(project, host, { ...opts, onEvent: (t, d) => { if (t === 'prenavigate' || t === 'navigate') refit(d.name); if (opts.onEvent) opts.onEvent(t, d); } });
+  const onResize = () => resize();
+  addEventListener('resize', onResize);
+  const ro = window.ResizeObserver ? new ResizeObserver(onResize) : null;
+  if (ro) ro.observe(stage);
+  player.start(opts.start);
+  if (document.fonts) document.fonts.ready.then(resize);
+  return { player, resize, get frame() { return frame; }, destroy() { removeEventListener('resize', onResize); if (ro) ro.disconnect(); player.destroy(); fit.remove(); } };
+}
+
 // export rendered element tree as static HTML+inline CSS (handoff)
 export function toStaticHTML(el) {
   const c = el.cloneNode(true);

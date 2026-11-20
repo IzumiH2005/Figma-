@@ -93,6 +93,20 @@ ed.on('pageerror', (e) => edErr.push(e.message));
 await ed.goto('file://' + tmp); await ed.waitForTimeout(1200);
 const nScreens = await ed.evaluate(() => document.querySelectorAll('.cv-world .mq-screen').length);
 ok(nScreens > 0 && !edErr.length, `Éditeur : ${nScreens} écrans rendus ${edErr.join(' | ')}`);
+// presentation: the scaled device must stay inside the stage, for every project and window size
+for (const vp of [{ width: 1280, height: 720 }, { width: 700, height: 900 }]) {
+  await ed.setViewportSize(vp);
+  for (let i = 0; i < examples.length; i++) {
+    const g = await ed.evaluate(async (i) => {
+      if (app.fileIndex !== i) { document.querySelector('.filebtn').click(); [...document.querySelectorAll('.ctxmenu .item')][i].click(); await new Promise((r) => setTimeout(r, 600)); }
+      document.querySelector('.playbtn').click(); await new Promise((r) => setTimeout(r, 700));
+      const s = document.querySelector('.play-stage').getBoundingClientRect(), d = document.querySelector('.mq-device').getBoundingClientRect();
+      document.querySelector('.play-bar .btn:last-child').click();
+      return { inside: d.left >= s.left - 1 && d.right <= s.right + 1 && d.top >= s.top - 1 && d.bottom <= s.bottom + 1, d: [d.left, d.top, d.right, d.bottom].map(Math.round), s: [s.left, s.top, s.right, s.bottom].map(Math.round) };
+    }, i);
+    ok(g.inside, `Présentation ${examples[i].file} ${vp.width}×${vp.height} : appareil dans la zone (${g.d} ⊂ ${g.s})`);
+  }
+}
 fs.rmSync(tmp);
 
 ok(!errors.length, 'aucune exception de page ' + errors.join(' | '));

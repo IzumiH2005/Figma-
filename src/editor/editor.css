@@ -94,8 +94,7 @@ kbd { font: 500 10.5px/1 "JetBrains Mono", monospace; background: var(--ui-input
 .agrid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 0 10px 8px; }
 .acard { border: 1px solid var(--ui-line); border-radius: 10px; overflow: hidden; cursor: pointer; background: var(--ui-panel-2); }
 .acard:hover { border-color: var(--ui-accent); }
-.aprev { height: 74px; display: grid; place-items: center; overflow: hidden; background: #fff; }
-.aprev > div { transform-origin: center; }
+.aprev { position: relative; height: 84px; overflow: hidden; background: #fff; }
 .aname { padding: 5px 8px; font-weight: 500; font-size: 11px; border-top: 1px solid var(--ui-line); }
 .search { width: calc(100% - 20px); margin: 0 10px 8px; height: 30px; border-radius: 8px; border: 1px solid transparent; background: var(--ui-input); padding: 0 10px; outline: 0; }
 .search:focus { border-color: var(--ui-accent); }
@@ -284,13 +283,14 @@ body.proto .cv-sel, body.proto .cv-handle { --ui-sel: var(--ui-proto); }
 
 /* ---------- play mode */
 .play { position: fixed; inset: 0; z-index: 500; background: radial-gradient(circle at 30% 15%, #2a2c42 0%, #121318 55%, #0a0a0d 100%); display: flex; flex-direction: column; color: #eee; }
-.play-bar { display: flex; align-items: center; gap: 8px; padding: 10px 14px; }
+.play-bar { display: flex; align-items: center; gap: 8px; padding: 10px 14px; flex-wrap: wrap; padding-left: max(14px, env(safe-area-inset-left, 0px)); padding-right: max(14px, env(safe-area-inset-right, 0px)); }
 .play-bar .btn { background: rgba(255,255,255,.08); color: #eee; }
 .play-bar .btn:hover { background: rgba(255,255,255,.16); }
 .play-bar .sel { width: auto; min-width: 160px; background: rgba(255,255,255,.08); color: #eee; }
 .play-title { display: flex; gap: 8px; align-items: center; font-weight: 600; font-size: 13px; margin-right: 8px; }
-.play-stage { flex: 1; display: grid; place-items: center; min-height: 0; }
-.play-fit { transform-origin: center center; }
+.play-stage { flex: 1; position: relative; min-height: 0; overflow: hidden; }
+.play-fit { position: absolute; left: 50%; top: 50%; transform-origin: center center; transform: translate(-50%, -50%); }
+.play-fit > .mq-device { flex-shrink: 0; }
 .play-hint { text-align: center; color: rgba(255,255,255,.45); padding: 10px; font-size: 11.5px; }
 
 /* ---------- responsive */

@@ -120,15 +120,39 @@ export class LeftPanel {
     const grid = (list, title) => {
       if (!list.length) return null;
       const g = h('div.agrid');
+      const pending = [];
+      // measure after layout, then scale & centre the real content box inside the thumbnail
+      const measure = () => {
+        for (const { prev, el } of pending) {
+          if (!el.isConnected) continue;
+          el.style.transform = 'none';
+          const box = prev.getBoundingClientRect(); const W = box.width, H = box.height;
+          let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+          const er = el.getBoundingClientRect();
+          for (const ch of el.children) { if (ch.tagName === 'STYLE') continue; const r = ch.getBoundingClientRect(); if (!r.width && !r.height) continue; minX = Math.min(minX, r.left - er.left); minY = Math.min(minY, r.top - er.top); maxX = Math.max(maxX, r.right - er.left); maxY = Math.max(maxY, r.bottom - er.top); }
+          if (!isFinite(minX)) continue;
+          const cw = maxX - minX, chh = maxY - minY;
+          const k = Math.min(1, (W - 16) / cw, (H - 12) / chh);
+          el.style.transform = `translate(${W / 2 - (minX + cw / 2) * k}px, ${H / 2 - (minY + chh / 2) * k}px) scale(${k})`;
+        }
+      };
+      requestAnimationFrame(() => requestAnimationFrame(measure));
+      if (document.fonts) document.fonts.ready.then(() => requestAnimationFrame(measure));
       for (const c of list) {
         const card = h('div.acard', { title: c.desc || c.name, onclick: () => this.insertNode({ id: MQ.newId(), tag: c.name, attrs: {}, children: [] }), draggable: 'true', ondragstart: (e) => e.dataTransfer.setData('text/mq-insert', c.name) });
-        const prev = h('div.aprev');
+        const prev = h('div.aprev', { style: { background: p.token('bg', app.mode) || '#fff' } });
         try {
           const ctx = MQ.makeCtx(p, { mode: app.mode, editor: true });
-          const el = MQ.renderStandalone({ id: 'prev', tag: c.name, attrs: {}, children: [] }, ctx);
-          el.style.pointerEvents = 'none';
+          // components with a <slot/> get sample content so the preview is meaningful
+          const hasSlot = JSON.stringify(c.node.children || []).includes('"tag":"slot"');
+          const sample = c.name === 'Menu' ? ['Copier', 'Coller', 'Supprimer'].map((l) => ({ id: MQ.newId(), tag: 'MenuItem', attrs: { label: l }, children: [] }))
+            : hasSlot ? [{ id: MQ.newId(), tag: 'text', attrs: {}, children: [{ id: MQ.newId(), tag: '#text', text: 'Contenu' }] }] : [];
+          const SAMPLE_ATTRS = { TabBar: { items: "{[{icon:'house',label:'Accueil'},{icon:'search',label:'Explorer'},{icon:'user',label:'Profil'}]}" }, NavBar: { title: 'Titre', back: true } };
+          const el = MQ.renderStandalone({ id: 'prev', tag: c.name, attrs: SAMPLE_ATTRS[c.name] || {}, children: sample }, ctx);
+          // fixed reference width so w=fill components have a size; hug components are centred in it
+          el.style.cssText += ';position:absolute;left:0;top:0;width:240px;justify-items:center;transform-origin:0 0;pointer-events:none';
           prev.appendChild(el);
-          requestAnimationFrame(() => { const r = el.getBoundingClientRect(); const k = Math.min(1, 104 / (r.width || 1), 64 / (r.height || 1)); el.style.transform = `scale(${k})`; });
+          pending.push({ prev, el });
         } catch (e) { prev.textContent = '⚠'; }
         card.append(prev, h('div.aname', null, c.name));
         g.appendChild(card);

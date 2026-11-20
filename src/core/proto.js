@@ -64,6 +64,7 @@ export class Player {
     if (!this.opts.keepVars) this.vars = this.opts.vars || this.project.initialVars();
     const s = name ? this.project.screen(name) : this.project.startScreen();
     if (!s) return;
+    this.emit('prenavigate', { name: s.attrs.name });
     const el = this.build(s.attrs.name);
     this.fitHost(el);
     this.host.appendChild(el);
@@ -233,6 +234,7 @@ export class Player {
       while (this.overlays.length) await this.closeOverlay(['instant']);
       this.clearTimers();
       const oldEl = this.current;
+      this.emit('prenavigate', { name });
       const newEl = this.build(name);
       this.history.push({ name: this.currentName, t });
       await this.transition(oldEl, newEl, t, false);
@@ -251,6 +253,7 @@ export class Player {
     try {
       this.clearTimers();
       const t = tOverride || prev.t || { type: 'instant' };
+      this.emit('prenavigate', { name: prev.name });
       const newEl = this.build(prev.name);
       await this.transition(this.current, newEl, t, true);
       this.current = newEl; this.currentName = prev.name;

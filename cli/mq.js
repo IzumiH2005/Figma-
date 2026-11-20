@@ -401,21 +401,14 @@ async function cmdExport(o) {
   const rt = await runtime();
   const esc = (s) => s.replace(/<\/script/gi, '<\\/script');
   const html = `<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Prototype</title>
-<style>html,body{margin:0;height:100%;background:#0f1014;overflow:hidden}#stage{position:fixed;inset:0;display:grid;place-items:center}#fit{transform-origin:center}</style></head>
-<body><div id="stage"><div id="fit"></div></div>
+<style>html,body{margin:0;height:100%;background:#0f1014;overflow:hidden}#stage{position:fixed;inset:0}</style></head>
+<body><div id="stage"></div>
 <script type="text/x-maquette" id="src">${esc(src)}</script>
 <script>${esc(rt)}</script>
 <script>
-const p = MQ.loadProject(document.getElementById('src').textContent.replace(/<\\\\\\/script/gi,'</script'));
-MQ.ensureStyles(); MQ.ensureFonts(p);
-const s = p.startScreen(); const size = p.sizeOf(s);
-const host = document.createElement('div');
-const frame = MQ.deviceFrame(size.device, host, size);
-document.getElementById('fit').appendChild(frame);
-const fit = () => { const r = frame.getBoundingClientRect(); const k = Math.min(1, (innerWidth - 32) / frame.offsetWidth, (innerHeight - 32) / frame.offsetHeight); document.getElementById('fit').style.transform = 'scale(' + k + ')'; };
-addEventListener('resize', fit);
-const pl = new MQ.Player(p, host, {}); pl.start(); fit();
-addEventListener('keydown', e => { if (e.key === 'r') pl.start(); if (e.key === 'Backspace') pl.back(); });
+const p = MQ.loadProject(document.getElementById('src').textContent.replace(/<\\\/script/gi, '</script'));
+const m = MQ.mountPrototype(p, document.getElementById('stage'), { pad: 16 });
+addEventListener('keydown', (e) => { if (e.key === 'r') m.player.start(); if (e.key === 'Backspace') m.player.back(); });
 </script></body></html>`;
   const out = o.o || 'out/prototype.html';
   fs.mkdirSync(path.dirname(out), { recursive: true });
