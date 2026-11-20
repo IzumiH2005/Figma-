@@ -47,6 +47,7 @@ export class Canvas {
         if (n.tag === 'screen') el = MQ.renderScreen(n, ctx);
         else { el = MQ.renderStandalone(n, ctx); el.dataset.id = n.id; el.dataset.tag = n.tag; }
       } catch (e) { el = h('div.cv-error', null, 'Erreur de rendu : ' + e.message); el.dataset.id = n.id; }
+      if (n.tag === 'screen' && app.showGrid) el.appendChild(gridOverlay(n, p));
       const wrap = h('div.cv-item', { style: { left: x + 'px', top: y + 'px' } }, el);
       wrap.dataset.item = n.id;
       this.world.appendChild(wrap);
@@ -124,6 +125,17 @@ export class Canvas {
     if (this.drag && this.drag.draw) this.overlay.appendChild(h('div.ov.cv-draw', { style: box(this.drag.draw) }));
     if (this.drag && this.drag.noodle) { const { a, b } = this.drag.noodle; this.curve(a.x, a.y, b.x, b.y, true); }
     if (this.measure) this.drawMeasure(this.measure);
+    if (this.markers && this.markers.length) {
+      const seen = new Set();
+      for (const m of this.markers) {
+        if (!m.id || seen.has(m.id)) continue; seen.add(m.id);
+        const el = this.elOf(m.id); if (!el || !el.isConnected) continue;
+        const r = this.local(el.getBoundingClientRect()); if (!r.w) continue;
+        const mk = h('div.ov.cv-marker.' + m.level, { title: m.msg, style: { left: r.x + r.w - 4 + 'px', top: r.y - 4 + 'px' } }, m.level === 'error' ? '!' : m.level === 'warn' ? '!' : 'i');
+        mk.dataset.mark = m.id;
+        this.overlay.appendChild(mk);
+      }
+    }
   }
 
   arrow(a, b, hot, action) {
@@ -635,6 +647,20 @@ export class Canvas {
   }
   zoomBy(f) { const R = this.rect; const app = this.app; const mx = R.width / 2, my = R.height / 2; const z = Math.max(0.05, Math.min(8, app.zoom * f)); app.panX = mx - (mx - app.panX) * (z / app.zoom); app.panY = my - (my - app.panY) * (z / app.zoom); app.zoom = z; this.applyTransform(); }
   zoomTo(z) { this.zoomBy(z / this.app.zoom); }
+}
+
+// Figma-like layout grid: grid="cols margin gutter" (or default by device), baseline="8"
+export function gridOverlay(screen, project) {
+  const { w, device } = project.sizeOf(screen);
+  let spec = screen.attrs.grid;
+  if (spec === 'none') return h('span');
+  if (!spec || spec === true || spec === 'auto') spec = w >= 1024 ? (w >= 1440 ? '12 100 20' : '12 40 20') : w >= 700 ? '8 32 16' : '4 16 8';
+  const [cols, margin, gutter] = String(spec).split(/\s+/).map(Number);
+  const g = h('div.cv-grid', { style: { padding: `0 ${margin || 0}px`, gap: `${gutter || 0}px` } });
+  for (let i = 0; i < (cols || 4); i++) g.appendChild(h('i'));
+  const base = screen.attrs.baseline ? +screen.attrs.baseline : 0;
+  if (base) g.style.backgroundImage = `repeating-linear-gradient(to bottom, rgba(255,40,90,.10) 0 1px, transparent 1px ${base}px)`;
+  return g;
 }
 
 function box(r) { return { left: r.x + 'px', top: r.y + 'px', width: r.w + 'px', height: r.h + 'px' }; }

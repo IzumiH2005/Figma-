@@ -31,9 +31,9 @@
   </vars>
 
   <styles>
-    .h1 { font=$display size=30 weight=700 ls=-1 lh=1.1 }
+    .h1 { font=$display size=28 weight=700 ls=-1 lh=1.1 }
     .h2 { font=$display size=20 weight=600 ls=-0.4 }
-    .label { size=13 color=$muted weight=500 }
+    .label { size=12 color=$muted weight=500 }
     .glass { fill=rgba(255,255,255,.08) bgblur=24 stroke="1 rgba(255,255,255,.14)" }
     .pressable { press:scale=0.97 transition=true }
   </styles>
@@ -54,17 +54,17 @@
   </component>
 
   <component name="CreditCard" props="last='4821' holder='ADA LOVELACE' tone=violet compact=false frozen=false" desc="Carte bancaire. tone: violet|sunset|ink">
-    <col name={'card-' + tone} w=fill h={compact ? 200 : 214} p=22 radius=26 clip justify=between color=#fff
+    <col name={'card-' + tone} w=fill h={compact ? 200 : 214} p=24 radius=26 clip justify=between color=$on-primary
       fill={tone == 'sunset' ? 'mesh(#FF7A59, #FF4D8D, #FFB86B, #C13CFF)' : tone == 'ink' ? 'mesh(#20202B, #3B3B52, #14141C, #5A4BD6)' : 'mesh(#5B4BFF, #A35BFF, #FF6BB5, #3A2BC9)'}
       shadow="0 24 48 -12 rgba(91,75,255,.45)" grayscale={frozen ? 1 : 0} transition=400>
       <frame absolute inset=0 fill="noise(.10)" blend=overlay events=none/>
       <row gap=auto>
-        <row gap=8><Logo size=26/><text font=$display weight=700 size=17 ls=-0.3>orbit</text></row>
+        <row gap=8><Logo size=26/><text font=$display weight=700 size=16 ls=-0.3>orbit</text></row>
         <icon name={frozen ? 'snowflake' : 'nfc'} size=22 color=rgba(255,255,255,.85)/>
       </row>
-      <frame w=44 h=32 radius=7 fill="linear(135, #F7D98B, #C9A24A)" stroke="1 rgba(0,0,0,.15)"/>
+      <frame w=44 h=32 radius=8 fill="linear(135, #F7D98B, #C9A24A)" stroke="1 rgba(0,0,0,.15)"/>
       <col gap=4>
-        <text font=$display size=19 weight=500 ls=2 tabular>••••  ••••  ••••  {last}</text>
+        <text font=$display size=18 weight=500 ls=2 tabular>••••  ••••  ••••  {last}</text>
         <row gap=auto>
           <text size=12 weight=600 ls=1 opacity=.85>{holder}</text>
           <text size=12 weight=600 opacity=.85>09/29</text>
@@ -83,11 +83,11 @@
   </component>
 
   <component name="TxRow" props="t={}" desc="Ligne de transaction">
-    <row gap=14 py=10 w=fill class=pressable on:click="set $tx = t; overlay TxSheet bottom">
+    <row gap=16 py=12 w=fill class=pressable on:click="set $tx = t; overlay TxSheet bottom">
       <stack w=44 h=44 radius=14 fill={t.tone + '22'} center color={t.tone}><icon name={t.icon} size=20/></stack>
       <col gap=2 w=fill>
         <text weight=600 truncate>{t.name}</text>
-        <text size=12.5 color=$muted>{t.cat}</text>
+        <text size=12 color=$muted>{t.cat}</text>
       </col>
       <text weight=600 tabular color={t.amt > 0 ? $success : $text}>{t.amt > 0 ? '+' : ''}{money(t.amt)}</text>
     </row>
@@ -95,19 +95,19 @@
 
   <component name="TxSheet" desc="Détail d'une transaction (bottom sheet)">
     <Sheet>
-      <col if={$tx} gap=18 align=center pt=4>
+      <col if={$tx} gap=20 align=center pt=4>
         <stack w=64 h=64 radius=22 fill={$tx.tone + '22'} color={$tx.tone} center anim="pop 500"><icon name={$tx.icon} size=28/></stack>
         <col gap=4 align=center>
           <text color=$muted size=14>{$tx.name}</text>
           <text class=h1 size=40 tabular color={$tx.amt > 0 ? $success : $text}>{$tx.amt > 0 ? '+' : ''}{money($tx.amt)}</text>
-          <text size=13 color=$muted>{$tx.time}</text>
+          <text size=12 color=$muted>{$tx.time}</text>
         </col>
         <col w=fill fill=$surface-2 radius=18 px=16 py=4>
           <row h=48 gap=auto stroke-b="1 $border"><text color=$muted>Catégorie</text><Badge label={$tx.cat}/></row>
           <row h=48 gap=auto stroke-b="1 $border"><text color=$muted>Carte</text><text weight=600>•••• 4821</text></row>
-          <row h=48 gap=auto><text color=$muted>Statut</text><row gap=6 color=$success><icon name=circle-check size=16/><text weight=600>Confirmé</text></row></row>
+          <row h=48 gap=auto><text color=$muted>Statut</text><row gap=8 color=$success><icon name=circle-check size=16/><text weight=600>Confirmé</text></row></row>
         </col>
-        <row gap=10 w=fill>
+        <row gap=12 w=fill>
           <Button label="Signaler" kind=secondary full icon=flag/>
           <Button label="Fermer" full on:click="close"/>
         </row>
@@ -119,7 +119,7 @@
     <stack h=60 w=fill radius=18 center hover:fill=$surface-2 press:scale=0.92 press:fill=$primary-soft transition=120
       on:click="set $amount = k == '⌫' ? (len($amount) > 1 ? slice($amount, 0, -1) : '0') : len($amount) >= 6 ? $amount : $amount == '0' ? (k == ',' ? '0,' : k) : $amount + k">
       <icon if={k == '⌫'} name=delete size=24/>
-      <text if={k != '⌫'} font=$display size=26 weight=500>{k}</text>
+      <text if={k != '⌫'} font=$display size=24 weight=500>{k}</text>
     </stack>
   </component>
 
@@ -127,9 +127,9 @@
     <col w=320 fill=$surface radius=32 p=28 gap=16 align=center shadow=2xl>
       <stack w=88 h=88 center>
         <ellipse size=88 fill=$success opacity=.18 loop="ping 1600"/>
-        <ellipse size=72 fill=$success center anim="pop 600 spring"><icon name=check size=36 stroke=3 color=#0B0B10/></ellipse>
+        <ellipse size=72 fill=$success center anim="pop 600 spring"><icon name=check size=36 stroke=3 color=$bg/></ellipse>
       </stack>
-      <col gap=6 align=center anim="fade-up 500 delay=200">
+      <col gap=8 align=center anim="fade-up 500 delay=200">
         <text class=h2 size=24>Envoyé !</text>
         <text color=$muted align=center>{$amount} € sont en route vers {$to}. Ils arriveront en quelques secondes.</text>
       </col>
@@ -145,7 +145,7 @@
         <Logo size=96 name=logo/>
         <text name=wordmark font=$display size=40 weight=700 ls=-1.5>orbit</text>
       </col>
-      <text fixed place=bottom mb=56 size=13 color=$muted anim="fade 800 delay=600">Votre argent, en orbite.</text>
+      <text fixed place=bottom mb=56 size=12 color=$muted anim="fade 800 delay=600">Votre argent, en orbite.</text>
     </screen>
 
     <screen name="Onboarding" device=iphone-16 statusbar homebar fill=$bg pt=safe px=24 pb=40 gap=24
@@ -162,19 +162,19 @@
         </stack>
         <stack if={$slide == 1} name=illus w=260 h=260 center anim="scale-in 600 spring">
           <ellipse size=180 stroke="1.5 rgba(255,255,255,.18) dashed"/>
-          <ellipse size=110 fill="linear(135, #FF6BB5, #8B7BFF)" center shadow="glow(#FF6BB5, 40)"><icon name=send size=44 color=#fff/></ellipse>
+          <ellipse size=110 fill="linear(135, #FF6BB5, #8B7BFF)" center shadow="glow(#FF6BB5, 40)"><icon name=send size=44 color=$on-primary/></ellipse>
           <Avatar absolute x=10 y=60 name="Léa Martin" size=52 ring loop="float 3200"/>
           <Avatar absolute right=6 y=40 name="Hugo B" size=46 ring loop="float 3800"/>
           <Avatar absolute x=60 bottom=10 name="Inès K" size=48 ring loop="float 3500"/>
         </stack>
         <stack if={$slide == 2} name=illus w=260 h=260 center anim="scale-in 600 spring">
-          <row align=end gap=10 h=180 stagger="80 grow-up 600 spring">
+          <row align=end gap=12 h=180 stagger="80 grow-up 600 spring">
             <frame repeat=6 w=26 h={50 + i * 22} radius=8 fill={i == 5 ? 'linear(180, #3DD68C, #1FA968)' : 'rgba(255,255,255,.12)'}/>
           </row>
         </stack>
       </stack>
       <col gap=12 key=copy>
-        <text class=h1 size=34>{pick($slide, 'Une carte qui vous ressemble.', 'Envoyez en un geste.', 'Gardez le cap sur vos dépenses.')}</text>
+        <text class=h1 size=32>{pick($slide, 'Une carte qui vous ressemble.', 'Envoyez en un geste.', 'Gardez le cap sur vos dépenses.')}</text>
         <text color=$muted size=16 lh=1.5>{pick($slide, 'Cartes virtuelles et physiques, gel instantané, plafonds réglables.', 'Payez vos amis en 2 secondes, sans IBAN, gratuitement.', 'Analyses claires, budgets intelligents, zéro surprise.')}</text>
       </col>
       <row gap=auto>
@@ -184,24 +184,24 @@
       </row>
     </screen>
 
-    <screen name="Home" device=iphone-16 statusbar homebar fill=$bg pt=safe pb=110 gap=24 stagger="45 fade-up 500">
+    <screen name="Home" device=iphone-16 statusbar homebar fill=$bg pt=safe pb=112 gap=24 stagger="45 fade-up 500">
       <row px=20 h=56 gap=12>
         <Avatar name="Ada Lovelace" size=42/>
         <col gap=0 w=fill>
           <text class=label size=12>Bonsoir,</text>
-          <text weight=700 size=17>Ada</text>
+          <text weight=700 size=16>Ada</text>
         </col>
         <IconButton icon=sun-moon kind=tonal size=42 on:click="mode next"/>
         <IconButton icon=bell kind=tonal size=42 badge=2/>
       </row>
 
-      <col px=20 gap=6>
+      <col px=20 gap=8>
         <row gap=8 color=$muted>
           <text class=label>Solde total</text>
           <icon name={$hideBalance ? 'eye-off' : 'eye'} size=16 on:click="toggle $hideBalance" cursor=pointer/>
         </row>
         <text name=balance class=h1 size=44 ls=-1.8 tabular anim="count 1400 expo">{$hideBalance ? '•••••• €' : '12 480,52 €'}</text>
-        <row gap=6><Badge label="+ 3,2 % ce mois" tone=success/><text size=13 color=$muted>vs. octobre</text></row>
+        <row gap=8><Badge label="+ 3,2 % ce mois" tone=success/><text size=12 color=$muted>vs. octobre</text></row>
       </col>
 
       <row px=20 gap=8>
@@ -212,7 +212,7 @@
       </row>
 
       <col gap=12>
-        <row px=20 gap=auto><text class=h2>Mes cartes</text><text size=13 color=$link weight=600>Gérer</text></row>
+        <row px=20 gap=auto><text class=h2>Mes cartes</text><text size=12 color=$link weight=600>Gérer</text></row>
         <row scroll=x snap px=20 gap=12 css="scroll-padding:20px">
           <CreditCard w=300 compact frozen={$frozen} snap=item on:click="go Card smart 520 spring" class=pressable/>
           <CreditCard w=300 compact tone=sunset last=7730 snap=item/>
@@ -221,44 +221,44 @@
       </col>
 
       <col px=20 gap=4>
-        <row gap=auto pb=4><text class=h2>Activité</text><text size=13 color=$link weight=600>Tout voir</text></row>
+        <row gap=auto pb=4><text class=h2>Activité</text><text size=12 color=$link weight=600>Tout voir</text></row>
         <TxRow each={$txs} as=t t={t}/>
       </col>
 
       <TabBar fixed place=bottom w=fill active=0 items={[{icon:'house',label:'Accueil',to:'Home'},{icon:'credit-card',label:'Cartes',to:'Card'},{icon:'arrow-left-right',label:'Envoyer',to:'Send'},{icon:'chart-no-axes-column',label:'Stats',to:'Card'}]}/>
     </screen>
 
-    <screen name="Card" device=iphone-16 statusbar homebar fill=$bg pt=safe px=20 pb=40 gap=22>
+    <screen name="Card" device=iphone-16 statusbar homebar fill=$bg pt=safe px=20 pb=40 gap=24>
       <row h=48 gap=auto>
         <IconButton icon=chevron-left kind=tonal on:click="back"/>
-        <text weight=600 size=17>Carte Orbit</text>
+        <text weight=600 size=16>Carte Orbit</text>
         <IconButton icon=ellipsis kind=tonal/>
       </row>
       <CreditCard frozen={$frozen}/>
-      <row gap=10 stagger="60 fade-up 450">
-        <col w=fill p=14 radius=18 fill=$surface gap=10 class=pressable on:click="toggle $frozen smart 400">
+      <row gap=12 stagger="60 fade-up 450">
+        <col w=fill p=16 radius=18 fill=$surface gap=12 class=pressable on:click="toggle $frozen smart 400">
           <icon name=snowflake size=20 color={$frozen ? '#7CC8FF' : $muted}/>
           <row gap=auto><text weight=600>Geler</text><Toggle value={$frozen}/></row>
         </col>
-        <col w=fill p=14 radius=18 fill=$surface gap=10 class=pressable>
+        <col w=fill p=16 radius=18 fill=$surface gap=12 class=pressable>
           <icon name=eye size=20 color=$muted/>
           <text weight=600>Voir le code</text>
         </col>
       </row>
-      <col p=18 radius=22 fill=$surface gap=16 anim="fade-up 500 delay=150">
+      <col p=20 radius=22 fill=$surface gap=16 anim="fade-up 500 delay=150">
         <row gap=auto>
-          <col gap=2><text class=label>Dépenses cette semaine</text><text class=h2 size=26 tabular>485,00 €</text></col>
+          <col gap=2><text class=label>Dépenses cette semaine</text><text class=h2 size=24 tabular>485,00 €</text></col>
           <Segmented items={['S', 'M', 'A']} active=0/>
         </row>
-        <row h=130 align=end gap=10 stagger="70 grow-up 700 spring">
-          <col each={$week} as=v w=fill h=fill justify=end gap=6 align=center>
+        <row h=130 align=end gap=12 stagger="70 grow-up 700 spring">
+          <col each={$week} as=v w=fill h=fill justify=end gap=8 align=center>
             <frame w=fill h={round(v / 120 * 100)} radius=8 fill={i == 5 ? 'linear(180, #8B7BFF, #FF6BB5)' : $surface-2}/>
-            <text size=11 color=$muted>{pick(i, 'L', 'M', 'M', 'J', 'V', 'S', 'D')}</text>
+            <text size=12 color=$muted>{pick(i, 'L', 'M', 'M', 'J', 'V', 'S', 'D')}</text>
           </col>
         </row>
       </col>
-      <col p=18 radius=22 fill=$surface gap=12 anim="fade-up 500 delay=250">
-        <row gap=auto><text weight=600>Plafond mensuel</text><text size=13 color=$muted tabular>1 240 / 2 000 €</text></row>
+      <col p=20 radius=22 fill=$surface gap=12 anim="fade-up 500 delay=250">
+        <row gap=auto><text weight=600>Plafond mensuel</text><text size=12 color=$muted tabular>1 240 / 2 000 €</text></row>
         <Progress value=0.62 tone="linear(90, #8B7BFF, #FF6BB5)"/>
       </col>
     </screen>
@@ -266,13 +266,13 @@
     <screen name="Send" device=iphone-16 statusbar homebar fill=$bg pt=safe px=20 pb=36 gap=20>
       <row h=48 gap=auto>
         <IconButton icon=x kind=tonal on:click="back"/>
-        <text weight=600 size=17>Envoyer</text>
+        <text weight=600 size=16>Envoyer</text>
         <spacer size=44/>
       </row>
-      <col gap=10>
+      <col gap=12>
         <text class=label>À</text>
-        <row gap=14 scroll=x>
-          <col each={$contacts} as=c gap=6 align=center class=pressable on:click="set $to = c smart 300">
+        <row gap=16 scroll=x>
+          <col each={$contacts} as=c gap=8 align=center class=pressable on:click="set $to = c smart 300">
             <Avatar name={c + ' Orbit'} size=54 ring={$to == c}/>
             <text size=12 weight={$to == c ? 700 : 500} color={$to == c ? $text : $muted}>{c}</text>
           </col>

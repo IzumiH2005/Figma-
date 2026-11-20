@@ -1,4 +1,4 @@
-<project name="Nimbus — Landing page" fonts="Inter:400;500;600;700|Instrument Serif:400" modes="light dark">
+<project name="Nimbus — Landing page" typescale=web fonts="Inter:400;500;600;700|Instrument Serif:400" modes="light dark">
   <tokens>
     bg: #FBFAF7 | #0C0C0F
     surface: #FFFFFF | #16161B
@@ -23,24 +23,24 @@
 
   <styles>
     .container { w=fill maxw=1180 px=24 md:px=40 mx=auto }
-    .eyebrow { size=13 weight=600 color=$primary upper ls=1.2 }
-    .display { font=$serif size=46 md:size=76 lh=1 ls=-1.5 weight=400 }
-    .h2 { font=$serif size=36 md:size=52 lh=1.05 ls=-1 }
-    .lead { size=17 md:size=19 color=$muted lh=1.55 }
+    .eyebrow { size=12 weight=600 color=$primary upper ls=1.2 }
+    .display { font=$serif size=48 md:size=72 lh=1 ls=-1.5 weight=400 }
+    .h2 { font=$serif size=40 md:size=48 lh=1.05 ls=-1 }
+    .lead { size=16 md:size=18 color=$muted lh=1.55 }
   </styles>
 
   <component name="Nav" props="">
     <row class=container h=72 gap=auto>
-      <row gap=10>
-        <stack w=30 h=30 radius=9 fill="linear(135, #4C3BE6, #FF7A45)" center><icon name=cloud size=17 color=#fff stroke=2.4/></stack>
+      <row gap=12>
+        <stack w=30 h=30 radius=8 fill="linear(135, #4C3BE6, #FF7A45)" center><icon name=cloud size=17 color=$on-primary stroke=2.4/></stack>
         <text weight=700 size=18 ls=-0.4>Nimbus</text>
       </row>
-      <row gap=32 hidden md:hidden=false size=15 color=$muted weight=500>
+      <row gap=32 hidden md:hidden=false size=14 color=$muted weight=500>
         <text hover:color=$text cursor=pointer on:click="scroll features">Fonctionnalités</text>
         <text hover:color=$text cursor=pointer on:click="scroll pricing">Tarifs</text>
         <text hover:color=$text cursor=pointer on:click="scroll faq">FAQ</text>
       </row>
-      <row gap=10>
+      <row gap=12>
         <IconButton icon=sun-moon size=40 on:click="mode next"/>
         <Button label="Essayer" size=sm hidden md:hidden=false/>
         <IconButton icon=menu size=40 md:hidden/>
@@ -57,23 +57,23 @@
         <spacer/>
       </row>
       <row h=360 md:h=420 align=stretch>
-        <col w=220 p=16 gap=10 stroke-r="1 $border" hidden md:hidden=false>
+        <col w=220 p=16 gap=12 stroke-r="1 $border" hidden md:hidden=false>
           <text size=12 weight=600 color=$muted upper ls=1>Aujourd'hui</text>
-          <row each={['Revue design','Écrire la spec','Sport','Appel Léa']} as=t gap=10 h=34 px=10 radius=9 fill={i == 1 ? $primary-soft : 'transparent'}>
+          <row each={['Revue design','Écrire la spec','Sport','Appel Léa']} as=t gap=12 h=34 px=12 radius=8 fill={i == 1 ? $primary-soft : 'transparent'}>
             <ellipse size=8 fill={pick(i, '#FF7A45', '#4C3BE6', '#2EB67D', '#E5A400')}/>
-            <text size=13 weight={i == 1 ? 600 : 500}>{t}</text>
+            <text size=12 weight={i == 1 ? 600 : 500}>{t}</text>
           </row>
         </col>
         <grid cols=3 md:cols=5 w=fill h=fill gapx=1 fill=$border>
-          <col each={['Lun','Mar','Mer','Jeu','Ven']} as=d fill=$surface p=10 gap=8 hidden={i > 2} md:hidden=false stagger="60 fade-up 500">
+          <col each={['Lun','Mar','Mer','Jeu','Ven']} as=d fill=$surface p=12 gap=8 hidden={i > 2} md:hidden=false stagger="60 fade-up 500">
             <text size=12 weight=600 color=$muted>{d} {17 + i}</text>
-            <col if={i != 2} h={50 + (i * 37) % 70} radius=10 p=10 gap=2 fill={pick(i, '#EEEBFF', '#FFE9DF', '#E3F6EC', '#FFF4D6', '#EEEBFF')} color=#1B1A22>
+            <col if={i != 2} h={50 + (i * 37) % 70} radius=10 p=12 gap=2 fill={pick(i, '#EEEBFF', '#FFE9DF', '#E3F6EC', '#FFF4D6', '#EEEBFF')} color=$text>
               <text size=12 weight=600>{pick(i, 'Focus produit', 'Atelier', '', 'Revue Q4', 'Deep work')}</text>
-              <text size=11 opacity=.75>9:00 – 11:00</text>
+              <text size=12 opacity=.75>9:00 – 11:00</text>
             </col>
-            <col h={70 + (i * 23) % 50} radius=10 p=10 gap=2 fill={i == 2 ? 'linear(135, #4C3BE6, #7B6BFF)' : $surface-2} color={i == 2 ? '#fff' : $text}>
+            <col h={70 + (i * 23) % 50} radius=10 p=12 gap=2 fill={i == 2 ? 'linear(135, #4C3BE6, #7B6BFF)' : $surface-2} color={i == 2 ? '#fff' : $text}>
               <text size=12 weight=600>{i == 2 ? '✦ Bloc IA' : 'Réunion'}</text>
-              <text size=11 opacity=.7>14:00 – 15:30</text>
+              <text size=12 opacity=.7>14:00 – 15:30</text>
             </col>
           </col>
         </grid>
@@ -82,26 +82,26 @@
   </component>
 
   <component name="Feature" props="f={}">
-    <col gap=14 p=28 radius=22 fill=$surface stroke="1 $border" hover:shadow=lg hover:dy=-4 transition=250>
+    <col gap=16 p=28 radius=22 fill=$surface stroke="1 $border" hover:shadow=lg hover:dy=-4 transition=250>
       <stack w=46 h=46 radius=14 fill=$primary-soft color=$primary center><icon name={f.icon} size=22/></stack>
-      <text size=19 weight=600 ls=-0.3>{f.t}</text>
+      <text size=18 weight=600 ls=-0.3>{f.t}</text>
       <text color=$muted lh=1.55>{f.d}</text>
     </col>
   </component>
 
   <component name="Plan" props="p={}">
-    <col gap=20 p=30 radius=26 w=fill fill={p.hl ? '#16151A' : $surface} color={p.hl ? '#F2F1F5' : $text} stroke={p.hl ? 'none' : '1 ' + $border} shadow={p.hl ? '0 30 60 -20 rgba(76,59,230,.45)' : 'none'}>
+    <col gap=20 p=32 radius=26 w=fill fill={p.hl ? '#16151A' : $surface} color={p.hl ? '#F2F1F5' : $text} stroke={p.hl ? 'none' : '1 ' + $border} shadow={p.hl ? '0 30 60 -20 rgba(76,59,230,.45)' : 'none'}>
       <row gap=auto>
         <text size=20 weight=600>{p.name}</text>
-        <row if={p.hl} h=24 px=10 radius=full fill=#A99BFF color=#16151A size=12 weight=700><text>Populaire</text></row>
+        <row if={p.hl} h=24 px=12 radius=full fill=#A99BFF color=$text size=12 weight=700><text>Populaire</text></row>
       </row>
-      <row align=baseline gap=6>
-        <text name={'price-' + p.name} font=$serif size=60 ls=-2>{$yearly ? p.y : p.m} €</text>
+      <row align=baseline gap=8>
+        <text name={'price-' + p.name} font=$serif size=56 ls=-2>{$yearly ? p.y : p.m} €</text>
         <text opacity=.6>/ mois</text>
       </row>
       <text opacity=.7 lh=1.5>{p.d}</text>
-      <col gap=10>
-        <row each={p.items} as=it gap=10><icon name=check size=18 color={p.hl ? '#A99BFF' : $primary} stroke=2.5/><text>{it}</text></row>
+      <col gap=12>
+        <row each={p.items} as=it gap=12><icon name=check size=18 color={p.hl ? '#A99BFF' : $primary} stroke=2.5/><text>{it}</text></row>
       </col>
       <spacer/>
       <Button label="Commencer" full kind={p.hl ? 'primary' : 'secondary'}/>
@@ -113,7 +113,7 @@
       <Nav/>
       <!-- hero -->
       <col class=container align=center gap=28 pt=56 md:pt=88 pb=64 stagger="90 fade-up 700 expo">
-        <row gap=8 h=34 px=6 pr=14 radius=full fill=$surface stroke="1 $border" size=13 weight=500>
+        <row gap=8 h=34 px=8 pr=16 radius=full fill=$surface stroke="1 $border" size=12 weight=500>
           <Badge label=Nouveau/><text>Nimbus 2.0 · la planification IA est là</text>
         </row>
         <text class=display align=center maxw=900 balance>Votre semaine, <span italic color=$primary>parfaitement</span> orchestrée.</text>
@@ -122,7 +122,7 @@
           <Button label="Essayer gratuitement" size=lg iconRight=arrow-right/>
           <Button label="Voir la démo" size=lg kind=secondary icon=circle-play/>
         </row>
-        <text size=13 color=$muted>14 jours gratuits · sans carte bancaire</text>
+        <text size=12 color=$muted>14 jours gratuits · sans carte bancaire</text>
       </col>
       <stack w=fill px=16 md:px=40 pb=40 justify=center>
         <frame absolute inset="10% 5% auto 5%" h=420 fill="aurora(#FBFAF700, #8D7BFF, #FF9A6B, #6BD5FF, #C9B8FF)" blur=60 opacity=.55 radius=200/>
@@ -130,14 +130,14 @@
       </stack>
       <!-- logos -->
       <col class=container py=40 gap=20 align=center>
-        <text size=13 color=$muted weight=500>Ils ont repris le contrôle de leur temps</text>
-        <row gap=40 md:gap=64 wrap justify=center opacity=.55 size=20 weight=700 ls=-0.5>
-          <text>Hélios</text><text font=$serif weight=400 size=24 italic>Maison Lune</text><text ls=3 size=15>KOBALT</text><text>pixelfox</text><text font=$serif size=24>Atelier & Co</text>
+        <text size=12 color=$muted weight=500>Ils ont repris le contrôle de leur temps</text>
+        <row gap=40 md:gap=64 wrap justify=center color=$muted size=20 weight=700 ls=-0.5>
+          <text>Hélios</text><text font=$serif weight=400 size=24 italic>Maison Lune</text><text ls=3 size=14>KOBALT</text><text>pixelfox</text><text font=$serif size=24>Atelier & Co</text>
         </row>
       </col>
       <!-- features -->
       <col key=features class=container py=64 md:py=96 gap=48>
-        <col gap=14 maxw=640>
+        <col gap=16 maxw=640>
           <text class=eyebrow>Fonctionnalités</text>
           <text class=h2>Tout ce qu'il faut pour une semaine sereine.</text>
         </col>
@@ -148,13 +148,13 @@
       <!-- pricing -->
       <col key=pricing w=fill py=64 md:py=96 fill=$surface-2>
         <col class=container gap=40 align=center>
-          <col gap=14 align=center>
+          <col gap=16 align=center>
             <text class=eyebrow>Tarifs</text>
             <text class=h2 align=center>Simple. Transparent.</text>
           </col>
           <row p=4 radius=full fill=$surface stroke="1 $border" gap=4>
-            <stack name=bill-m h=38 px=18 radius=full center fill={$yearly ? 'transparent' : $text} color={$yearly ? $muted : $bg} weight=600 on:click="set $yearly = false smart 350" cursor=pointer><text>Mensuel</text></stack>
-            <row name=bill-y h=38 px=18 gap=8 radius=full fill={$yearly ? $text : 'transparent'} color={$yearly ? $bg : $muted} weight=600 on:click="set $yearly = true smart 350" cursor=pointer><text>Annuel</text><Badge label="-20 %" tone=success/></row>
+            <stack name=bill-m h=38 px=20 radius=full center fill={$yearly ? 'transparent' : $text} color={$yearly ? $muted : $bg} weight=600 on:click="set $yearly = false smart 350" cursor=pointer><text>Mensuel</text></stack>
+            <row name=bill-y h=38 px=20 gap=8 radius=full fill={$yearly ? $text : 'transparent'} color={$yearly ? $bg : $muted} weight=600 on:click="set $yearly = true smart 350" cursor=pointer><text>Annuel</text><row h=22 px=8 radius=full fill=$accent color=#16151A size=12 weight=700><text>-20 %</text></row></row>
           </row>
           <grid cols=1 md:cols=3 gap=16 w=fill align=stretch>
             <Plan each={$plans} as=p p={p}/>
@@ -164,23 +164,23 @@
       <!-- faq -->
       <col key=faq class=container maxw=820 py=64 md:py=96 gap=32>
         <text class=h2 align=center>Questions fréquentes</text>
-        <col gap=10>
-          <col each={$faqs} as=f name={'faq-' + i} p=22 radius=18 fill=$surface stroke="1 $border" gap=12 cursor=pointer on:click="set $faq = $faq == i ? -1 : i smart 320">
-            <row gap=16><text size=17 weight=600 w=fill>{f.q}</text><icon name={$faq == i ? 'minus' : 'plus'} size=20 color=$muted/></row>
+        <col gap=12>
+          <col each={$faqs} as=f name={'faq-' + i} p=24 radius=18 fill=$surface stroke="1 $border" gap=12 cursor=pointer on:click="set $faq = $faq == i ? -1 : i smart 320">
+            <row gap=16><text size=16 weight=600 w=fill>{f.q}</text><icon name={$faq == i ? 'minus' : 'plus'} size=20 color=$muted/></row>
             <text if={$faq == i} color=$muted lh=1.6>{f.a}</text>
           </col>
         </col>
       </col>
       <!-- CTA -->
       <col class=container pb=64>
-        <col w=fill p=40 md:p=72 radius=32 clip align=center gap=24 fill="mesh(#1B1640, #4C3BE6, #FF7A45, #2B1F7A)" color=#fff>
+        <col w=fill p=40 md:p=72 radius=32 clip align=center gap=24 fill="mesh(#1B1640, #4C3BE6, #FF7A45, #2B1F7A)" color=$on-primary>
           <frame absolute inset=0 fill="noise(.14)" blend=overlay events=none/>
-          <text font=$serif size=40 md:size=60 lh=1 ls=-1.5 align=center balance>Reprenez la main sur votre temps.</text>
-          <text size=17 opacity=.8 align=center>Rejoignez 40 000 personnes qui planifient mieux avec Nimbus.</text>
+          <text font=$serif size=40 md:size=56 lh=1 ls=-1.5 align=center balance>Reprenez la main sur votre temps.</text>
+          <text size=16 opacity=.8 align=center>Rejoignez 40 000 personnes qui planifient mieux avec Nimbus.</text>
           <Button label="Commencer gratuitement" size=lg iconRight=arrow-right css="background:#fff;color:#16151A"/>
         </col>
       </col>
-      <row class=container py=32 gap=auto stroke-t="1 $border" size=13 color=$muted wrap>
+      <row class=container py=32 gap=auto stroke-t="1 $border" size=12 color=$muted wrap>
         <text>© 2026 Nimbus Labs</text>
         <row gap=24><text>Confidentialité</text><text>Conditions</text><text>Contact</text></row>
       </row>

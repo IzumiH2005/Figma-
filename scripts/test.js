@@ -41,6 +41,35 @@ for (const ex of examples) {
   ok(!r.bad.length, `${ex.file}: lint sans erreur ${r.bad.slice(0, 3).join(' | ')}`);
 }
 
+// foundations & hygiene: ramps, color fns, surgical fixes keep comments
+const hyg = await page.evaluate(() => {
+  const src = `<project typescale=ui>
+  <tokens>
+    brand: ramp(#0F7B6C)
+    primary: $brand-700
+    a: x
+    b: y
+  </tokens>
+  <!-- commentaire conservé -->
+  <screen name=S device=iphone-16 p=20 gap=10>
+    <text size=13 color=#0B5C51>Bonjour</text>
+    <Button label="Supprimer le compte"/>
+  </screen>
+</project>`;
+  const p = MQ.loadProject(src);
+  const r1 = p.token('brand-50') && p.token('brand-950') && p.token('primary') === p.token('brand-700');
+  document.body.innerHTML = '';
+  const el = MQ.screenElement(p, 'S'); document.body.appendChild(el);
+  const issues = MQ.lintProject(p).concat(MQ.lintScreen(el, p, p.screen('S')));
+  const codes = new Set(issues.map((i) => i.code));
+  const out = MQ.fixSource(src, p, issues).source;
+  return { r1, codes: [...codes], comment: out.includes('<!-- commentaire conservé -->'), gap: /gap=12/.test(out), size: /size=12|size=14/.test(out), danger: /kind=danger/.test(out), tint: MQ.Color.toHex(MQ.Color.parseColor(MQ.Color.resolveColorFns('tint(#000000, 50)'))) };
+});
+ok(hyg.r1, 'ramp() génère brand-50…950 et les références de tokens');
+ok(['off-grid', 'type-scale', 'destructive'].every((c) => hyg.codes.includes(c)), 'lint détecte grille, échelle typo, action destructrice : ' + hyg.codes.join(','));
+ok(hyg.comment && hyg.gap && hyg.size && hyg.danger, 'fix chirurgical : corrections appliquées, commentaires conservés');
+ok(/^#[0-9A-F]{6}$/.test(hyg.tint) && hyg.tint !== '#000000', 'fonctions de couleur tint()/shade() ' + hyg.tint);
+
 // prototype runtime: navigation + variables
 const proto = await page.evaluate(async () => {
   const p = MQ.loadProject(`<vars>n: 0</vars><screen name=A start><text name=t on:click="inc $n">{$n}</text><text name=go on:click="go B smart 50">go</text></screen><screen name=B><text name=t on:click="back">B</text></screen>`);

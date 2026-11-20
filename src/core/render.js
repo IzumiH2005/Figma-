@@ -1,6 +1,7 @@
 // DOM renderer: Maquette node tree -> live HTML elements.
 import { Scope, interp, evaluate } from './expr.js';
 import { DEVICES, splitTop, withAlpha, parseColor, coerce } from './project.js';
+import { resolveColorFns } from './color.js';
 import { textOf } from './parse.js';
 import { ICONS } from './icons.js';
 import { genImage } from './gen.js';
@@ -20,6 +21,18 @@ const SHADOWS = {
   xl: '0 8px 16px rgba(0,0,0,.06), 0 28px 64px rgba(0,0,0,.18)',
   '2xl': '0 40px 100px rgba(0,0,0,.28)',
   inner: 'inset 0 2px 4px rgba(0,0,0,.08)',
+  // recettes « How to Design Better UI Components »
+  soft: '0 10px 15px rgba(0,0,0,.04)',
+  raised: '0 15px 20px rgba(0,0,0,.10)',
+  layered: '0 10px 15px rgba(0,0,0,.04), 0 2px 4px rgba(0,0,0,.15)',
+  contact: '0 2px 4px rgba(0,0,0,.15)',
+  brutal: '4px 4px 0 #000',
+  'inner-light': 'inset -4px 2px 10px rgba(255,255,255,1)',
+  e1: '0 1px 2px rgba(0,0,0,.06), 0 1px 1px rgba(0,0,0,.04)',
+  e2: '0 2px 4px rgba(0,0,0,.06), 0 4px 8px rgba(0,0,0,.05)',
+  e3: '0 4px 8px rgba(0,0,0,.06), 0 10px 20px rgba(0,0,0,.08)',
+  e4: '0 8px 16px rgba(0,0,0,.08), 0 20px 40px rgba(0,0,0,.10)',
+  e5: '0 16px 32px rgba(0,0,0,.10), 0 40px 80px rgba(0,0,0,.16)',
 };
 const EVENT_KEYS = (k) => k.startsWith('on:') || k.startsWith('@');
 const ANIM_KEYS = new Set(['anim', 'loop', 'stagger']);
@@ -39,7 +52,12 @@ export function rootScope(project, state) {
 
 // resolve "$token" refs inside a plain attribute string
 export function resolveDollars(v, ctx) {
-  if (typeof v !== 'string' || !v.includes('$')) return v;
+  if (typeof v !== 'string') return v;
+  if (!v.includes('$')) return resolveColorFns(v);
+  const r = resolveDollarsRaw(v, ctx);
+  return typeof r === 'string' ? resolveColorFns(r) : r;
+}
+function resolveDollarsRaw(v, ctx) {
   const whole = /^\$([A-Za-z_][\w\-.]*)(?:\/(\d+))?$/.exec(v);
   const look = (n) => {
     if (ctx.vars && n in ctx.vars) return ctx.vars[n];
@@ -168,17 +186,17 @@ export function fillToCss(v, ctx) {
         let a = args;
         let ang = '180deg';
         if (/^-?\d+(\.\d+)?(deg)?$/.test(a[0]) || /^to /.test(a[0])) { ang = /^to /.test(a[0]) ? a[0] : `${parseFloat(a[0])}deg`; a = a.slice(1); }
-        images.push(`linear-gradient(${ang}, ${stopList(a)})`); sizes.push('auto'); break;
+        images.push(`linear-gradient(${ang} in oklab, ${stopList(a)})`); sizes.push('auto'); break;
       }
       case 'radial': {
         let a = args; let pos = 'circle at 50% 50%';
         if (/^(at |circle|ellipse)/.test(a[0])) { pos = a[0].startsWith('at') ? `circle ${a[0]}` : a[0]; a = a.slice(1); }
-        images.push(`radial-gradient(${pos}, ${stopList(a)})`); sizes.push('auto'); break;
+        images.push(`radial-gradient(${pos} in oklab, ${stopList(a)})`); sizes.push('auto'); break;
       }
       case 'conic': {
         let a = args; let pre = 'from 0deg';
         if (/^-?\d+(deg)?$/.test(a[0])) { pre = `from ${parseFloat(a[0])}deg`; a = a.slice(1); }
-        images.push(`conic-gradient(${pre}, ${stopList(a)})`); sizes.push('auto'); break;
+        images.push(`conic-gradient(${pre} in oklch, ${stopList(a)})`); sizes.push('auto'); break;
       }
       case 'mesh': case 'aurora': {
         const c = args;
@@ -222,6 +240,8 @@ function shadowToCss(v) {
   return splitTop(String(v), '+').map((s) => {
     if (SHADOWS[s]) return SHADOWS[s];
     const f = fnArgs(s);
+    if (f && f[0] === 'tinted') { const c = parseColor(f[1][0]); const a = f[1][1] ? parseFloat(f[1][1]) / (parseFloat(f[1][1]) > 1 ? 100 : 1) : 0.2; return c ? `0 15px 20px rgba(${c[0]},${c[1]},${c[2]},${a})` : ''; }
+    if (f && f[0] === 'halo') return `0 0 0 1px ${f[1][0] || 'rgba(255,255,255,.08)'}, 0 0 ${num(f[1][1], 40)}px ${f[1][0] || 'rgba(255,255,255,.08)'}`;
     if (f && f[0] === 'glow') return `0 0 ${num(f[1][1], 24)}px ${f[1][2] || 0}px ${f[1][0]}`;
     if (f && f[0] === 'soft') return `0 ${num(f[1][1], 12)}px ${num(f[1][1], 12) * 2.5}px -${num(f[1][1], 12) / 2}px ${f[1][0]}`;
     return splitTop(s, ' ').map((t) => (/^-?\d+(\.\d+)?$/.test(t) ? `${t}px` : t)).join(' ');
@@ -364,7 +384,8 @@ export function cssFor(tag, a, parentLayout, ctx, isText) {
   if (a.order !== undefined) s.order = a.order;
 
   // ---------- visuals
-  const fillV = a.fill ?? a.bg;
+  const fillV = tag === 'icon' || tag === 'vector' || tag === 'svg' ? undefined : isText && a.bg !== undefined ? undefined : a.fill ?? a.bg;
+  if (isText && a.bg !== undefined && a.bg !== true) { const f = fillToCss(a.bg, ctx); if (f) { if (f.image) s.backgroundImage = f.image; if (f.color) s.backgroundColor = f.color; } }
   if (fillV !== undefined && fillV !== true) {
     const f = fillToCss(fillV, ctx);
     if (f) {
@@ -571,6 +592,8 @@ function renderInstance(node, comp, scope, parentLayout, ctx, outerOverrides) {
   const els = renderNode(comp.root, compScope, parentLayout, sub, { base, events, states });
   const el = els[0] || document.createElement('div');
   el.dataset.comp = comp.name;
+  el._props = props;
+  if (props.kind !== undefined) el.dataset.kind = String(props.kind);
   if (!ctx.owner) el.dataset.id = node.id;
   const key = base.key || base.name;
   if (key) el.dataset.key = key;
@@ -750,7 +773,7 @@ export function renderScreen(screen, ctx) {
   outer.style.fontFamily = fontStack(fontDefault);
   const txt = ctx.project.token('text', ctx.mode);
   outer.style.color = txt || '#111';
-  outer.style.fontSize = '15px'; outer.style.lineHeight = '1.4';
+  outer.style.fontSize = '16px'; outer.style.lineHeight = '1.45';
   // inner content box (scrollable)
   const inner = document.createElement('div');
   inner.className = 'mq-screen-body';
@@ -799,7 +822,7 @@ export function renderStandalone(node, ctx, layout = 'stack') {
   const fontDefault = ctx.project.token('font', ctx.mode) || ctx.project.fonts[0]?.split(':')[0] || 'Inter';
   wrap.style.fontFamily = fontStack(fontDefault);
   wrap.style.color = ctx.project.token('text', ctx.mode) || '#111';
-  wrap.style.fontSize = '15px'; wrap.style.lineHeight = '1.4';
+  wrap.style.fontSize = '16px'; wrap.style.lineHeight = '1.45';
   if (node.attrs && (node.attrs.x !== undefined || node.attrs.y !== undefined)) { const at = { ...node.attrs }; delete at.x; delete at.y; node = { ...node, attrs: at }; }
   renderNode(node, ctx.scope, layout, ctx).forEach((e) => wrap.appendChild(e));
   if (ctx.rules.length) { const st = document.createElement('style'); st.textContent = ctx.rules.join('\n'); wrap.appendChild(st); }
@@ -814,6 +837,7 @@ export const BASE_CSS = `
 .mq-note{white-space:pre-line;background:#FFE58F;color:#3d3200;padding:14px 16px;border-radius:4px;font:500 14px/1.45 Inter,system-ui,sans-serif;box-shadow:0 6px 18px rgba(0,0,0,.18);max-width:320px}
 .mq-input{font:inherit;color:inherit;background:transparent;border:0;outline:0;min-width:0;padding:0;margin:0}
 .mq-input::placeholder{color:currentColor;opacity:.45}
+[data-hot]:focus-visible{outline:2px solid #5B8CFF;outline-offset:2px}
 @keyframes mq-aurora{0%{background-position:0% 50%}50%{background-position:100% 50%}100%{background-position:30% 0%}}
 @keyframes mq-shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
 `;

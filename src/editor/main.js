@@ -26,10 +26,21 @@ const NEW_PROJECT = `<project name="Nouveau projet" fonts="Inter:400;500;600;700
 </project>
 `;
 
+// SVG color-vision filters (Machado et al. 2009, severity 1.0)
+function ensureVisionFilters() {
+  if (document.getElementById('mq-vision')) return;
+  const M = { protanopia: '0.152286 1.052583 -0.204868 0 0  0.114503 0.786281 0.099216 0 0  -0.003882 -0.048116 1.051998 0 0  0 0 0 1 0', deuteranopia: '0.367322 0.860646 -0.227968 0 0  0.280085 0.672501 0.047413 0 0  -0.011820 0.042940 0.968881 0 0  0 0 0 1 0', tritanopia: '1.255528 -0.076749 -0.178779 0 0  -0.078411 0.930809 0.147602 0 0  0.004733 0.691367 0.303900 0 0  0 0 0 1 0' };
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.id = 'mq-vision'; svg.setAttribute('width', '0'); svg.setAttribute('height', '0'); svg.style.position = 'absolute';
+  svg.innerHTML = Object.entries(M).map(([k, v]) => `<filter id="mq-${k}"><feColorMatrix type="matrix" values="${v}"/></filter>`).join('');
+  document.body.appendChild(svg);
+}
+
 function boot() {
   MQ.ensureStyles();
   const app = new App();
   window.app = app;
+  app.showGrid = !!store('grid'); app.view = 'normal';
   // files: embedded projects (+ local drafts)
   const embeds = [...document.querySelectorAll('script[type="text/x-maquette"]')];
   app.files = embeds.map((s) => {
@@ -72,6 +83,8 @@ function boot() {
     toggleTimeline: () => timeline.toggle(),
     runLint: () => runLint(),
     onZoom: () => { zoomLabel.textContent = Math.round(app.zoom * 100) + '%'; },
+    itemEl: (id) => canvas.items.get(id),
+    setMarkers: (issues) => { canvas.markers = issues.filter((i) => i.level !== 'info' && i.id); canvas.drawOverlay(); },
   };
   canvas = new Canvas(app, canvasEl, hooks);
   left = new LeftPanel(app, leftEl, hooks);
@@ -97,6 +110,8 @@ function boot() {
       h('span.grow'),
       modeBtns,
       protoBtn,
+      h('button.tb' + (app.showGrid ? '.on' : ''), { title: 'Grilles de mise en page (Maj+G)', onclick: () => toggleGrid() }, icon('layout-grid', 16)),
+      h('button.tb' + (app.view !== 'normal' ? '.on' : ''), { title: 'Simulation de vision', onclick: (e) => viewMenu(e) }, icon('eye', 16)),
       h('button.tb', { title: 'Timeline Motion', onclick: () => timeline.toggle() }, icon('gantt-chart', 16)),
       h('button.tb', { title: 'Code source (Ctrl+/)', onclick: () => code.toggle() }, icon('code-xml', 16)),
       zoomLabel,
@@ -105,6 +120,10 @@ function boot() {
     renderFileBtn(); renderModes(); hooks.onZoom();
     protoBtn.classList.toggle('on', app.protoView);
   }
+  function toggleGrid() { app.showGrid = !app.showGrid; store('grid', app.showGrid); renderTop(); canvas.render(); }
+  const VIEWS = [['normal', 'Normal'], ['grayscale', 'Niveaux de gris (hiérarchie)'], ['protanopia', 'Protanopie (rouge)'], ['deuteranopia', 'Deutéranopie (vert)'], ['tritanopia', 'Tritanopie (bleu)'], ['achromatopsia', 'Achromatopsie'], ['blur', 'Basse vision (flou)'], ['contrast-low', 'Faible contraste (soleil)']];
+  function setView(v) { app.view = v; ensureVisionFilters(); document.body.dataset.view = v; renderTop(); toast(v === 'normal' ? 'Vue normale' : 'Simulation : ' + VIEWS.find((x) => x[0] === v)[1]); }
+  function viewMenu(e) { const r = e.currentTarget.getBoundingClientRect(); menu(r.left - 120, r.bottom + 4, VIEWS.map(([k, l]) => ({ label: l, icon: app.view === k ? 'check' : 'circle', run: () => setView(k) }))); }
   function renderFileBtn() { clear(fileBtn).append(...[icon('file-code-2', 14), h('span', null, app.files[app.fileIndex].file), app.files[app.fileIndex].draft ? h('em', { title: 'Modifié localement' }, '•') : null, icon('chevron-down', 12)].filter(Boolean)); }
   function renderModes() {
     clear(modeBtns);
@@ -289,6 +308,7 @@ function boot() {
     if (e.shiftKey && (e.code === 'Digit2')) { canvas.zoomToFit(app.selection); return; }
     if (e.shiftKey && (e.code === 'Digit0')) { canvas.zoomTo(1); return; }
     if (e.shiftKey && k === 'a') { wrap('col', { gap: '8' }); return; }
+    if (e.shiftKey && k === 'g') { toggleGrid(); return; }
     if (k === 'delete' || k === 'backspace') { del(); return; }
     if (k === 'escape') { if (app.tool !== 'move') { app.tool = 'move'; app.emit('tool'); } else { const n = app.selNodes[0]; const p = n && app.parent(n.id); app.select(p && p.tag !== 'page' && p.tag !== 'project' ? p.id : []); } return; }
     if (k === 'enter') { const n = app.selNodes[0]; if (!n) return; if (e.shiftKey) { const p = app.parent(n.id); if (p && p.tag !== 'page' && p.tag !== 'project') app.select(p.id); } else if (n.tag === 'text' || n.tag === 'note') canvas.editText(n.id); else { const c = (n.children || []).filter((x) => x.tag !== '#text'); if (c.length) app.select(c.map((x) => x.id)); } return; }

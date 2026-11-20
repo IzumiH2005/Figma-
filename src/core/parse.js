@@ -131,11 +131,11 @@ export function parse(src) {
   }
 
   function parseElement() {
-    const startLine = line;
+    const startLine = line, startPos = i;
     adv(); // <
     const tag = readName();
     const attrs = readAttrs();
-    const node = { id: newId(), tag, attrs, children: [], line: startLine };
+    const node = { id: newId(), tag, attrs, children: [], line: startLine, pos: startPos };
     if (peek('/>')) { adv(2); return node; }
     if (src[i] !== '>') err(`> attendu pour <${tag}>`);
     adv();
@@ -208,4 +208,68 @@ export function clone(n, freshIds = true) {
   if (n.children) c.children = n.children.map((k) => clone(k, freshIds));
   delete c.implicit;
   return c;
+}
+
+// Patch attributes of elements directly in the source text (keeps comments & formatting).
+// edits: [{ pos, attrs: {k: v|null} }]  (pos = offset of the element's "<")
+export function patchSource(src, edits) {
+  const sorted = [...edits].filter((e) => e.pos !== undefined).sort((a, b) => b.pos - a.pos);
+  for (const e of sorted) {
+    if (src[e.pos] !== '<') continue;
+    // find end of opening tag
+    let i = e.pos + 1, q = null, depth = 0;
+    while (i < src.length) {
+      const c = src[i];
+      if (q) { if (c === q) q = null; i++; continue; }
+      if (c === '"' || c === "'") { q = c; i++; continue; }
+      if (c === '{' || c === '(') depth++;
+      if (c === '}' || c === ')') depth--;
+      if (depth === 0 && c === '>') break;
+      i++;
+    }
+    let open = src.slice(e.pos, i + 1);
+    for (const [k, v] of Object.entries(e.attrs)) {
+      const r = attrRange(open, k);
+      if (r) open = open.slice(0, r[0]) + (v === null ? '' : ' ' + fmtAttr(k, v)) + open.slice(r[1]);
+      else if (v !== null) open = open.replace(/(\s*\/?>)$/, ` ${fmtAttr(k, v)}$1`);
+    }
+    src = src.slice(0, e.pos) + open + src.slice(i + 1);
+  }
+  return src;
+}
+
+// Patch a class inside <styles> raw text: .name { k=v }
+export function patchStyle(src, className, attrs) {
+  const re = new RegExp(`(\\.${className.replace(/[-]/g, '\\-')}\\s*\\{)([^}]*)(\\})`);
+  return src.replace(re, (m, a, body, c) => {
+    for (const [k, v] of Object.entries(attrs)) {
+      const kr = new RegExp(`(^|\\s)${k}=("[^"]*"|\\S+)`);
+      if (kr.test(body)) body = body.replace(kr, (mm, sp) => (v === null ? '' : `${sp}${fmtAttr(k, v)}`));
+      else if (v !== null) body = body.replace(/\s*$/, ` ${fmtAttr(k, v)} `);
+    }
+    return a + body + c;
+  });
+}
+
+// [start, end) of " key=value" (including leading whitespace) inside an opening tag
+function attrRange(open, key) {
+  let i = 1; while (i < open.length && /[\w.\-]/.test(open[i])) i++; // tag name
+  while (i < open.length) {
+    const ws = i;
+    while (i < open.length && /\s/.test(open[i])) i++;
+    if (open[i] === '>' || open[i] === '/' && open[i + 1] === '>') return null;
+    const ks = i;
+    while (i < open.length && /[^\s=>]/.test(open[i]) && !(open[i] === '/' && open[i + 1] === '>')) i++;
+    const k = open.slice(ks, i);
+    if (open[i] === '=') {
+      i++;
+      const c = open[i];
+      if (c === '"' || c === "'") { i = open.indexOf(c, i + 1) + 1; }
+      else if (c === '{') { let d = 0; while (i < open.length) { if (open[i] === '{') d++; else if (open[i] === '}') { d--; if (d === 0) { i++; break; } } i++; } }
+      else { let d = 0; while (i < open.length) { const x = open[i]; if (d === 0 && (/\s/.test(x) || x === '>' || (x === '/' && open[i + 1] === '>'))) break; if (x === '(' || x === '[') d++; if (x === ')' || x === ']') d--; i++; } }
+    }
+    if (k === key) return [ws, i];
+    if (i === ks) i++;
+  }
+  return null;
 }

@@ -1,6 +1,7 @@
 // Project model: indexes a parsed .mq tree (tokens, vars, styles, keyframes, components, pages, screens)
 import { parse, serialize, newId, textOf } from './parse.js';
 import { evaluate, Scope } from './expr.js';
+import { parseColor, ramp, neutrals, resolveColorFns, toHex } from './color.js';
 
 export const DEVICES = {
   'iphone-16': { w: 393, h: 852, safeTop: 59, safeBottom: 34, radius: 55, kind: 'phone', island: true },
@@ -96,12 +97,19 @@ export class Project {
     this.name = meta.name || 'Sans titre';
     this.modes = (meta.modes || 'default').split(/[,\s|]+/).filter(Boolean);
     this.tokens = {}; this.vars = {}; this.styles = {}; this.keyframes = {}; this.components = {}; this.pages = []; this.css = ''; this.flows = {};
-    this.byId = new Map(); this.parentOf = new Map();
+    this.byId = new Map(); this.parentOf = new Map(); this.styleOrigin = {};
     const fonts = (meta.fonts || '').split(/\s*[|]\s*|\s*,\s*(?=[A-Z])/).map((s) => s.trim()).filter(Boolean);
     this.fonts = fonts;
 
     if (this.kitSource) this._ingest(parse(this.kitSource), true);
     this._ingest(top, false);
+    this.expandTokens();
+    this.typescale = meta.typescale || 'ui';
+    const scale = TYPESCALES[this.typescale] || TYPESCALES.ui;
+    for (const [k, [size, lh, weight, extra]] of Object.entries(scale)) {
+      if (this.styles['t-' + k]) continue;
+      this.styles['t-' + k] = { size: String(size), lh: String(lh), weight: String(weight), ...(extra || {}) };
+    }
 
     const index = (n, parent) => {
       this.byId.set(n.id, n);
@@ -128,13 +136,13 @@ export class Project {
     for (const n of top) {
       switch (n.tag) {
         case 'tokens':
-          for (const [k, v] of parseKeyLines(n.raw || '')) this.tokens[k] = splitTop(v, '|').map(unq);
+          for (const [k, v] of parseKeyLines(n.raw || '')) { const arr = splitTop(v, '|').map(unq); if (fromKit) arr._kit = true; this.tokens[k] = arr; }
           break;
         case 'vars':
           for (const [k, v] of parseKeyLines(n.raw || '')) this.vars[k] = v;
           break;
         case 'styles':
-          for (const [k, a] of parseBlocks(n.raw || '')) this.styles[k.replace(/^\./, '')] = a;
+          for (const [k, a] of parseBlocks(n.raw || '')) { this.styles[k.replace(/^\./, '')] = a; this.styleOrigin[k.replace(/^\./, '')] = fromKit ? 'kit' : 'project'; }
           break;
         case 'keyframes': {
           const frames = parseBlocks(n.raw || '').map(([off, a]) => ({ offset: parseFloat(off) / 100, attrs: a }));
@@ -173,7 +181,26 @@ export class Project {
   screen(name) { return this.screens().find((s) => s.attrs.name === name) || null; }
   startScreen() { const all = this.screens(); return all.find((s) => s.attrs.start) || all[0] || null; }
 
-  // token value for current mode (resolves token references)
+  // ramp(#hex) and neutrals(#hex) generate 50→950 tonal scales (name-50 … name-950)
+  expandTokens() {
+    for (const [k, vals] of Object.entries({ ...this.tokens })) {
+      const v = vals[0];
+      if (typeof v !== 'string') continue;
+      const m = /^(ramp|neutrals)\((.*)\)$/.exec(v.trim());
+      if (!m) continue;
+      const arg = m[2].split(',')[0].trim();
+      const strength = m[2].split(',')[1];
+      const col = parseColor(arg.startsWith('$') ? this.token(arg.slice(1)) : arg);
+      if (!col && m[1] === 'ramp') continue;
+      const steps = m[1] === 'ramp' ? ramp(col) : neutrals(col, strength ? parseFloat(strength) : undefined);
+      for (const [step, hex] of Object.entries(steps)) if (!this.tokens[`${k}-${step}`] || this.tokens[`${k}-${step}`]._gen) { this.tokens[`${k}-${step}`] = [hex]; this.tokens[`${k}-${step}`]._gen = true; }
+      this.tokens[k] = [m[1] === 'ramp' ? toHex(col) : steps[500]];
+      this.ramps = this.ramps || {};
+      this.ramps[k] = Object.keys(steps);
+    }
+  }
+
+  // token value for current mode (resolves token references and color functions)
   token(name, mode = 0, depth = 0) {
     const t = this.tokens[name];
     if (!t) return undefined;
@@ -182,7 +209,8 @@ export class Project {
       const r = this.token(v.slice(1).split('/')[0], mode, depth + 1);
       if (r !== undefined) return v.includes('/') ? withAlpha(r, v.split('/')[1]) : r;
     }
-    return v;
+    if (typeof v === 'string' && v.includes('$') && depth < 8) v = v.replace(/\$([A-Za-z_][\w\-.]*)/g, (mm, n) => { const r = this.token(n, mode, depth + 1); return r === undefined ? mm : r; });
+    return typeof v === 'string' ? resolveColorFns(v) : v;
   }
 
   initialVars() {
@@ -202,11 +230,22 @@ export class Project {
   parent(id) { return this.parentOf.get(id) || null; }
 }
 
+// Type scales: name -> [size, line-height, weight, extra]
+export const TYPESCALES = {
+  ui: { display: [56, 1.05, 700, { ls: '-1.5' }], h1: [40, 1.1, 700, { ls: '-1' }], h2: [32, 1.15, 700, { ls: '-0.6' }], h3: [28, 1.2, 700, { ls: '-0.4' }], h4: [24, 1.25, 600, { ls: '-0.3' }], title: [20, 1.3, 600], 'body-lg': [18, 1.5, 400], body: [16, 1.5, 400], 'body-sm': [14, 1.45, 400], label: [14, 1.3, 600], caption: [12, 1.35, 500], overline: [12, 1.3, 600, { upper: true, ls: '1' }] },
+  ios: { display: [34, 1.2, 700, { ls: '0.4' }], h1: [28, 1.21, 700], h2: [22, 1.27, 700], h3: [20, 1.25, 600], title: [17, 1.29, 600], body: [17, 1.29, 400], callout: [16, 1.31, 400], subhead: [15, 1.33, 400], footnote: [13, 1.38, 400], caption: [12, 1.33, 400], caption2: [11, 1.18, 400] },
+  material: { display: [57, 1.12, 400, { ls: '-0.25' }], h1: [32, 1.25, 400], h2: [28, 1.29, 400], h3: [24, 1.33, 400], title: [22, 1.27, 500], 'title-sm': [16, 1.5, 500, { ls: '0.15' }], body: [16, 1.5, 400, { ls: '0.5' }], 'body-sm': [14, 1.43, 400, { ls: '0.25' }], label: [14, 1.43, 500, { ls: '0.1' }], caption: [12, 1.33, 400, { ls: '0.4' }] },
+  web: { display: [72, 1.05, 600, { ls: '-2' }], h1: [56, 1.1, 600, { ls: '-1.5' }], h2: [48, 1.1, 600, { ls: '-1' }], h3: [40, 1.15, 600, { ls: '-0.8' }], h4: [32, 1.2, 600, { ls: '-0.5' }], h5: [24, 1.3, 600], h6: [20, 1.35, 600], title: [18, 1.4, 600], 'body-lg': [18, 1.55, 400], body: [16, 1.55, 400], 'body-sm': [14, 1.5, 400], caption: [12, 1.4, 500], button: [16, 1.2, 600] },
+  tailwind: { '7xl': [72, 1, 700], '6xl': [60, 1, 700], '5xl': [48, 1, 700], '4xl': [36, 1.11, 700], '3xl': [30, 1.2, 700], '2xl': [24, 1.33, 600], xl: [20, 1.4, 600], lg: [18, 1.55, 400], base: [16, 1.5, 400], sm: [14, 1.43, 400], xs: [12, 1.33, 400] },
+};
+export const SPACING = [0, 2, 4, 8, 12, 16, 20, 24, 32, 40, 48, 56, 64, 80, 96, 120, 160];
+
 export function parseProps(s) {
   const a = s ? parseAttrString(s) : {};
   const out = {};
   for (const [k, v] of Object.entries(a)) {
     if (v === true) { out[k] = true; continue; }
+    if (/^\{[\s\S]*\}$/.test(v)) { try { out[k] = evaluate(v.slice(1, -1), new Scope({}, null, { dollar: () => undefined })); continue; } catch (e) { /* fall through */ } }
     out[k] = coerce(v);
   }
   return out;
@@ -226,21 +265,4 @@ export function withAlpha(color, a) {
   return `rgba(${c[0]},${c[1]},${c[2]},${+(c[3] * alpha).toFixed(3)})`;
 }
 
-const NAMED = { white: [255, 255, 255, 1], black: [0, 0, 0, 1], transparent: [0, 0, 0, 0], red: [255, 0, 0, 1] };
-export function parseColor(s) {
-  if (!s || typeof s !== 'string') return null;
-  s = s.trim();
-  if (NAMED[s]) return NAMED[s].slice();
-  let m = /^#([0-9a-f]{3,8})$/i.exec(s);
-  if (m) {
-    let h = m[1];
-    if (h.length === 3 || h.length === 4) h = h.split('').map((c) => c + c).join('');
-    const n = (k) => parseInt(h.slice(k, k + 2), 16);
-    return [n(0), n(2), n(4), h.length === 8 ? +(n(6) / 255).toFixed(3) : 1];
-  }
-  m = /^rgba?\(([^)]+)\)$/.exec(s);
-  if (m) { const p = m[1].split(/[,\s/]+/).filter(Boolean).map(parseFloat); return [p[0], p[1], p[2], p[3] ?? 1]; }
-  return null;
-}
-
-export { parse, serialize, newId, textOf };
+export { parse, serialize, newId, textOf, parseColor };

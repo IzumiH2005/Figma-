@@ -12,19 +12,28 @@
   danger: #D93644
   success: #2EB67D
   warning: #F5A524
+  info: #2F6FEB
   radius: 14
 </tokens>
 
-<component name="Button" props="label='Bouton' kind=primary size=md icon='' iconRight='' full=false loading=false" desc="Bouton principal. kind: primary|secondary|ghost|outline|danger ; size: sm|md|lg">
-  <row class="mq-btn" gap=8 justify=center radius={size == 'lg' ? 16 : 12} h={size == 'sm' ? 36 : size == 'lg' ? 56 : 48} px={size == 'sm' ? 14 : 20} w={full ? 'fill' : 'hug'}
-    fill={kind == 'primary' ? $primary : kind == 'danger' ? $danger : kind == 'secondary' ? $surface : 'transparent'}
-    color={kind == 'primary' || kind == 'danger' ? $on-primary : kind == 'secondary' ? $text : $primary}
-    stroke={kind == 'outline' ? '1.5 ' + $border : 'none'}
-    size={size == 'sm' ? 14 : size == 'lg' ? 17 : 16} weight=600 press:scale=0.97 hover:opacity=0.92>
+<component name="Button" props="label='Bouton' kind=primary size=md icon='' iconRight='' full=false loading=false disabled=false state=''" desc="Bouton. kind: primary|secondary|tonal|outline|ghost|link|danger ; size: sm|md|lg (40/48/56px) ; state: hover|pressed|focus|disabled|loading (pour documenter les états)">
+  <ButtonBase label={label} kind={kind} size={size} icon={icon} iconRight={iconRight} full={full} loading={loading || state == 'loading'} disabled={disabled || state == 'disabled'} state={state}
+    bg={kind == 'primary' ? $primary : kind == 'danger' ? $danger : kind == 'secondary' ? $surface : kind == 'tonal' ? $primary-soft : 'transparent'}
+    fg={kind == 'primary' ? $on-primary : kind == 'danger' ? '#FFFFFF' : kind == 'secondary' ? $text : $primary}/>
+</component>
+
+<component name="ButtonBase" props="label='' kind=primary size=md icon='' iconRight='' full=false loading=false disabled=false state='' bg='transparent' fg='#000000'" desc="(interne) rendu commun des boutons">
+  <row gap=8 justify=center radius={size == 'lg' ? 16 : 12} h={kind == 'link' ? 'hug' : size == 'sm' ? 40 : size == 'lg' ? 56 : 48} minh={kind == 'link' ? 44 : 0} px={kind == 'link' ? 4 : size == 'sm' ? 16 : 24} w={full ? 'fill' : 'hug'}
+    fill={state == 'hover' ? (bg == 'transparent' ? alpha(fg, 8) : shade(bg, 10)) : state == 'pressed' ? (bg == 'transparent' ? alpha(fg, 14) : shade(bg, 18)) : bg}
+    hover:fill={bg == 'transparent' ? alpha(fg, 8) : shade(bg, 10)} press:fill={bg == 'transparent' ? alpha(fg, 14) : shade(bg, 18)} press:scale=0.98
+    color={fg} stroke={kind == 'outline' ? '1.5 ' + alpha(fg, 45) : 'none'} underline={kind == 'link'}
+    shadow={state == 'focus' ? '0 0 0 3px ' + alpha($primary, 40) : 'none'} focus:shadow={'0 0 0 3px ' + alpha($primary, 40)}
+    opacity={disabled ? 0.45 : 1} events={disabled ? 'none' : 'auto'}
+    size={size == 'sm' ? 14 : size == 'lg' ? 18 : 16} weight=600>
     <icon if={loading} name=loader-circle size=18 loop="spin 900"/>
     <icon if={icon && !loading} name={icon} size=18/>
-    <text if={label} nowrap>{label}</text>
-    <icon if={iconRight} name={iconRight} size=18/>
+    <text if={label} nowrap>{loading ? 'Chargement…' : label}</text>
+    <icon if={iconRight && !loading} name={iconRight} size=18/>
   </row>
 </component>
 
@@ -35,14 +44,14 @@
     stroke={kind == 'outline' ? '1 ' + $border : 'none'} bgblur={kind == 'glass' ? 16 : 0}>
     <icon name={icon} size={round(size * 0.48)}/>
     <stack if={badge > 0} absolute top=2 right=2 minw=18 h=18 px=5 radius=full fill=$danger center stroke={'2 ' + $bg + ' outside'}>
-      <text size=11 weight=700 color=#fff lh=1>{badge}</text>
+      <text size=12 weight=700 color=#fff lh=1>{badge}</text>
     </stack>
   </stack>
 </component>
 
 <component name="Chip" props="label='Filtre' selected=false icon=''" desc="Puce de filtre / tag sélectionnable">
-  <row gap=6 h=34 px=14 radius=full size=14 weight=500 press:scale=0.96
-    fill={selected ? $text : $surface} color={selected ? $bg : $text}>
+  <row gap=8 h=36 px=16 radius=full size=14 weight=500 press:scale=0.96
+    fill={selected ? $text : $surface-2} color={selected ? $bg : $text}>
     <icon if={icon} name={icon} size=16/>
     <text nowrap>{label}</text>
   </row>
@@ -51,7 +60,7 @@
 <component name="Badge" props="label='Nouveau' tone=primary" desc="Étiquette. tone: primary|success|danger|warning|neutral">
   <row h=22 px=8 radius=full size=12 weight=600
     fill={tone == 'success' ? 'rgba(46,182,125,.14)' : tone == 'danger' ? 'rgba(229,72,77,.14)' : tone == 'warning' ? 'rgba(245,165,36,.16)' : tone == 'neutral' ? $surface : $primary-soft}
-    color={tone == 'success' ? $success : tone == 'danger' ? $danger : tone == 'warning' ? '#B26B00' : tone == 'neutral' ? $muted : $primary}>
+    color={tone == 'success' ? mix($success, $text, 45) : tone == 'danger' ? mix($danger, $text, 35) : tone == 'warning' ? mix($warning, $text, 55) : tone == 'neutral' ? $muted : mix($primary, $text, 20)}>
     <text nowrap>{label}</text>
   </row>
 </component>
@@ -87,14 +96,15 @@
   </row>
 </component>
 
-<component name="Field" props="label='' placeholder='Saisir…' bind='' icon='' type=text hint='' error=''" desc="Champ texte réellement saisissable en prototype (bind=nomDeVariable)">
-  <col gap=6 w=fill>
-    <text if={label} size=13 weight=600 color=$muted>{label}</text>
-    <row gap=10 h=52 px=16 radius=$radius fill=$surface stroke={error ? '1.5 ' + $danger : 'none'} focus:stroke={'2 ' + $primary}>
+<component name="Field" props="label='' placeholder='Saisir…' bind='' icon='' type=text hint='' error='' optional=false valid=false" desc="Champ texte réellement saisissable en prototype (bind=nomDeVariable)">
+  <col gap=8 w=fill>
+    <text if={label} size=14 weight=600 color=$muted>{label}{optional ? ' (optionnel)' : ''}</text>
+    <row gap=12 h=52 px=16 radius=$radius fill=$surface stroke={error ? '1.5 ' + $danger : 'none'} focus:stroke={'2 ' + $primary}>
       <icon if={icon} name={icon} size=18 color=$muted/>
       <input w=fill h=fill placeholder={placeholder} bind={bind} type={type} size=16/>
+      <icon if={valid} name=circle-check size=18 color=$success/>
     </row>
-    <text if={error} size=12 color=$danger>{error}</text>
+    <row if={error} gap=4 size=12 color=$danger><icon name=circle-alert size=14/><text>{error}</text></row>
     <text if={hint && !error} size=12 color=$muted>{hint}</text>
   </col>
 </component>
@@ -107,13 +117,13 @@
 </component>
 
 <component name="ListItem" props="title='Titre' subtitle='' icon='' avatar='' image='' trailing='' chevron=true tone=''" desc="Ligne de liste (icône/avatar/image + titre + sous-titre + valeur)">
-  <row gap=14 py=12 w=fill press:opacity=0.6>
+  <row gap=12 py=12 w=fill press:opacity=0.6>
     <stack if={icon} w=40 h=40 radius=12 center fill={tone || $primary-soft} color={tone ? '#fff' : $primary}><icon name={icon} size=20/></stack>
     <Avatar if={avatar} name={avatar} size=44/>
     <image if={image} src={image} w=48 h=48 radius=12/>
     <col gap=2 w=fill>
       <text weight=600 truncate>{title}</text>
-      <text if={subtitle} size=13 color=$muted truncate>{subtitle}</text>
+      <text if={subtitle} size=14 color=$muted truncate>{subtitle}</text>
     </col>
     <text if={trailing} weight=600 tabular nowrap>{trailing}</text>
     <icon if={chevron} name=chevron-right size=18 color=$muted/>
@@ -131,7 +141,7 @@
     <row h=48 px=8 gap=4>
       <IconButton if={back} icon=chevron-left on:click="back"/>
       <spacer if={!back} size=8/>
-      <text if={!large} w=fill align=center weight=600 size=17 truncate>{title}</text>
+      <text if={!large} w=fill align=center weight=600 size=18 truncate>{title}</text>
       <spacer if={large}/>
       <IconButton if={action} icon={action}/>
       <spacer if={!action} size={back ? 44 : 8}/>
@@ -144,7 +154,7 @@
   <row w=fill justify=evenly pt=10 pb=safe+4 fill=$bg/92 bgblur=20 stroke-t={'1 ' + $border}>
     <col each={items} gap=4 align=center w=fill press:scale=0.92 color={i == active ? ($tab-active || $primary) : $muted} on:click="go {item.to} instant">
       <icon name={item.icon} size=24 stroke={i == active ? 2.4 : 2}/>
-      <text size=11 weight={i == active ? 600 : 500}>{item.label}</text>
+      <text size=12 weight={i == active ? 600 : 500}>{item.label}</text>
     </col>
   </row>
 </component>
@@ -184,9 +194,9 @@
 
 <component name="Stat" props="label='Revenus' value='12 480 €' delta='' up=true" desc="Indicateur chiffré">
   <col gap=4>
-    <text size=13 color=$muted>{label}</text>
+    <text size=14 color=$muted>{label}</text>
     <text size=24 weight=700 tabular ls=-0.5>{value}</text>
-    <row if={delta} gap=4 size=13 weight=600 color={up ? $success : $danger}>
+    <row if={delta} gap=4 size=14 weight=600 color={up ? mix($success, $text, 45) : mix($danger, $text, 30)}>
       <icon name={up ? 'trending-up' : 'trending-down'} size=14/>
       <text>{delta}</text>
     </row>
@@ -219,7 +229,7 @@
 
 <component name="Dialog" props="title='Confirmer' message='' confirm='OK' cancel='Annuler'" desc="Boîte de dialogue centrée (overlay)">
   <col w=300 fill=$bg radius=24 p=24 gap=12 shadow=xl>
-    <text size=19 weight=700 align=center>{title}</text>
+    <text size=20 weight=700 align=center>{title}</text>
     <text if={message} color=$muted align=center>{message}</text>
     <slot/>
     <row gap=10 pt=8>
@@ -227,4 +237,146 @@
       <Button label={confirm} full on:click="close"/>
     </row>
   </col>
+</component>
+
+<!-- ─────────────── composants « hygiène UI » : chiffres et états issus des guidelines ─────────────── -->
+
+<component name="Tabs" props="items={['Aperçu','Activité','Réglages']} active=0 var=''" desc="Onglets soulignés (indicateur animé en smart). var=nom de variable à mettre à jour">
+  <row w=fill gap=24 stroke-b={'1 ' + $border}>
+    <stack each={items} h=44 align=center press:opacity=0.7 cursor=pointer on:click="set ${var} = {i}">
+      <text weight={i == active ? 600 : 500} color={i == active ? $text : $muted} size=16>{item}</text>
+      <frame if={i == active} name=tab-indicator absolute left=0 right=0 bottom=-1 h=2 radius=full fill=$primary/>
+    </stack>
+  </row>
+</component>
+
+<component name="Accordion" props="title='Question' text='' open=false" desc="Élément d'accordéon (FAQ). Ex : open={$faq == 1} on:click=&quot;set $faq = $faq == 1 ? -1 : 1&quot;">
+  <col w=fill gap=12 py=16 stroke-b={'1 ' + $border} cursor=pointer>
+    <row gap=16><text w=fill weight=600 size=16>{title}</text><icon name=chevron-down size=20 color=$muted rotate={open ? 180 : 0} transition=250/></row>
+    <text if={open && text} color=$muted lh=1.6>{text}</text>
+    <slot if={open}/>
+  </col>
+</component>
+
+<component name="Stepper" props="step=1 total=3 label=''" desc="Progression d'un parcours multi-étapes (« Étape 2 sur 3 »)">
+  <col gap=8 w=fill>
+    <row gap=auto><text size=14 weight=600>{label || 'Étape ' + step + ' sur ' + total}</text><text size=14 color=$muted tabular>{round(step / total * 100)} %</text></row>
+    <row gap=4 w=fill><frame repeat={total} h=4 w=fill radius=full fill={i < step ? $primary : $surface-2} transition=300/></row>
+  </col>
+</component>
+
+<component name="Breadcrumbs" props="items={['Accueil','Catégorie','Article']}" desc="Fil d'Ariane (position dans la hiérarchie)">
+  <row gap=8 wrap size=14>
+    <row each={items} gap=8><text color={last ? $text : $muted} weight={last ? 600 : 400} underline={!last}>{item}</text><icon if={!last} name=chevron-right size=14 color=$muted/></row>
+  </row>
+</component>
+
+<component name="Tooltip" props="text='Info-bulle' side=top" desc="Info-bulle avec flèche. side: top|bottom (la flèche pointe vers l'élément)">
+  <col align=center>
+    <frame if={side == 'bottom'} w=10 h=10 rotate=45 fill=#1C1C22 mb=-6/>
+    <text px=12 py=8 radius=8 bg=#1C1C22 color=#FFFFFF size=12 lh=1.4 maxw=240 shadow=md>{text}</text>
+    <frame if={side != 'bottom'} w=10 h=10 rotate=45 fill=#1C1C22 mt=-6/>
+  </col>
+</component>
+
+<component name="Alert" props="tone=info title='Information' text='' close=true" desc="Bannière de statut. tone: info|success|warning|error (icône + titre + texte + fermeture)">
+  <row w=fill gap=12 p=16 radius=14 align=start fill={alpha(tone == 'success' ? $success : tone == 'warning' ? $warning : tone == 'error' ? $danger : $info, 10)} stroke={'1 ' + alpha(tone == 'success' ? $success : tone == 'warning' ? $warning : tone == 'error' ? $danger : $info, 30)}>
+    <stack w=28 h=28 radius=full center fill={tone == 'success' ? $success : tone == 'warning' ? $warning : tone == 'error' ? $danger : $info} color=#FFFFFF><icon name={tone == 'success' ? 'check' : tone == 'warning' ? 'triangle-alert' : tone == 'error' ? 'x' : 'info'} size=16 stroke=2.5/></stack>
+    <col gap=4 w=fill><text weight=600>{title}</text><text if={text} size=14 color=$muted lh=1.5>{text}</text></col>
+    <icon if={close} name=x size=18 color=$muted/>
+  </row>
+</component>
+
+<component name="Snackbar" props="message='Message supprimé' action='Annuler'" desc="Confirmation éphémère avec action d'annulation">
+  <row gap=16 px=16 h=48 radius=12 fill=#1C1C22 color=#F4F4F6 shadow=lg w=fill maxw=480>
+    <text w=fill size=14 truncate>{message}</text>
+    <text if={action} size=14 weight=700 color=#B4A8FF cursor=pointer>{action}</text>
+  </row>
+</component>
+
+<component name="Menu" props="w=240" desc="Menu déroulant / contextuel : contient des MenuItem (et des divider)">
+  <col w={w} p=6 radius=12 fill=$bg stroke={'1 ' + $border} shadow=layered gap=2>
+    <slot/>
+  </col>
+</component>
+
+<component name="MenuItem" props="label='Action' icon='' shortcut='' danger=false disabled=false selected=false submenu=false" desc="Ligne de menu : icône, raccourci aligné à droite, sous-menu ▸, état sélectionné">
+  <row h=40 px=10 gap=10 radius=8 hover:fill=$surface opacity={disabled ? 0.4 : 1} events={disabled ? 'none' : 'auto'} color={danger ? $danger : $text} fill={selected ? $primary-soft : 'transparent'} cursor=pointer>
+    <icon if={icon} name={icon} size=16/>
+    <text w=fill size=14 weight={selected ? 600 : 400} truncate>{label}</text>
+    <text if={shortcut} size=12 color=$muted mono>{shortcut}</text>
+    <icon if={selected} name=check size=16 color=$primary/>
+    <icon if={submenu} name=chevron-right size=16 color=$muted/>
+  </row>
+</component>
+
+<component name="Select" props="label='' value='' placeholder='Choisir…' open=false" desc="Liste déroulante (au-delà de 5 choix). Les options vont dans le slot (Menu/MenuItem) quand open">
+  <col gap=8 w=fill>
+    <text if={label} size=14 weight=600 color=$muted>{label}</text>
+    <row h=48 px=16 gap=8 radius=12 fill=$bg stroke={open ? '2 ' + $primary : '1 ' + $border} hover:stroke={'1 ' + $muted} cursor=pointer>
+      <text w=fill color={value ? $text : $muted} truncate>{value || placeholder}</text>
+      <icon name={open ? 'chevron-up' : 'chevron-down'} size=18 color=$muted/>
+    </row>
+    <slot if={open}/>
+  </col>
+</component>
+
+<component name="AvatarGroup" props="names={['Léa Martin','Hugo B','Inès K','Malik D','Zoé R']} size=32 max=4" desc="Pile d'avatars qui se chevauchent">
+  <row>
+    <image each={slice(names, 0, max)} as=nm src={'avatar:' + nm} w={size} h={size} radius=full ml={i == 0 ? 0 : -round(size * 0.3)} stroke={'2 ' + $bg + ' outside'}/>
+    <stack if={len(names) > max} w={size} h={size} radius=full fill=$surface-2 center ml={-round(size * 0.3)} stroke={'2 ' + $bg + ' outside'}><text size=12 weight=600>+{len(names) - max}</text></stack>
+  </row>
+</component>
+
+<component name="SocialProof" props="rating=4.9 count='12 000' label='utilisateurs'" desc="Preuve sociale : avatars + note + nombre d'avis">
+  <row gap=12>
+    <AvatarGroup size=32/>
+    <col gap=2>
+      <Rating value={round(rating)} size=14/>
+      <text size=14 color=$muted>Noté <b>{rating}/5</b> par {count} {label}</text>
+    </col>
+  </row>
+</component>
+
+<component name="EmptyState" props="icon=inbox title='Rien ici pour l’instant' text='' action=''" desc="État vide utile : explique et propose l'action suivante">
+  <col align=center gap=12 p=32 w=fill>
+    <stack w=64 h=64 radius=20 fill=$primary-soft color=$primary center><icon name={icon} size=28/></stack>
+    <text size=18 weight=600 align=center>{title}</text>
+    <text if={text} color=$muted align=center maxw=320 size=14 lh=1.5>{text}</text>
+    <Button if={action} label={action} kind=secondary size=sm/>
+  </col>
+</component>
+
+<component name="Pagination" props="count=5 active=1" desc="Pagination numérotée (cibles 40px)">
+  <row gap=4>
+    <IconButton icon=chevron-left size=40/>
+    <stack each={range(1, count + 1)} as=pg w=40 h=40 radius=10 center fill={pg == active ? $text : 'transparent'} color={pg == active ? $bg : $text} hover:fill={pg == active ? $text : $surface} cursor=pointer><text size=14 weight=600 tabular>{pg}</text></stack>
+    <IconButton icon=chevron-right size=40/>
+  </row>
+</component>
+
+<component name="FAB" props="icon=plus label=''" desc="Bouton d'action flottant (action principale, zone du pouce)">
+  <row gap=8 h=56 px={label ? 20 : 0} w={label ? 'hug' : 56} justify=center radius=18 fill=$primary color=$on-primary shadow={'tinted(' + $primary + ', 35)'} press:scale=0.95 cursor=pointer>
+    <icon name={icon} size=24/><text if={label} weight=600>{label}</text>
+  </row>
+</component>
+
+<component name="ConfirmDialog" props="title='Supprimer le projet ?' message='Cette action est définitive.' confirm='Supprimer' cancel='Annuler' danger=true" desc="Confirmation d'action irréversible : verbes d'action (jamais Oui/Non), bouton rouge">
+  <col w=320 fill=$bg radius=24 p=24 gap=16 shadow=e5>
+    <stack w=48 h=48 radius=full fill={danger ? alpha($danger, 12) : $primary-soft} color={danger ? $danger : $primary} center><icon name={danger ? 'trash-2' : 'info'} size=22/></stack>
+    <col gap=8><text size=20 weight=700>{title}</text><text color=$muted lh=1.5>{message}</text></col>
+    <row gap=12><Button label={cancel} kind=secondary full on:click="close"/><Button label={confirm} kind={danger ? 'danger' : 'primary'} full on:click="close"/></row>
+  </col>
+</component>
+
+<component name="Testimonial" props="quote='Un outil qui a changé notre façon de travailler.' name='Léa Martin' role='Product designer' rating=5" desc="Carte d'avis client">
+  <col gap=16 p=24 radius=20 fill=$surface stroke={'1 ' + $border} w=fill>
+    <Rating value={rating} size=16/>
+    <text size=16 lh=1.6>« {quote} »</text>
+    <row gap=12><Avatar name={name} size=40/><col><text weight=600 size=14>{name}</text><text size=12 color=$muted>{role}</text></col></row>
+  </col>
+</component>
+
+<component name="OrDivider" props="label='ou'" desc="Séparateur avec libellé (« ou »)">
+  <row gap=12 w=fill><divider w=fill/><text size=14 color=$muted>{label}</text><divider w=fill/></row>
 </component>

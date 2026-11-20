@@ -107,7 +107,7 @@ export class Player {
     const run = (ev, extra) => (e) => { if (e) e.stopPropagation(); this.emit('trigger', { el, action: ev.action }); this.exec(ev.action, extra ? ev.scope.child(extra(e)) : ev.scope, el); };
     for (const [trig, ev] of Object.entries(events)) {
       switch (trig) {
-        case 'on:click': case 'on:tap': el.addEventListener('click', run(ev)); el.dataset.hot = '1'; break;
+        case 'on:click': case 'on:tap': el.addEventListener('click', run(ev)); el.dataset.hot = '1'; if (!/^(INPUT|TEXTAREA)$/.test(el.tagName)) { el.tabIndex = 0; el.setAttribute('role', 'button'); el.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); el.click(); } }); } break;
         case 'on:dblclick': el.addEventListener('dblclick', run(ev)); el.dataset.hot = '1'; break;
         case 'on:press': el.addEventListener('pointerdown', run(ev)); el.dataset.hot = '1'; break;
         case 'on:release': el.addEventListener('pointerup', run(ev)); break;

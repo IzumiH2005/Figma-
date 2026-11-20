@@ -1,6 +1,8 @@
 // Tiny safe expression language (no eval): literals, $vars, idents, member access,
 // arrays/objects, arithmetic, comparisons, logic, ternary, function calls on builtins.
 
+import { parseColor, shade as _shade, tint as _tint, mix as _mix, toCss, contrast as _contrast } from './color.js';
+
 const cache = new Map();
 
 function tokenize(s) {
@@ -90,7 +92,12 @@ function parseExpr(src) {
   return e;
 }
 
+const pc = (c) => parseColor(String(c)) || [0, 0, 0, 1];
+const pct = (p, d) => { const n = Number(p ?? d); return n > 1 ? n / 100 : n; };
 const BUILTINS = {
+  shade: (c, p) => toCss(_shade(pc(c), pct(p, 10))), tint: (c, p) => toCss(_tint(pc(c), pct(p, 10))),
+  mix: (a, b, p) => toCss(_mix(pc(a), pc(b), pct(p, 50))), alpha: (c, p) => { const x = pc(c); return toCss([x[0], x[1], x[2], x[3] * pct(p, 50)]); },
+  onColor: (c, light = '#FFFFFF', dark = '#111114') => (_contrast(pc(c), pc(light)) >= _contrast(pc(c), pc(dark)) ? light : dark),
   min: Math.min, max: Math.max, round: Math.round, floor: Math.floor, ceil: Math.ceil, abs: Math.abs,
   len: (x) => (x == null ? 0 : x.length ?? Object.keys(x).length),
   upper: (s) => String(s).toUpperCase(), lower: (s) => String(s).toLowerCase(),
@@ -125,6 +132,7 @@ function ev(e, scope) {
     case 'mem': { const o = ev(e.o, scope); return o == null ? undefined : o[ev(e.p, scope)]; }
     case 'tern': return ev(e.c, scope) ? ev(e.a, scope) : ev(e.b, scope);
     case 'call': {
+      if (e.f.k === 'id' && e.f.v === 'dollar') return scope.lookup('$' + ev(e.args[0], scope));
       const fn = e.f.k === 'id' ? BUILTINS[e.f.v] : null;
       if (!fn) throw new Error(`Fonction inconnue: ${e.f.v}`);
       return fn(...e.args.map((x) => ev(x, scope)));

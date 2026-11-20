@@ -1,0 +1,237 @@
+<project name="Atelier — Système UI" typescale=ui fonts="Inter:400;500;600;700|Fraunces:500;600" modes="light dark">
+  <!-- Palette générée : une primaire (ramp → 50…950), des gris teintés de la primaire, un accent. Règle 60-30-10. -->
+  <tokens>
+    brand: ramp(#0F7B6C)
+    gray: neutrals(#0F7B6C, 0.012)
+    primary: $brand-700
+    on-primary: #FFFFFF
+    primary-soft: alpha($brand-500, 14)
+    tab-active: $brand-700 | $brand-300
+    bg: #FFFFFF | $gray-950
+    surface: $gray-50 | $gray-900
+    surface-2: $gray-100 | $gray-800
+    text: $gray-950 | $gray-50
+    muted: $gray-600 | $gray-400
+    border: $gray-200 | $gray-800
+    accent: #F5A524
+    serif: "Fraunces"
+  </tokens>
+
+  <vars>
+    tab: 0
+    faq: 0
+    step: 2
+    steps: ["50","100","200","300","400","500","600","700","800","900","950"]
+    type: [{"n":"display","s":"56 / 1.05 · 700"},{"n":"h1","s":"40 / 1.1 · 700"},{"n":"h2","s":"32 / 1.15 · 700"},{"n":"h3","s":"28 / 1.2 · 700"},{"n":"h4","s":"24 / 1.25 · 600"},{"n":"title","s":"20 / 1.3 · 600"},{"n":"body-lg","s":"18 / 1.5 · 400"},{"n":"body","s":"16 / 1.5 · 400"},{"n":"body-sm","s":"14 / 1.45 · 400"},{"n":"label","s":"14 / 1.3 · 600"},{"n":"caption","s":"12 / 1.35 · 500"}]
+    space: [4, 8, 12, 16, 24, 32, 48, 64, 80]
+    shadows: ["e1","e2","e3","e4","e5","soft","layered","brutal"]
+    kinds: ["primary","secondary","tonal","outline","ghost","link","danger"]
+    states: ["","hover","pressed","focus","disabled","loading"]
+  </vars>
+
+  <styles>
+    .page { w=fill maxw=1240 mx=auto px=40 }
+    .section { col gap=32 py=64 stroke-t="1 $border" }
+    .eyebrow { size=12 weight=600 upper ls=1 color=$primary }
+    .stitle { font=$serif size=40 weight=500 ls=-1 lh=1.1 }
+    .swatch-label { size=12 weight=500 mono }
+  </styles>
+
+  <component name="SectionHead" props="eyebrow='' title='' text=''">
+    <col gap=12 maxw=640>
+      <text class=eyebrow>{eyebrow}</text>
+      <text class=stitle>{title}</text>
+      <text if={text} color=$muted size=16 lh=1.6>{text}</text>
+    </col>
+  </component>
+
+  <component name="RampRow" props="name=brand label='Primaire'">
+    <col gap=8 w=fill>
+      <row gap=auto><text weight=600 size=14>{label}</text><text size=12 color=$muted mono>${name}-50 … ${name}-950</text></row>
+      <row w=fill radius=12 clip>
+        <col each={$steps} as=st w=fill h=88 p=8 justify=end gap=0 fill={'$' + name + '-' + st} color={onColor(dollar(name + '-' + st))}>
+          <text size=12 weight=600>{st}</text>
+          <text size=12 mono>{dollar(name + '-' + st)}</text>
+        </col>
+      </row>
+    </col>
+  </component>
+
+  <page name="Système">
+    <screen name="Style guide" device=desktop h=auto start fill=$bg>
+      <col class=page gap=0>
+        <row h=72 gap=auto>
+          <row gap=12><stack w=32 h=32 radius=8 fill=$primary center><icon name=pen-tool size=18 color=$on-primary/></stack><text weight=700 size=18>Atelier · Système UI</text></row>
+          <row gap=8><Badge label="v2.0" tone=neutral/><IconButton icon=sun-moon kind=tonal size=40 on:click="mode next"/></row>
+        </row>
+        <col gap=20 pt=48 pb=64 maxw=760 stagger="70 fade-up 500">
+          <text class=eyebrow>Style guide</text>
+          <text font=$serif size=56 weight=500 ls=-1.5 lh=1.05 balance>Des fondations cohérentes, vérifiées automatiquement.</text>
+          <text size=18 color=$muted lh=1.6>Une primaire, des gris teintés, une échelle typographique, une grille de 8 px et des composants dont chaque état est documenté. Chaque écran passe par le lint d'hygiène (contraste, cibles, grille, échelle).</text>
+        </col>
+
+        <!-- couleurs -->
+        <col class=section>
+          <SectionHead eyebrow=Couleurs title="Une primaire, des neutres, un accent" text="Générées avec ramp() et neutrals() : les gris contiennent une pointe de la primaire, jamais de gris pur. Les couleurs système portent du sens (succès, alerte, erreur, info)."/>
+          <RampRow name=brand label="Primaire — brand"/>
+          <RampRow name=gray label="Neutres teintés — gray"/>
+          <row gap=12 w=fill>
+            <col each={['primary','accent','success','warning','danger','info']} as=c w=fill gap=8>
+              <frame h=64 radius=12 fill={'$' + c}/>
+              <text size=14 weight=600>${c}</text>
+              <text size=12 color=$muted mono>{dollar(c)}</text>
+            </col>
+          </row>
+        </col>
+
+        <!-- typographie -->
+        <col class=section>
+          <SectionHead eyebrow=Typographie title="Une échelle, pas des tailles au hasard" text="Classes t-display … t-caption générées depuis typescale=ui. Le lint signale toute taille hors échelle et propose la plus proche."/>
+          <col gap=0 w=fill>
+            <row each={$type} as=t gap=24 py=12 stroke-b="1 $border" align=baseline>
+              <text w=120 size=12 color=$muted mono>t-{t.n}</text>
+              <text w=fill class={'t-' + t.n} truncate>Orchestrer chaque détail</text>
+              <text w=140 size=12 color=$muted mono align=right>{t.s}</text>
+            </row>
+          </col>
+        </col>
+
+        <!-- espacements, rayons, ombres -->
+        <col class=section>
+          <SectionHead eyebrow="Espacement & élévation" title="Grille de 8 px, une seule source de lumière"/>
+          <row gap=48 w=fill align=start wrap>
+            <col gap=12>
+              <text weight=600 size=14>Espacements</text>
+              <row each={$space} as=sp gap=16><text w=32 size=12 color=$muted mono>{sp}</text><frame w={sp * 3} h=16 radius=4 fill=$primary-soft stroke="1 $primary"/></row>
+            </col>
+            <col gap=12 w=fill>
+              <text weight=600 size=14>Ombres (shadow=…)</text>
+              <grid cols=4 gap=24 p=24 radius=16 fill=$surface>
+                <col each={$shadows} as=sh h=96 radius={sh == 'brutal' ? 4 : 16} fill=$bg stroke={sh == 'brutal' ? '2 #111' : 'none'} shadow={sh} center><text size=14 weight=600 mono>{sh}</text></col>
+              </grid>
+            </col>
+          </row>
+        </col>
+
+        <!-- boutons -->
+        <col class=section>
+          <SectionHead eyebrow=Boutons title="Hiérarchie et états" text="Un seul primaire par vue ; secondary/outline pour l'action moyenne, link pour la tertiaire. États distincts mais sobres. Hauteurs 40 / 48 / 56."/>
+          <col gap=0 w=fill radius=16 stroke="1 $border" clip>
+            <row h=48 px=20 gap=16 fill=$surface>
+              <text w=96 size=12 color=$muted weight=600 upper ls=1>kind</text>
+              <text each={['défaut','hover','pressé','focus','désactivé','chargement']} as=st w=fill size=12 color=$muted weight=600 upper ls=1>{st}</text>
+            </row>
+            <row each={$kinds} as=k h=80 px=20 gap=16 stroke-t="1 $border">
+              <text w=96 size=14 mono>{k}</text>
+              <stack each={$states} as=st w=fill><Button label={k == 'danger' ? 'Supprimer' : 'Continuer'} kind={k} size=sm state={st}/></stack>
+            </row>
+          </col>
+          <row gap=12><Button label="Créer un projet" icon=plus/><Button label="Importer" kind=outline icon=upload/><Button label="Voir la documentation" kind=link iconRight=arrow-up-right/></row>
+        </col>
+
+        <!-- formulaires -->
+        <col class=section>
+          <SectionHead eyebrow=Formulaires title="Labels visibles, erreurs explicites" text="Label toujours affiché, « (optionnel) » plutôt qu'un astérisque, placeholder qui montre le format, erreur avec icône et solution."/>
+          <grid cols=3 gap=24 w=fill align=start>
+            <Field label="Nom complet" placeholder="Ada Lovelace"/>
+            <Field label="E-mail" placeholder="ada@exemple.fr" icon=mail error="Format attendu : nom@domaine.fr"/>
+            <Field label="Téléphone" placeholder="06 12 34 56 78" icon=phone optional hint="Uniquement pour la livraison"/>
+            <Field label="Code promo" placeholder="PRINTEMPS24" valid/>
+            <Select label="Pays" value="France"/>
+            <col gap=16><Checkbox checked label="Recevoir la newsletter"/><Checkbox label="Accepter les CGU"/><Radio checked label="Livraison standard"/></col>
+          </grid>
+        </col>
+
+        <!-- feedback -->
+        <col class=section>
+          <SectionHead eyebrow=Feedback title="Statuts système" text="Succès vert, alerte orange, erreur rouge, info bleu : toujours accompagnés d'une icône et d'un texte foncé (contraste ≥ 4.5:1)."/>
+          <grid cols=2 gap=16 w=fill>
+            <Alert tone=success title="Paiement confirmé" text="Votre reçu a été envoyé par e-mail."/>
+            <Alert tone=warning title="Abonnement bientôt expiré" text="Renouvelez avant le 30 novembre."/>
+            <Alert tone=error title="Échec de l'envoi" text="Vérifiez votre connexion puis réessayez."/>
+            <Alert tone=info title="Nouveauté" text="Les exports PDF sont disponibles."/>
+          </grid>
+          <row gap=24 align=center wrap>
+            <Snackbar/>
+            <Toast message="Modifications enregistrées"/>
+            <Tooltip text="Augmente les frais pour accélérer la transaction."/>
+          </row>
+        </col>
+
+        <!-- navigation -->
+        <col class=section>
+          <SectionHead eyebrow=Navigation title="Où suis-je, où aller ?"/>
+          <grid cols=2 gap=40 w=fill align=start>
+            <col gap=24>
+              <Tabs items={['Aperçu','Activité','Membres','Réglages']} active={$tab} var=tab/>
+              <Breadcrumbs items={['Projets','Atelier','Système UI']}/>
+              <Stepper step={$step} total=4/>
+              <row gap=12><Button label="Étape précédente" kind=secondary size=sm on:click="if $step > 1 then dec $step"/><Button label="Étape suivante" size=sm on:click="if $step < 4 then inc $step"/></row>
+              <Pagination count=5 active=2/>
+              <Segmented items={['Jour','Semaine','Mois']} active=1/>
+            </col>
+            <row gap=24 align=start>
+              <Menu>
+                <MenuItem label="Annuler" icon=undo-2 shortcut="⌘Z"/>
+                <MenuItem label="Rétablir" icon=redo-2 shortcut="⇧⌘Z"/>
+                <divider/>
+                <MenuItem label="Copier comme" icon=copy submenu/>
+                <MenuItem label="Dupliquer" icon=copy-plus shortcut="⌘D" selected/>
+                <MenuItem label="Exporter (bientôt)" icon=download disabled/>
+                <divider/>
+                <MenuItem label="Supprimer" icon=trash-2 shortcut="⌫" danger/>
+              </Menu>
+              <col gap=16 w=240>
+                <Select label="Trier par" value="Plus récents" open>
+                  <Menu w=fill>
+                    <MenuItem label="Plus récents" selected/>
+                    <MenuItem label="Recommandés"/>
+                    <MenuItem label="Prix croissant"/>
+                    <MenuItem label="Prix décroissant"/>
+                  </Menu>
+                </Select>
+              </col>
+            </row>
+          </grid>
+        </col>
+
+        <!-- affichage de données -->
+        <col class=section>
+          <SectionHead eyebrow="Contenu & confiance" title="Cartes, preuve sociale, états vides"/>
+          <grid cols=3 gap=24 w=fill align=stretch>
+            <Testimonial quote="On a divisé par deux le temps passé en allers-retours avec les développeurs." name="Inès Kaci" role="Lead design, Hélios"/>
+            <Testimonial quote="Les états des composants sont enfin documentés au même endroit." name="Malik Diallo" role="Développeur front"/>
+            <col gap=16 p=24 radius=20 fill=$surface stroke="1 $border">
+              <Stat label="Taux de conversion" value="4,8 %" delta="+0,6 pt ce mois"/>
+              <SocialProof/>
+              <row gap=8 wrap><Chip label=Figma selected/><Chip label=Tokens/><Chip label=A11y icon=accessibility/><Badge label=Nouveau/></row>
+            </col>
+          </grid>
+          <row gap=24 align=start>
+            <col w=fill radius=20 stroke="1.5 $border dashed"><EmptyState icon=folder-open title="Aucun projet pour l'instant" text="Crée ton premier projet ou importe un fichier .mq existant." action="Créer un projet"/></col>
+            <ConfirmDialog/>
+          </row>
+        </col>
+        <row h=80 gap=auto stroke-t="1 $border" size=14 color=$muted><text>Atelier · Système UI v2.0</text><text>Généré et vérifié avec Maquette</text></row>
+      </col>
+      <FAB fixed place=bottom-right m=32 icon=plus label="Composant"/>
+    </screen>
+
+    <screen name="Formulaire mobile" device=iphone-se statusbar fill=$bg pt=safe px=20 pb=24 gap=24 x=1540>
+      <row h=48 gap=auto><IconButton icon=chevron-left on:click="back"/><text weight=600 size=16>Livraison</text><spacer size=44/></row>
+      <Stepper step=2 total=3 label="Étape 2 sur 3 · Adresse"/>
+      <col gap=16>
+        <Field label="Adresse" placeholder="12 rue des Lilas" icon=map-pin/>
+        <row gap=12><Field label="Code postal" placeholder="75011" w=136/><Field label="Ville" placeholder="Paris"/></row>
+        <Field label="Complément" placeholder="Bâtiment, étage…" optional/>
+      </col>
+      <spacer/>
+      <col gap=12>
+        <Button label="Continuer vers le paiement" full size=lg iconRight=arrow-right/>
+        <text size=12 color=$muted align=center>Vous pourrez modifier ces informations avant de payer.</text>
+      </col>
+    </screen>
+
+    <note x=1540 y=720 w=375>Règles appliquées sur ce formulaire : labels visibles, « (optionnel) » au lieu d'astérisques, champ CP à la largeur attendue, progression d'étapes, CTA pleine largeur dans la zone du pouce, verbe + destination.</note>
+  </page>
+</project>

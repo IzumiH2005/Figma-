@@ -15,7 +15,8 @@ const HELP = `Maquette CLI
   mq render  <file.mq> [-s Écran,Écran] [-o dossier] [--scale 2] [--mode dark] [--frame] [--full]
   mq board   <file.mq> [-o board.png] [--page 0] [--scale 1]        vue d'ensemble du canvas
   mq inspect <file.mq> [-s Écran] [--depth 4]                        arbre de layout calculé (texte)
-  mq lint    <file.mq>                                               contraste, zones tactiles, débordements, liens
+  mq lint    <file.mq> [--fix] [--only code,cat] [--min-score 90]    hygiène UI : contraste, cibles, grille 4/8, échelle typo, tokens, CTA…
+  mq audit   <file.mq>                                               score d'hygiène par catégorie (erreurs et avertissements seulement)
   mq video   <file.mq> [--flow nom|fichier.flow] [-o demo.mp4] [--gif] [--scale 2] [--no-frame]
   mq anim    <file.mq> -s Écran [-o anim.mp4] [--ms 2500]            enregistre les animations d'entrée
   mq build   <file.mq...> [-o maquette.html] [--artifact]            éditeur autonome avec projets intégrés (--artifact : pour publication)
@@ -66,7 +67,7 @@ async function loadInPage(page, source, mode) {
   return page.evaluate(async ({ source, mode }) => {
     const p = MQ.loadProject(source);
     window.__p = p;
-    MQ.ensureStyles(); MQ.ensureFonts(p);
+    MQ.ensureStyles(); await MQ.ensureFonts(p);
     const m = typeof mode === 'string' && isNaN(+mode) ? Math.max(0, p.modes.indexOf(mode)) : +(mode || 0);
     window.__mode = m;
     return { name: p.name, screens: p.screens().map((s) => s.attrs.name), modes: p.modes, flows: Object.keys(p.flows) };
@@ -74,7 +75,14 @@ async function loadInPage(page, source, mode) {
 }
 
 async function waitFonts(page) {
-  await page.evaluate(async () => { await document.fonts.ready; await new Promise((r) => setTimeout(r, 60)); await document.fonts.ready; });
+  await page.evaluate(async () => {
+    await document.fonts.ready;
+    // force-load every family/weight actually used on the page
+    const seen = new Set();
+    document.querySelectorAll('.mq-text, .mq-screen').forEach((el) => { const cs = getComputedStyle(el); const f = cs.fontFamily.split(',')[0].trim(); seen.add(`${cs.fontStyle === 'italic' ? 'italic ' : ''}${cs.fontWeight} 16px ${f}`); });
+    await Promise.all([...seen].map((f) => document.fonts.load(f).catch(() => {})));
+    await new Promise((r) => setTimeout(r, 60)); await document.fonts.ready;
+  });
 }
 
 const slug = (s) => String(s).normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\w]+/g, '-').replace(/^-|-$/g, '').toLowerCase();
@@ -176,23 +184,43 @@ async function cmdInspect(o) {
   await browser.close();
 }
 
-async function cmdLint(o) {
-  const src = readProject(o._[1]);
+async function cmdLint(o, audit = false) {
+  const file = o._[1];
+  const src = readProject(file);
   const { browser, page } = await browserPage();
   const info = await loadInPage(page, src, o.mode);
   await waitFonts(page);
-  const out = await page.evaluate(async ({ screens }) => {
-    const p = window.__p; let issues = MQ.lintProject(p);
-    for (const name of screens) {
-      document.body.innerHTML = '';
-      const el = MQ.screenElement(p, name, { mode: window.__mode });
-      document.body.appendChild(el);
-      issues = issues.concat(MQ.lintScreen(el, p, p.screen(name)));
+  const out = await page.evaluate(async ({ screens, fix, audit, only }) => {
+    const p = window.__p;
+    const run = () => {
+      let issues = MQ.lintProject(p);
+      for (const name of screens) {
+        document.body.innerHTML = '';
+        const el = MQ.screenElement(p, name, { mode: window.__mode });
+        document.body.appendChild(el);
+        issues = issues.concat(MQ.lintScreen(el, p, p.screen(name)));
+      }
+      if (only) issues = issues.filter((i) => only.split(',').includes(i.code) || only.split(',').includes(i.cat));
+      return issues;
+    };
+    let issues = run();
+    let fixed = 0, source = null;
+    if (fix) {
+      source = p.source;
+      for (let pass = 0; pass < 3; pass++) {
+        const r = MQ.fixSource(source, p, issues); if (!r.count || r.source === source) break;
+        fixed += r.count; source = r.source; p.setSource(source); issues = run();
+      }
     }
-    return { text: MQ.formatIssues(issues), n: issues.filter((i) => i.level !== 'info').length };
-  }, { screens: info.screens });
+    const score = MQ.scoreIssues(issues);
+    const quiet = audit ? issues.filter((i) => i.level !== 'info') : issues;
+    return { text: MQ.formatIssues(quiet, true), n: issues.filter((i) => i.level !== 'info').length, fixed, source, score: score.score, infos: issues.length - quiet.length };
+  }, { screens: info.screens, fix: !!o.fix, audit, only: o.only || null });
   console.log(out.text);
+  if (audit && out.infos) console.log(`  (+ ${out.infos} suggestion(s) mineure(s) : mq lint pour le détail)`);
+  if (o.fix) { fs.writeFileSync(file, out.source); console.log(`\n⚙ ${out.fixed} correction(s) appliquée(s) dans ${file}`); }
   await browser.close();
+  if (o['min-score'] && out.score < +o['min-score']) { console.error(`✖ score ${out.score} < ${o['min-score']}`); process.exit(2); }
   return out.n;
 }
 
@@ -430,6 +458,6 @@ async function cmdScenes() {
 
 const o = args(process.argv.slice(2));
 const cmd = o._[0];
-const table = { render: cmdRender, board: cmdBoard, inspect: cmdInspect, lint: cmdLint, video: (x) => cmdVideo(x), anim: (x) => cmdVideo(x, true), build: cmdBuild, export: cmdExport, fmt: cmdFmt, kit: cmdKit, icons: cmdIcons, scenes: cmdScenes };
+const table = { render: cmdRender, board: cmdBoard, inspect: cmdInspect, lint: (x) => cmdLint(x), audit: (x) => cmdLint(x, true), video: (x) => cmdVideo(x), anim: (x) => cmdVideo(x, true), build: cmdBuild, export: cmdExport, fmt: cmdFmt, kit: cmdKit, icons: cmdIcons, scenes: cmdScenes };
 if (!cmd || !table[cmd]) { console.log(HELP); process.exit(cmd ? 1 : 0); }
 try { await table[cmd](o); } catch (e) { console.error('✖ ' + (e && e.message || e)); process.exit(1); }

@@ -30,10 +30,10 @@ C'est la source de vérité : l'éditeur visuel le lit et le réécrit, la CLI l
 
 | Balise | Rôle |
 |---|---|
-| `screen` | Artboard / écran de prototype. `device=`, `w`/`h`, `h=auto` (hug, pages web), `start`, `statusbar[=dark|light]`, `homebar`, `x`/`y` sur le canvas |
+| `screen` | Artboard / écran de prototype. `device=`, `w`/`h`, `h=auto` (hug, pages web), `start`, `statusbar[=dark|light]`, `homebar`, `x`/`y` sur le canvas, `grid="12 100 20"` (colonnes, marge, gouttière) et `baseline=8` pour les grilles de mise en page |
 | `frame` `box` | Conteneur ; **sans** `row`/`col`/`grid` c'est une pile superposée (ZStack) |
 | `row` `col` `grid` `stack` | Raccourcis de conteneurs auto layout |
-| `text` | Texte ; enfants inline : `<b>`, `<i>`, `<u>`, `<s>`, `<code>`, `<span …>`, `<br/>`, `<icon>` |
+| `text` | Texte ; enfants inline : `<b>`, `<i>`, `<u>`, `<s>`, `<code>`, `<span …>`, `<br/>`, `<icon>`. Sur un texte, `fill`/`color` = couleur du texte, `bg` = fond |
 | `icon name=heart` | 2 400 icônes Lucide (`mq icons cœur`) ; `size`, `color`, `stroke=1.5`, `fill=currentColor` |
 | `image src=…` | `gen:mountains/3`, `avatar:Nom`, `initials:Nom`, URL, `data:` ; `fit=cover|contain|fill` |
 | `rect` `ellipse` | Formes (`size=` pour un carré / cercle) |
@@ -78,7 +78,7 @@ C'est la source de vérité : l'éditeur visuel le lit et le réécrit, la CLI l
 | `color` | Couleur du texte (hérite) — un dégradé donne un texte dégradé |
 | `stroke` | `"1 $border"`, `"2 #000 outside dashed"` ; `stroke-t|b|l|r` pour un seul côté |
 | `radius` | `12`, `full`, `"16 16 0 0"` |
-| `shadow` | `xs sm md lg xl 2xl inner`, `"0 8 24 rgba(0,0,0,.2)"`, `glow(#f0f, 30)`, `soft(color, 12)` — combiner avec ` + ` |
+| `shadow` | élévations `e1…e5`, recettes `soft raised layered contact brutal inner inner-light`, `xs…2xl`, `tinted(#couleur, 30)` (ombre de la couleur du bouton), `halo(couleur, 40)` (élévation sur fond sombre), `glow(#f0f, 30)`, ou `"0 8 24 rgba(0,0,0,.2)"` ; combiner avec ` + ` |
 | `opacity` `blur` `bgblur` `blend` `grayscale` `brightness` `saturate` `hue` | Effets |
 | `rotate` `scale` `dx` `dy` `rotx` `roty` `perspective` `flipx` `origin` | Transformations |
 | `css="…"` | Échappatoire : CSS brut |
@@ -87,7 +87,7 @@ C'est la source de vérité : l'éditeur visuel le lit et le réécrit, la CLI l
 
 `font` (famille ou `$token`, `mono`, `serif`), `size`, `weight` (`400` ou `semibold`…), `lh` (≤4 = multiplicateur), `ls` (px ou `%`), `align` (sur un texte) / `talign`, `upper` `lower` `caps` `italic` `underline` `strike` `tabular` `nowrap` `balance` `truncate` `lines=2`.
 
-## Tokens, modes, styles
+## Tokens, modes, styles, fondations
 
 ```xml
 <project modes="light dark">
@@ -103,6 +103,9 @@ C'est la source de vérité : l'éditeur visuel le lit et le réécrit, la CLI l
 </styles>
 ```
 
+- `primary: ramp(#0F7B6C)` génère `$primary-50 … $primary-950` (rampe OKLCH ; la couleur de base garde sa place) ; `gray: neutrals($primary, 0.012)` génère des gris teintés.
+- Fonctions de couleur utilisables partout (valeurs et tokens) : `tint(c, 20)`, `shade(c, 30)`, `mix(a, b, 50)`, `alpha(c, 40)`. Dans une expression `{…}`, en plus : `onColor(fond)` renvoie le texte (blanc ou quasi noir) le plus lisible, `dollar('nom')` lit un token par son nom.
+- `<project typescale=ui|ios|material|web|tailwind>` crée les classes `t-display t-h1 … t-body t-caption` (tailles, interlignes, graisses de l'échelle choisie). Le lint compare toutes les tailles à cette échelle.
 - `class="card title"` applique des styles (les attributs de l'élément gagnent).
 - Préfixes conditionnels : `dark:fill=…` (mode), `md:cols=3` (largeur d'écran ≥ sm 640 / md 768 / lg 1024 / xl 1280), `hover:` `press:` `focus:` (états interactifs, avec transition auto).
 - Le kit fournit des tokens par défaut (`primary on-primary primary-soft bg surface surface-2 text muted border danger success warning radius`) ; le projet peut les redéfinir.
@@ -122,7 +125,13 @@ C'est la source de vérité : l'éditeur visuel le lit et le réécrit, la CLI l
 - Les props déclarées vont dans le scope du composant ; les autres attributs de l'instance (`w`, `grow`, `x`, `on:click`, `anim`, `name`…) s'appliquent à sa racine.
 - `<slot/>` insère les enfants de l'instance. Un texte seul comme enfant devient `label`.
 - Variantes = expressions sur les props (`fill={kind == 'ghost' ? …}`) ou `class="btn btn-{kind}"`.
-- Kit intégré (`mq kit`) : `Button IconButton Chip Badge Avatar Toggle Checkbox Radio Field SearchBar ListItem Card NavBar TabBar Segmented Progress Slider Skeleton Toast Stat Dots Rating Grabber Sheet Dialog`.
+- Kit intégré (`mq kit`) :
+  - Actions : `Button` (kind `primary secondary tonal outline ghost link danger`, size `sm md lg`, `state=hover|pressed|focus|disabled|loading`), `IconButton`, `FAB`.
+  - Saisie : `Field` (label, `optional`, `error`, `valid`, `hint`), `SearchBar`, `Select`, `Checkbox`, `Radio`, `Toggle`, `Slider`, `Segmented`.
+  - Navigation : `NavBar`, `TabBar`, `Tabs`, `Breadcrumbs`, `Pagination`, `Stepper`, `Dots`.
+  - Feedback : `Alert` (tone `info success warning error`), `Toast`, `Snackbar`, `Tooltip`, `Progress`, `Skeleton`, `EmptyState`.
+  - Menus et dialogues : `Menu` + `MenuItem` (icône, `shortcut`, `submenu`, `danger`, `selected`, `disabled`), `Dialog`, `ConfirmDialog`, `Sheet`, `Grabber`, `Accordion`.
+  - Contenu : `Card`, `ListItem`, `Avatar`, `AvatarGroup`, `Badge`, `Chip`, `Stat`, `Rating`, `Testimonial`, `SocialProof`, `OrDivider`.
 
 ## Données, boucles, conditions
 

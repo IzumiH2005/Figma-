@@ -25,6 +25,7 @@ export class RightPanel {
     this.body = h('div.pbody');
     this.root.appendChild(this.body);
     const nodes = app.selNodes;
+    if (this.tab !== 'lint' && this.hooks.setMarkers) this.hooks.setMarkers([]);
     if (this.tab === 'lint') this.lint();
     else if (!nodes.length) this.empty();
     else if (this.tab === 'design') this.design(nodes);
@@ -147,8 +148,93 @@ export class RightPanel {
     if (n.tag === 'icon') b.appendChild(sec('Icône', h('div.prow', null, h('label', null, 'Nom'), iconPicker(a.name || '', (v) => set('name', v))), h('div.grid2', null, num('Taille', a.size || 20, (v) => set('size', v)), num('Trait', a.stroke || 2, (v) => set('stroke', v === 2 ? null : v))), h('div.prow', null, h('label', null, 'Couleur'), colorField(app, a.color, (v) => set('color', v), 'color', true)), h('div.prow', null, h('label', null, 'Remplie'), toggle(!!a.fill, (v) => set('fill', v ? 'currentColor' : null)))));
     if (n.tag === 'image') b.appendChild(sec('Image', h('div.prow', null, h('label', null, 'Source'), input('src', a.src || '', (v) => set('src', v), { placeholder: 'gen:mountains/3, avatar:Nom, url, data:', mono: true })), h('div.chips', null, MQ.SCENE_NAMES.slice(0, 12).map((s) => h('button.chip', { onclick: () => set('src', `gen:${s}/${Math.floor(Math.random() * 99)}`) }, s))), h('div.prow', null, h('label', null, 'Ajustement'), select([['', 'Couvrir'], ['contain', 'Contenir'], ['fill', 'Étirer']], a.fit || '', (v) => set('fit', v || null)))));
 
+    const alignSec = this.alignSection(nodes);
+    if (alignSec) b.insertBefore(alignSec, b.children[1] || null);
+    if (!multi && (isContainer(n) || n.tag === 'screen')) { b.appendChild(this.colorsSection(n)); b.appendChild(this.typeSection(n)); }
     // raw attributes
     if (!multi) b.appendChild(this.attrTable(n));
+  }
+
+  // ------------------------------------------------------------ align / distribute (absolute & top-level items)
+  alignSection(nodes) {
+    const app = this.app;
+    const items = nodes.map((n) => {
+      const top = app.page && app.page.children.includes(n);
+      const el = top ? this.hooks.itemEl(n.id) : this.hooks.elOf(n.id);
+      if (!el) return null;
+      const abs = top || getComputedStyle(el).position === 'absolute';
+      if (!abs) return null;
+      const z = app.zoom; const r = el.getBoundingClientRect();
+      return { n, el, top, x: top ? parseFloat(el.style.left) || 0 : (+n.attrs.x || el.offsetLeft), y: top ? parseFloat(el.style.top) || 0 : (+n.attrs.y || el.offsetTop), w: r.width / z, h: r.height / z, pw: top ? 0 : (el.offsetParent || el.parentElement).clientWidth, ph: top ? 0 : (el.offsetParent || el.parentElement).clientHeight };
+    }).filter(Boolean);
+    if (!items.length || (nodes.length === 1 && items[0].top)) return null;
+    const single = items.length === 1;
+    const apply = (fn) => app.change(() => { for (const it of items) { const p = fn(it); for (const k of ['right', 'bottom', 'place', 'inset']) delete it.n.attrs[k]; if (p.x !== undefined) it.n.attrs.x = String(Math.round(p.x)); if (p.y !== undefined) it.n.attrs.y = String(Math.round(p.y)); } });
+    const minX = single ? 0 : Math.min(...items.map((i) => i.x)), maxX = single ? items[0].pw : Math.max(...items.map((i) => i.x + i.w));
+    const minY = single ? 0 : Math.min(...items.map((i) => i.y)), maxY = single ? items[0].ph : Math.max(...items.map((i) => i.y + i.h));
+    const btn = (ic, title, fn) => h('button', { title, onclick: fn }, icon(ic, 15));
+    const distribute = (axis) => {
+      const s = [...items].sort((a, b) => a[axis] - b[axis]); const size = axis === 'x' ? 'w' : 'h';
+      const total = s.reduce((t, i) => t + i[size], 0); const span = (axis === 'x' ? maxX - minX : maxY - minY) - total; const gap = span / Math.max(1, s.length - 1);
+      let cur = axis === 'x' ? minX : minY; const pos = new Map(); for (const i of s) { pos.set(i, cur); cur += i[size] + gap; }
+      apply((i) => (axis === 'x' ? { x: pos.get(i) } : { y: pos.get(i) }));
+    };
+    const tidy = () => {
+      const s = [...items].sort((a, b) => a.y - b.y || a.x - b.x); const cols = Math.ceil(Math.sqrt(s.length)); const gap = 24; const cw = Math.max(...s.map((i) => i.w)), ch = Math.max(...s.map((i) => i.h));
+      const pos = new Map(); s.forEach((i, k) => pos.set(i, { x: minX + (k % cols) * (cw + gap), y: minY + Math.floor(k / cols) * (ch + gap) })); apply((i) => pos.get(i));
+    };
+    return sec(single ? 'Aligner dans le parent' : `Aligner ${items.length} éléments`, h('div.alignbar', null,
+      btn('align-start-vertical', 'Aligner à gauche', () => apply(() => ({ x: minX }))),
+      btn('align-center-vertical', 'Centrer horizontalement', () => apply((i) => ({ x: (minX + maxX) / 2 - i.w / 2 }))),
+      btn('align-end-vertical', 'Aligner à droite', () => apply((i) => ({ x: maxX - i.w }))),
+      btn('align-start-horizontal', 'Aligner en haut', () => apply(() => ({ y: minY }))),
+      btn('align-center-horizontal', 'Centrer verticalement', () => apply((i) => ({ y: (minY + maxY) / 2 - i.h / 2 }))),
+      btn('align-end-horizontal', 'Aligner en bas', () => apply((i) => ({ y: maxY - i.h }))),
+      !single ? btn('align-horizontal-distribute-center', 'Répartir horizontalement', () => distribute('x')) : null,
+      !single ? btn('align-vertical-distribute-center', 'Répartir verticalement', () => distribute('y')) : null,
+      !single ? btn('layout-grid', 'Ranger en grille (tidy up)', tidy) : null));
+  }
+
+  // ------------------------------------------------------------ selection colors (Figma « Selection colors » + tokens)
+  colorsSection(n) {
+    const app = this.app; const p = app.project;
+    const KEYS = ['fill', 'bg', 'color', 'stroke', 'hover:fill', 'press:fill', 'highlight'];
+    const uses = new Map();
+    const walk = (x) => { for (const k of KEYS) { const v = x.attrs && x.attrs[k]; if (typeof v !== 'string' || v.includes('{')) continue; const m = v.match(/\$[\w\-.]+(\/\d+)?|#[0-9a-fA-F]{3,8}\b|rgba?\([^)]*\)/g) || []; for (const c of m) { if (!uses.has(c)) uses.set(c, []); uses.get(c).push([x, k]); } } (x.children || []).forEach(walk); };
+    walk(n);
+    if (!uses.size) return sec('Couleurs de la sélection', h('div.hint', null, 'Aucune couleur définie directement ici.'));
+    const tokenColors = Object.keys(p.tokens).map((k) => [k, MQ.parseColor(String(p.token(k, app.mode)))]).filter(([, c]) => c && c[3] >= 0.99);
+    const replaceAll = (from, to) => app.change(() => { for (const [x, k] of uses.get(from)) x.attrs[k] = x.attrs[k].split(from).join(to); });
+    const rows = [...uses.entries()].sort((a, b) => b[1].length - a[1].length).map(([c, list]) => {
+      const isTok = c.startsWith('$');
+      const resolved = isTok ? p.token(c.slice(1).split('/')[0], app.mode) : c;
+      const rc = MQ.parseColor(String(resolved || ''));
+      let near = null;
+      if (!isTok && rc) for (const [k, tc] of tokenColors) { const d = MQ.Color.deltaE(rc, tc); if (d < 3 && (!near || d < near.d)) near = { k, d }; }
+      const pick = h('input', { type: 'color', class: 'hiddenpick' });
+      if (rc) pick.value = MQ.Color.toHex(rc).slice(0, 7).toLowerCase();
+      pick.addEventListener('change', () => replaceAll(c, pick.value.toUpperCase()));
+      return h('div.selcolor', null,
+        h('span.swatch', { style: { background: rc ? MQ.Color.toCss(rc) : '#ccc' }, title: 'Remplacer partout', onclick: () => pick.click() }), pick,
+        h('span.scval' + (isTok ? '.tok' : ''), null, c), h('span.sccount', null, '×' + list.length),
+        !isTok && near ? h('button.chip', { title: `Remplacer par $${near.k}`, onclick: () => replaceAll(c, '$' + near.k) }, '→ $' + near.k) : null,
+        !isTok && !near ? h('button.chip', { title: 'Créer un token et l\'utiliser', onclick: async () => { const name = await ask('Nom du nouveau token', 'accent', `Remplacera ${c} (${list.length} usage(s)) par $nom`); if (!name) return; app.change(() => { const top = p.rootNode ? p.rootNode.children : p.nodes; let tok = top.find((t) => t.tag === 'tokens'); if (!tok) { tok = { id: MQ.newId(), tag: 'tokens', attrs: {}, children: [], raw: '' }; top.unshift(tok); } tok.raw = (tok.raw || '').replace(/\s*$/, '') + `\n${name}: ${c}\n`; for (const [x, k] of list) x.attrs[k] = x.attrs[k].split(c).join('$' + name); }); } }, '+ token') : null);
+    });
+    return sec('Couleurs de la sélection', ...rows, h('div.hint', null, 'Clique une pastille pour remplacer la couleur partout dans la sélection. Les couleurs codées en dur proches d\'un token peuvent y être rattachées.'));
+  }
+
+  typeSection(n) {
+    const app = this.app;
+    const uses = new Map();
+    const walk = (x) => { const v = x.attrs && x.attrs.size; if (x.tag !== 'icon' && x.tag !== 'ellipse' && x.tag !== 'rect' && typeof v === 'string' && /^\d+(\.\d+)?$/.test(v) && !/^[A-Z]/.test(x.tag)) { if (!uses.has(v)) uses.set(v, []); uses.get(v).push(x); } (x.children || []).forEach(walk); };
+    walk(n);
+    if (!uses.size) return h('span');
+    const scale = MQ.TYPESCALES[app.project.typescale] || MQ.TYPESCALES.ui;
+    const inScale = new Set(Object.values(scale).map((x) => String(x[0])));
+    const rows = [...uses.entries()].sort((a, b) => +b[0] - +a[0]).map(([v, list]) => h('div.selcolor', null,
+      h('span.tsize' + (inScale.has(v) ? '' : '.off'), { title: inScale.has(v) ? 'Dans l\'échelle' : 'Hors échelle' }, v), h('span.scval', null, Object.entries(scale).filter(([, s]) => String(s[0]) === v).map(([k]) => 't-' + k).join(', ') || 'hors échelle'), h('span.sccount', null, '×' + list.length),
+      h('button.chip', { onclick: async () => { const nv = await ask(`Remplacer la taille ${v}`, v, `Échelle « ${app.project.typescale} » : ${[...inScale].sort((a, b) => a - b).join(', ')}`); if (nv && nv !== v) app.change(() => { for (const x of list) x.attrs.size = nv; }); } }, 'Remplacer')));
+    return sec(`Typographie de la sélection (${uses.size} tailles)`, ...rows);
   }
 
   attrTable(n) {
@@ -270,12 +356,27 @@ easings : ${EASES.join(' ')}`)));
   // ------------------------------------------------------------ lint
   lint() {
     const app = this.app; const b = this.body;
-    const issues = this.hooks.runLint();
-    this.lintCount = issues.filter((i) => i.level !== 'info').length;
-    b.appendChild(h('div.pad', null, h('button.btn', { onclick: () => this.render() }, icon('refresh-cw', 13), 'Relancer l\'analyse')));
-    if (!issues.length) { b.appendChild(h('div.okmsg', null, icon('check-circle-2', 16), 'Aucun problème détecté sur cette page.')); return; }
+    const all = this.hooks.runLint();
+    this.lintCount = all.filter((i) => i.level !== 'info').length;
+    this.hooks.setMarkers(all);
+    const sc = MQ.scoreIssues(all);
+    const ring = (v) => { const c = v >= 90 ? 'var(--ui-ok)' : v >= 75 ? 'var(--ui-warn)' : 'var(--ui-danger)'; return h('div.scorering', { style: { background: `conic-gradient(${c} ${v * 3.6}deg, var(--ui-line) 0)` } }, h('span', null, v)); };
+    const cats = Object.entries(sc.categories);
+    b.appendChild(h('div.scorebox', null, ring(sc.score), h('div.scoreinfo', null, h('b', null, 'Hygiène de la page'), h('span.muted', null, `${all.filter((i) => i.level === 'error').length} erreur(s) · ${all.filter((i) => i.level === 'warn').length} avertissement(s) · ${all.filter((i) => i.level === 'info').length} suggestion(s)`))));
+    b.appendChild(h('div.catbars', null, cats.map(([k, c]) => h('button.catbar' + (this.lintCat === k ? '.on' : ''), { onclick: () => { this.lintCat = this.lintCat === k ? null : k; this.render(); } }, h('span.cname', null, c.name), h('span.cbar', null, h('i', { style: { width: c.score + '%', background: c.score >= 90 ? 'var(--ui-ok)' : c.score >= 75 ? 'var(--ui-warn)' : 'var(--ui-danger)' } })), h('span.cval', null, c.count ? String(c.count) : '✓')))));
+    const issues = this.lintCat ? all.filter((i) => (i.cat || 'ux') === this.lintCat) : all;
+    const fixable = issues.filter((i) => i.fix);
+    b.appendChild(h('div.pad', null,
+      h('button.btn', { onclick: () => this.render() }, icon('refresh-cw', 13), 'Relancer'),
+      fixable.length ? h('button.btn.primary', { onclick: () => { app.change(() => MQ.applyFixes(app.project, fixable)); toast(`${fixable.length} correction(s) appliquée(s)`); } }, icon('wand-sparkles', 13), `Tout corriger (${fixable.length})`) : null,
+      h('button.btn', { onclick: () => { this.showInfo = !this.showInfo; this.render(); } }, icon(this.showInfo ? 'eye-off' : 'eye', 13), this.showInfo ? 'Masquer les suggestions' : 'Voir les suggestions')));
+    const shown = this.showInfo ? issues : issues.filter((i) => i.level !== 'info');
+    if (!shown.length) { b.appendChild(h('div.okmsg', null, icon('check-circle-2', 16), issues.length ? `Aucune erreur. ${issues.length} suggestion(s) mineure(s) masquée(s).` : 'Aucun problème détecté.')); return; }
     const ic = { error: 'circle-x', warn: 'triangle-alert', info: 'info' };
-    for (const i of issues) b.appendChild(h('div.issue.' + i.level, { onclick: () => { if (i.id && app.node(i.id)) { app.select(i.id); this.hooks.focus(i.id); } } }, icon(ic[i.level], 14), h('div', null, h('div.imsg', null, i.msg), h('div.imeta', null, `${i.code}${i.screen ? ' · ' + i.screen : ''}`))));
+    const order = { error: 0, warn: 1, info: 2 };
+    for (const i of [...shown].sort((x, y) => order[x.level] - order[y.level])) b.appendChild(h('div.issue.' + i.level, { onclick: () => { if (i.id && app.node(i.id)) { app.select(i.id); this.hooks.focus(i.id); } } }, icon(ic[i.level], 14),
+      h('div.ibody2', null, h('div.imsg', null, i.msg), h('div.imeta', null, `${MQ.CATEGORIES[i.cat] || ''} · ${i.code}${i.screen ? ' · ' + i.screen : ''}`)),
+      i.fix ? h('button.btn.fixbtn', { title: 'Appliquer la correction', onclick: (e) => { e.stopPropagation(); app.change(() => MQ.applyFixes(app.project, [i])); } }, icon('wand-sparkles', 12), 'Corriger') : null));
   }
 }
 

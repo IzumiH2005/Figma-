@@ -16,12 +16,16 @@ Playwright et Chromium sont préinstallés dans l'environnement ; ffmpeg sert po
 
 1. **Écrire** le `.mq` (partir d'un exemple de `examples/` ou du squelette de `docs/LANGUAGE.md`).
 2. **Vérifier sans pixels** : `node cli/mq.js inspect f.mq -s Écran --depth 4` affiche l'arbre de layout calculé (boîtes `[x,y w×h]`, ⚠ débordements, ▶ zones interactives).
-3. **Linter** : `node cli/mq.js lint f.mq` (contraste WCAG, zones tactiles < 44 px, textes trop petits ou débordants, liens cassés, écrans inaccessibles, icônes et composants inconnus).
+3. **Auditer et corriger** : `node cli/mq.js audit f.mq` donne un score d'hygiène par catégorie. `node cli/mq.js lint f.mq --fix` applique les corrections sûres par patch chirurgical du source (grille 4/8, échelle typo, tokens, `kind=danger`…). `--only contrast,spacing` filtre par règle ou par catégorie. Règles détaillées : `docs/DESIGN-RULES.md`. **Ne livre rien sous 95/100 ou avec une erreur.**
 4. **Regarder** : `node cli/mq.js render f.mq -s Écran --frame -o out` (PNG avec cadre d'appareil), ou `board` pour tout le canvas. Lis le PNG avec l'outil Read.
 5. **Animer** : `node cli/mq.js video f.mq --flow demo -o out/demo.mp4` (ajoute `--gif` si besoin) ; `anim -s Écran` pour les animations d'entrée seules.
 6. **Livrer** : `node cli/mq.js build f.mq -o out/maquette.html`, puis publie ce fichier en artifact ; envoie PNG et MP4 avec SendUserFile.
 
 ## Règles de conception utiles
+
+- Fondations d'abord : `primary: ramp(#hex)`, `gray: neutrals($primary)`, `typescale=…` puis `class=t-h1` / `t-body`… plutôt que des tailles libres ; espacements dans 4 · 8 · 12 · 16 · 24 · 32 · 48 · 64.
+- Un seul `Button` primaire par vue ; verbes d'action ; `kind=danger` et `ConfirmDialog` pour le destructif ; formulaires avec `Field label=… optional error=…`.
+- Pour lire un texte sur une couleur arbitraire : `color={onColor($fond)}`. Pour les variations : `shade($primary, 10)` au survol, `alpha($primary, 12)` pour un fond doux.
 
 - Nomme (`name=`) les éléments qui doivent se transformer entre deux écrans ou deux états : c'est la clé du smart animate.
 - Un écran mobile : `device=iphone-16 statusbar homebar pt=safe` ; un `NavBar` du kit gère déjà `pt=safe`.

@@ -1,0 +1,413 @@
+// Design hygiene linter — rules distilled from UI design references (8-pt grid, WCAG, HIG/Material,
+// "How to Design Better UI Components"). Every issue may carry a `fix` the editor/CLI can apply.
+import { parseColor } from './project.js';
+import { TYPESCALES } from './project.js';
+import { contrast, deltaE, toOklch, hueDistance, mix, toHex } from './color.js';
+import { patchSource, patchStyle } from './parse.js';
+
+export const CATEGORIES = { a11y: 'Accessibilité', spacing: 'Espacement & grille', type: 'Typographie', color: 'Couleur', ux: 'Composants & UX', proto: 'Prototype' };
+const CAT = {
+  contrast: 'a11y', 'contrast-ui': 'a11y', 'tap-target': 'a11y', 'tiny-text': 'a11y', 'body-size': 'a11y', 'input-label': 'a11y', 'link-style': 'a11y',
+  'off-grid': 'spacing', 'edge-margin': 'spacing', crowded: 'spacing', bounds: 'spacing', overflow: 'spacing',
+  'type-scale': 'type', 'type-count': 'type', 'line-length': 'type', 'caps-long': 'type',
+  hardcoded: 'color', 'pure-color': 'color', 'gradient-muddy': 'color', 'color-count': 'color', 'shadow-light': 'color',
+  'multi-primary': 'ux', 'vague-label': 'ux', destructive: 'ux', asterisk: 'ux', 'thumb-zone': 'ux', 'card-height': 'ux', placeholder: 'ux',
+  'broken-link': 'proto', unreachable: 'proto', 'overlay-escape': 'proto', 'smart-keys': 'proto', render: 'proto',
+};
+
+function rel(el, root) {
+  const r = el.getBoundingClientRect(), R = root.getBoundingClientRect();
+  const s = R.width / (root.offsetWidth || R.width) || 1;
+  return { x: (r.left - R.left) / s, y: (r.top - R.top) / s, w: r.width / s, h: r.height / s };
+}
+function insideHScroll(el, root) {
+  let n = el.parentElement;
+  while (n && n !== root) { const cs = getComputedStyle(n); if (cs.overflowX === 'auto' || cs.overflowX === 'scroll') return true; n = n.parentElement; }
+  return false;
+}
+function blend(top, bottom) { const a = top[3]; return [top[0] * a + bottom[0] * (1 - a), top[1] * a + bottom[1] * (1 - a), top[2] * a + bottom[2] * (1 - a), 1]; }
+export function effectiveBg(el, root, skipSelf = false) {
+  const stack = [];
+  let n = skipSelf ? el.parentElement : el;
+  while (n) {
+    const cs = getComputedStyle(n);
+    if (cs.backgroundImage && cs.backgroundImage !== 'none' && !cs.backgroundImage.startsWith('url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'220\'')) return null;
+    const c = parseColor(cs.backgroundColor);
+    if (c && c[3] > 0) { stack.push(c); if (c[3] >= 0.99) break; }
+    if (n === root) break;
+    n = n.parentElement;
+  }
+  let bg = [255, 255, 255, 1];
+  if (stack.length && stack[stack.length - 1][3] >= 0.99) bg = stack.pop();
+  while (stack.length) bg = blend(stack.pop(), bg);
+  return bg;
+}
+const ownerNode = (el, project) => { let n = el; while (n && !(n.dataset && n.dataset.id)) n = n.parentElement; return n ? project.byId.get(n.dataset.id) : null; };
+const label = (el) => el.dataset.key || el.dataset.comp || el.dataset.tag || 'élément';
+const short = (t, n = 32) => { t = (t || '').trim().replace(/\s+/g, ' '); return t.length > n ? t.slice(0, n - 1) + '…' : t; };
+
+const VAGUE = /^(cliquez ici|clique ici|click here|ici|here|ok|oui|non|yes|no|submit|go|lien|link|plus|more)$/i;
+const DESTRUCTIVE = /\b(supprimer|effacer|delete|remove|retirer|désactiver|deactivate|résilier|annuler mon abonnement|vider)\b/i;
+
+// ------------------------------------------------------------------ per-screen (needs DOM)
+export function lintScreen(screenEl, project, screenNode) {
+  const issues = [];
+  const name = screenEl.dataset.screen;
+  const push = (level, code, msg, el, fix) => issues.push({ level, code, cat: CAT[code] || 'ux', screen: name, msg, id: el && el.dataset ? (el.dataset.id || (ownerNode(el, project) || {}).id) : el && el.id, key: el && el.dataset ? el.dataset.key : undefined, fix });
+  const W = screenEl.offsetWidth, H = screenEl.offsetHeight;
+  const dev = project.sizeOf(screenNode).device;
+  const kind = dev ? dev.kind : 'phone';
+  const touch = kind === 'phone' || kind === 'watch' || kind === 'tablet';
+  const minTap = !dev ? 44 : dev.punch ? 48 : kind === 'desktop' ? 32 : 44;
+  const visible = (el) => { const cs = getComputedStyle(el); return cs.display !== 'none' && cs.visibility !== 'hidden' && el.getClientRects().length > 0; };
+
+  // --- text
+  const sizes = new Map();
+  screenEl.querySelectorAll('[data-tag="text"]').forEach((el) => {
+    if (!visible(el) || !el.textContent.trim() || el.closest('.mq-statusbar')) return;
+    const cs = getComputedStyle(el);
+    if (cs.pointerEvents === 'none' && el.closest('[data-comp]')) return; // composant désactivé : exempté (WCAG 1.4.3)
+    const fs = parseFloat(cs.fontSize);
+    const txt = el.textContent.trim();
+    const t = short(txt);
+    sizes.set(Math.round(fs * 2) / 2, (sizes.get(Math.round(fs * 2) / 2) || 0) + 1);
+    if (fs < 11) push('warn', 'tiny-text', `Texte trop petit (${fs}px < 11) : « ${t} »`, el);
+    else if (touch && fs < 14 && txt.length > 80) push('info', 'body-size', `Texte courant à ${fs}px : vise 14–17px pour un paragraphe (« ${t} »)`, el);
+    const fg = parseColor(cs.color);
+    if (fg && fg[3] > 0.05 && cs.webkitTextFillColor !== 'rgba(0, 0, 0, 0)' && cs.color !== 'rgba(0, 0, 0, 0)') {
+      const bg = effectiveBg(el, screenEl);
+      if (bg) {
+        let op = 1; let n = el; while (n && n !== screenEl) { op *= parseFloat(getComputedStyle(n).opacity) || 1; n = n.parentElement; }
+        const fgc = blend([fg[0], fg[1], fg[2], fg[3] * op], bg);
+        const ratio = contrast(fgc, bg);
+        const large = fs >= 24 || (fs >= 18.6 && +cs.fontWeight >= 700);
+        const min = large ? 3 : 4.5;
+        if (ratio < min) push(ratio < min - 1.3 ? 'error' : 'warn', 'contrast', `Contraste ${ratio.toFixed(2)}:1 < ${min}:1 (${large ? 'grand texte' : 'texte'}) pour « ${t} »`, el);
+      }
+    }
+    if (el.scrollWidth > el.clientWidth + 1 && cs.textOverflow !== 'ellipsis' && cs.whiteSpace === 'nowrap') push('warn', 'overflow', `Texte coupé : « ${t} » (truncate, w=fill ou texte plus court)`, el);
+    // line length: chars per line ≈ width / (0.5 · font-size)
+    const lines = Math.max(1, Math.round(el.offsetHeight / (parseFloat(cs.lineHeight) || fs * 1.4)));
+    const cpl = txt.length / lines;
+    if (txt.length > 120 && cpl > 85) {
+      const node = ownerNode(el, project);
+      push('warn', 'line-length', `Lignes trop longues (~${Math.round(cpl)} caractères) : vise 45–75 pour « ${t} »`, el, node && node.tag === 'text' ? { id: node.id, attrs: { maxw: String(Math.round(fs * 34 / 4) * 4) } } : undefined);
+    }
+    if (cs.textTransform === 'uppercase' && txt.length > 40) push('info', 'caps-long', `Texte long en capitales : difficile à lire (« ${t} »)`, el);
+    if (/\*\s*$/.test(txt) && txt.length < 40) push('info', 'asterisk', `« ${t} » : plutôt que l'astérisque, marque les champs facultatifs « (optionnel) »`, el);
+    if (/lorem ipsum/i.test(txt)) push('info', 'placeholder', `Faux texte « ${t} » : utilise du contenu réel`, el);
+  });
+  // type scale on this screen
+  const distinct = [...sizes.keys()].sort((a, b) => a - b);
+  const maxSizes = kind === 'desktop' || W >= 1024 ? 9 : 7;
+  if (distinct.length > maxSizes) push('warn', 'type-count', `${distinct.length} tailles de texte différentes (${distinct.join(', ')}) : vise ${maxSizes - 2}–${maxSizes} tailles issues d'une échelle`);
+  const near = [];
+  for (let i = 1; i < distinct.length; i++) if (distinct[i] - distinct[i - 1] <= 1 && distinct[i] < 30) near.push(`${distinct[i - 1]}/${distinct[i]}`);
+  if (near.length) push('info', 'type-scale', `Tailles presque identiques (${near.join(', ')}) : la hiérarchie devient floue, fusionne-les`);
+
+  // --- interactive elements
+  const hots = [...screenEl.querySelectorAll('[data-hot]')].filter(visible);
+  for (const el of hots) {
+    if (el.closest('.mq-statusbar')) continue;
+    const r = rel(el, screenEl);
+    if (r.w > 0 && (r.w < minTap - 4 || r.h < minTap - 4)) push('warn', 'tap-target', `Zone tactile ${Math.round(r.w)}×${Math.round(r.h)} < ${minTap}×${minTap} (${label(el)})`, el);
+    const cs = getComputedStyle(el);
+    const bgc = parseColor(cs.backgroundColor);
+    if (bgc && bgc[3] > 0.9 && cs.outlineStyle === 'none' && (cs.boxShadow === 'none' || !cs.boxShadow) && (el.dataset.comp === 'Button' || el.dataset.comp === 'IconButton')) {
+      const pbg = effectiveBg(el, screenEl, true);
+      if (pbg) { const ratio = contrast(bgc, pbg); if (ratio < 1.25 && el.dataset.kind !== 'secondary' && el.dataset.kind !== 'tonal') push('warn', 'contrast-ui', `Bouton qui se confond avec le fond (${ratio.toFixed(2)}:1) : contour, ombre ou fond plus contrasté (${label(el)})`, el); }
+    }
+  }
+  // buttons: count primaries, vague & destructive labels
+  const buttons = [...screenEl.querySelectorAll('[data-comp="Button"]')].filter(visible);
+  const primaries = buttons.filter((b) => !b.dataset.kind || b.dataset.kind === 'primary');
+  const repeated = new Set(primaries.map((b) => b.parentElement));
+  if (primaries.length > 2 && !(repeated.size === 1)) push('info', 'multi-primary', `${primaries.length} boutons primaires sur l'écran : un seul CTA principal, les autres en secondary / ghost / link`);
+  for (const b of buttons) {
+    const txt = short(b.textContent, 40);
+    if (VAGUE.test(txt.trim())) push('warn', 'vague-label', `Libellé vague « ${txt} » : utilise un verbe + résultat (« Supprimer le fichier », « Voir la démo »)`, b);
+    const node = ownerNode(b, project);
+    if (DESTRUCTIVE.test(txt) && b.dataset.kind !== 'danger' && b.dataset.kind !== 'link' && b.dataset.kind !== 'ghost' && b.dataset.kind !== 'secondary') push('warn', 'destructive', `Action destructrice « ${txt} » : style danger (rouge) et confirmation`, b, node && node.tag === 'Button' ? { id: node.id, attrs: { kind: 'danger' } } : undefined);
+  }
+  // inputs without label
+  screenEl.querySelectorAll('[data-comp="Field"]').forEach((f) => { if (visible(f) && f._props && !f._props.label) push('warn', 'input-label', `Champ sans label visible (placeholder « ${short(f._props.placeholder || '', 24)} » seul) : ajoute label=`, f); });
+  screenEl.querySelectorAll('input.mq-input, textarea.mq-input').forEach((inp) => {
+    if (!visible(inp) || inp.closest('[data-comp="Field"],[data-comp="SearchBar"]')) return;
+    let n = inp.parentElement, found = false;
+    for (let k = 0; k < 3 && n && !found; k++, n = n.parentElement) if ([...n.querySelectorAll('.mq-text')].some((t) => t.compareDocumentPosition(inp) & Node.DOCUMENT_POSITION_FOLLOWING)) found = true;
+    if (!found) push('warn', 'input-label', `Champ de saisie sans label (${inp.placeholder ? '« ' + short(inp.placeholder, 24) + ' »' : 'sans placeholder'})`, inp);
+  });
+  // thumb zone: forms on phones should keep the main CTA low
+  if (kind === 'phone' && screenEl.querySelector('input.mq-input') && primaries.length) {
+    const main = primaries[primaries.length - 1]; const r = rel(main, screenEl);
+    if (r.y + r.h / 2 < H * 0.45) push('info', 'thumb-zone', `CTA « ${short(main.textContent, 24)} » dans le haut de l'écran : place-le dans la zone du pouce (bas)`, main);
+  }
+
+  // --- spacing / bounds
+  screenEl.querySelectorAll('[data-id]').forEach((el) => {
+    if (el.closest('.mq-overlay') || !visible(el)) return;
+    const r = rel(el, screenEl);
+    if (r.w > 0 && r.x + r.w > W + 1 && !insideHScroll(el, screenEl)) push('warn', 'bounds', `Dépasse l'écran à droite de ${Math.round(r.x + r.w - W)}px (${label(el)})`, el);
+  });
+  if (kind === 'phone') {
+    const offenders = [...screenEl.querySelectorAll('[data-tag="text"]')].filter((el) => visible(el) && !insideHScroll(el, screenEl) && !el.closest('.mq-fixed') && !el.closest('.mq-statusbar')).filter((el) => { const r = rel(el, screenEl); return r.w > 0 && (r.x < 12 || r.x + r.w > W - 12) && el.textContent.trim().length > 2; });
+    if (offenders.length) push('warn', 'edge-margin', `${offenders.length} texte(s) à moins de 12px du bord (ex. « ${short(offenders[0].textContent, 24)} ») : marge latérale ≥ 16px`, offenders[0]);
+  }
+  // crowded interactive siblings
+  for (const el of hots) {
+    const nx = el.nextElementSibling;
+    if (!nx || !nx.dataset || !nx.dataset.hot || !visible(nx)) continue;
+    const a = rel(el, screenEl), b = rel(nx, screenEl);
+    const gap = Math.max(b.x - (a.x + a.w), b.y - (a.y + a.h));
+    if (gap >= 0 && gap < 8 && touch) push('info', 'crowded', `Éléments cliquables collés (${Math.round(gap)}px) : ≥ 8px pour éviter les erreurs de tap (${label(el)})`, el);
+  }
+  // repeated cards with unequal heights in a row/grid
+  const groups = new Map();
+  screenEl.querySelectorAll('[data-comp], [data-id]').forEach((el) => {
+    const p = el.parentElement; if (!p || !visible(el)) return;
+    const pcs = getComputedStyle(p);
+    const horiz = (pcs.display === 'flex' && pcs.flexDirection.startsWith('row')) || (pcs.display === 'grid' && pcs.gridTemplateColumns.split(' ').length > 1);
+    if (!horiz) return;
+    const k = (el.dataset.comp || el.dataset.id) + '@' + (p.dataset.id || '');
+    if (!groups.has(k)) groups.set(k, { p, els: [] });
+    groups.get(k).els.push(el);
+  });
+  for (const { p, els } of groups.values()) {
+    if (els.length < 2) continue;
+    const rows = new Map();
+    for (const e of els) { const r = rel(e, screenEl); const key = Math.round(r.y / 4); if (!rows.has(key)) rows.set(key, []); rows.get(key).push(r.h); }
+    for (const hs of rows.values()) {
+      if (hs.length < 2) continue;
+      const mn = Math.min(...hs), mx = Math.max(...hs);
+      if (mx - mn > 6 && mn > 60 && getComputedStyle(p).alignItems !== 'stretch' && getComputedStyle(p).alignItems !== 'normal') {
+        const pn = ownerNode(p, project);
+        push('info', 'card-height', `Cartes voisines de hauteurs inégales (${Math.round(mn)}–${Math.round(mx)}px) : aligne-les (align=stretch) ou limite le texte (lines=2)`, p, pn && pn.children ? { id: pn.id, attrs: { align: 'stretch' } } : undefined);
+        break;
+      }
+    }
+  }
+
+  // --- colors & shadows
+  const colors = new Set(); const shadowX = new Set();
+  screenEl.querySelectorAll('[data-tag]').forEach((el) => {
+    if (!visible(el)) return;
+    const cs = getComputedStyle(el);
+    for (const c of [cs.color, cs.backgroundColor]) { const p = parseColor(c); if (p && p[3] > 0.5) colors.add(toHex(p).slice(0, 7)); }
+    if (cs.boxShadow && cs.boxShadow !== 'none' && !cs.boxShadow.includes('inset')) {
+      for (const m of cs.boxShadow.matchAll(/\)\s+(-?[\d.]+)px\s+(-?[\d.]+)px\s+([\d.]+)px/g)) if (+m[3] > 0 && (Math.abs(+m[1]) > 0.5 || Math.abs(+m[2]) > 0.5)) shadowX.add(Math.sign(+m[1]) + ',' + Math.sign(+m[2]));
+    }
+  });
+  if (colors.size > 14) push('info', 'color-count', `${colors.size} couleurs distinctes à l'écran : règle 60-30-10 (une primaire, des neutres, un accent)`);
+  if (shadowX.size > 1) push('info', 'shadow-light', `Ombres orientées dans des directions différentes (${[...shadowX].join(' · ')}) : une seule source de lumière`);
+
+  const errs = (screenEl._mq && screenEl._mq.errors) || [];
+  [...new Set(errs)].forEach((e) => push('error', 'render', e));
+  return issues;
+}
+
+// ------------------------------------------------------------------ project-level (source only)
+const SPACE_KEYS = ['gap', 'gapx', 'gapy', 'p', 'px', 'py', 'pt', 'pb', 'pl', 'pr', 'm', 'mx', 'my', 'mt', 'mb', 'ml', 'mr'];
+const snap4 = (n) => (n <= 2 ? n : Math.round(n / 4) * 4);
+const COLOR_KEYS = ['fill', 'bg', 'color', 'stroke', 'highlight', 'hover:fill', 'hover:color', 'press:fill'];
+
+export function lintProject(project) {
+  const issues = [];
+  const push = (level, code, msg, extra = {}) => issues.push({ level, code, cat: CAT[code] || 'ux', msg, ...extra });
+  const names = new Set(project.screens().map((s) => s.attrs.name));
+  const comps = new Set(Object.keys(project.components));
+
+  // links graph
+  const compLinks = new Map();
+  const linkRe = /\b(go|overlay|swap|open)\s+("[^"]+"|[\w\-]+)/g;
+  const collect = (n, out, used, owner) => {
+    for (const [k, v] of Object.entries(n.attrs || {})) {
+      const val = String(v);
+      if (k.startsWith('on:') || k.startsWith('@')) {
+        let m; linkRe.lastIndex = 0;
+        while ((m = linkRe.exec(val))) {
+          const target = m[2].replace(/"/g, '');
+          if (target.includes('{')) continue;
+          out.add(target);
+          if (!names.has(target) && !(m[1] !== 'go' && comps.has(target))) push('error', 'broken-link', `Lien cassé : ${m[1]} ${target} (écran introuvable)`, { screen: owner, id: n.id });
+          if (m[1] !== 'go' && /\bnoclose\b|\bmodal\b/.test(val) && comps.has(target)) {
+            const src = JSON.stringify(project.components[target].node);
+            if (!/\bclose\b|\bback\b/.test(src)) push('warn', 'overlay-escape', `Overlay « ${target} » ouvert sans fermeture possible (noclose et aucun bouton close)`, { screen: owner, id: n.id });
+          }
+        }
+      } else for (const nm of names) if (val.includes(`'${nm}'`) || val.includes(`"${nm}"`) || val.includes(`:${nm}`)) out.add(nm);
+    }
+    if (/^[A-Z]/.test(n.tag)) used.add(n.tag);
+    (n.children || []).forEach((c) => collect(c, out, used, owner));
+  };
+  for (const c of Object.values(project.components)) { if (c.fromKit) continue; const out = new Set(), used = new Set(); collect(c.node, out, used, '◆ ' + c.name); compLinks.set(c.name, { out, used }); }
+  const graph = new Map();
+  for (const s of project.screens()) {
+    const out = new Set(), used = new Set(); collect(s, out, used, s.attrs.name); const seen = new Set();
+    const addComp = (nm) => { if (seen.has(nm)) return; seen.add(nm); const cl = compLinks.get(nm); if (!cl) return; cl.out.forEach((t) => out.add(t)); cl.used.forEach(addComp); };
+    used.forEach(addComp); graph.set(s.attrs.name, out);
+  }
+  const start = project.startScreen();
+  if (start && [...graph.values()].some((x) => x.size)) {
+    const seen = new Set([start.attrs.name]); const q = [start.attrs.name];
+    while (q.length) { const s = q.shift(); for (const t of graph.get(s) || []) if (!seen.has(t) && names.has(t)) { seen.add(t); q.push(t); } }
+    for (const n of names) if (!seen.has(n)) push('info', 'unreachable', `Écran « ${n} » inaccessible depuis « ${start.attrs.name} »`, { screen: n });
+  }
+
+  // smart animate without shared layer names
+  const keysOf = (n, acc = new Set()) => { if (n.attrs && (n.attrs.name || n.attrs.key) && n.tag !== 'screen' && n.tag !== 'icon') acc.add(String(n.attrs.name || n.attrs.key)); if (/^[A-Z]/.test(n.tag) && project.components[n.tag] && project.components[n.tag].root) keysOf(project.components[n.tag].root, acc); (n.children || []).forEach((c) => keysOf(c, acc)); return acc; };
+  for (const s of project.screens()) {
+    const walk = (n) => {
+      for (const [k, v] of Object.entries(n.attrs || {})) {
+        if (!k.startsWith('on:')) continue;
+        const m = /\bgo\s+("[^"]+"|[\w\-]+)[^;]*\bsmart\b/.exec(String(v));
+        if (!m) continue;
+        const t = project.screen(m[1].replace(/"/g, ''));
+        if (!t) continue;
+        const a = keysOf(s), b = keysOf(t);
+        if (![...a].some((x) => b.has(x))) push('warn', 'smart-keys', `Smart animate « ${s.attrs.name} → ${t.attrs.name} » sans calque commun : donne le même name= aux éléments à transformer`, { screen: s.attrs.name, id: n.id });
+      }
+      (n.children || []).forEach(walk);
+    };
+    walk(s);
+  }
+
+  // source-level hygiene: spacing grid, type scale, hardcoded colors, pure colors, muddy gradients
+  const scale = TYPESCALES[project.typescale] || TYPESCALES.ui;
+  const scaleSizes = [...new Set(Object.values(scale).map((x) => x[0]))].sort((a, b) => a - b);
+  const ownTokens = Object.keys(project.tokens).filter((k) => !project.tokens[k]._kit);
+  const tokenColors = [];
+  for (const k of Object.keys(project.tokens)) { const v = project.token(k, 0); const c = parseColor(String(v)); if (c && c[3] >= 0.99) tokenColors.push([k, c]); }
+  const nodeScreen = (id) => { const s = project.screenOf(id); return s ? s.attrs.name : undefined; };
+  const isLiteral = (v) => typeof v === 'string' && !v.includes('$') && !v.includes('{');
+  const visit = (n, inComp) => {
+    const a = n.attrs || {};
+    if (n.tag !== '#text' && n.tag !== 'tokens' && n.tag !== 'vars' && n.tag !== 'styles') {
+      // spacing on the 4/8 grid
+      for (const k of SPACE_KEYS) {
+        const v = a[k]; if (!isLiteral(v)) continue;
+        const parts = String(v).trim().split(/\s+/);
+        if (!parts.every((p) => /^-?\d+(\.\d+)?$/.test(p) || p === 'auto' || p.startsWith('safe'))) continue;
+        const bad = parts.filter((p) => /^\d/.test(p) && +p > 2 && +p % 4 !== 0);
+        if (bad.length) { const fixed = parts.map((p) => (/^\d/.test(p) ? String(snap4(+p)) : p)).join(' '); push('info', 'off-grid', `${k}=${v} hors grille 4/8 → ${fixed}`, { id: n.id, screen: nodeScreen(n.id), fix: { id: n.id, attrs: { [k]: fixed } } }); }
+      }
+      for (const k of ['w', 'h', 'radius']) {
+        const v = a[k]; if (!isLiteral(v) || !/^\d+$/.test(v)) continue;
+        if (n.tag === 'screen' || n.tag === 'icon' || +v <= 2) continue;
+        if (+v % 2 !== 0 && +v > 3) push('info', 'off-grid', `${k}=${v} impair : préfère un multiple de 4 → ${snap4(+v)}`, { id: n.id, screen: nodeScreen(n.id), fix: { id: n.id, attrs: { [k]: String(snap4(+v)) } } });
+      }
+      // font sizes off the type scale
+      if (isLiteral(a.size) && /^\d+(\.\d+)?$/.test(a.size) && !['icon', 'ellipse', 'rect', 'box', 'spacer'].includes(n.tag) && !/^[A-Z]/.test(n.tag)) {
+        const s = +a.size;
+        if (!scaleSizes.includes(s)) {
+          const nearest = scaleSizes.reduce((b, x) => (Math.abs(x - s) < Math.abs(b - s) ? x : b), scaleSizes[0]);
+          if (Math.abs(nearest - s) <= 2) push('info', 'type-scale', `size=${s} hors échelle « ${project.typescale} » → ${nearest} (ou class=t-…)`, { id: n.id, screen: nodeScreen(n.id), fix: { id: n.id, attrs: { size: String(nearest) } } });
+        }
+      }
+      // hard-coded colors
+      for (const k of COLOR_KEYS) {
+        const v = a[k]; if (!isLiteral(v)) continue;
+        const str = String(v).trim();
+        const c = parseColor(str.split(/\s+/).find((x) => parseColor(x)) || str);
+        if (!c) {
+          const stops = [...str.matchAll(/#[0-9a-f]{6}\b/gi)].map((m) => parseColor(m[0]));
+          if (/^(linear|radial)\(/.test(str) && stops.length >= 2) {
+            for (let i = 1; i < stops.length; i++) {
+              const [, c1] = toOklch(stops[i - 1]), [, c2] = toOklch(stops[i]);
+              if (c1 > 0.08 && c2 > 0.08 && hueDistance(stops[i - 1], stops[i]) > 110) { push('info', 'gradient-muddy', `Dégradé entre teintes éloignées (${toHex(stops[i - 1])} → ${toHex(stops[i])}) : choisis des teintes voisines ou ajoute un stop intermédiaire`, { id: n.id, screen: nodeScreen(n.id) }); break; }
+            }
+          }
+          continue;
+        }
+        if (c[3] < 0.99) continue;
+        const hex = toHex(c);
+        if (ownTokens.length > 3) {
+          let best = null;
+          for (const [tk, tc] of tokenColors) { const d = deltaE(c, tc); if (!best || d < best.d) best = { k: tk, d }; }
+          if (best && best.d < 2.5) { push('info', 'hardcoded', `${k}=${str} codé en dur : utilise $${best.k}`, { id: n.id, screen: nodeScreen(n.id), fix: { id: n.id, attrs: { [k]: str.replace(/#[0-9a-f]{3,8}\b|rgba?\([^)]*\)/i, '$' + best.k) } } }); continue; }
+        }
+        const [L, C] = toOklch(c);
+        if ((hex === '#000000' || hex === '#000') && (k === 'fill' || k === 'bg' || k === 'color') && n.tag !== 'text' && project.token('primary')) {
+          const pc = parseColor(project.token('primary'));
+          if (pc) push('info', 'pure-color', `${k}=${str} noir pur : teinte-le avec la primaire (${toHex(mix(c, pc, 0.06))})`, { id: n.id, screen: nodeScreen(n.id), fix: { id: n.id, attrs: { [k]: toHex(mix(c, pc, 0.06)) } } });
+        }
+      }
+    }
+    (n.children || []).forEach((ch) => visit(ch, inComp || n.tag === 'component'));
+  };
+  project.pages.forEach((p) => visit(p, false));
+  // classes in <styles>
+  for (const [name, a] of Object.entries(project.styles)) {
+    if (project.styleOrigin[name] !== 'project') continue;
+    for (const k of SPACE_KEYS) {
+      const v = a[k]; if (!isLiteral(v) || !/^\d+$/.test(String(v))) continue;
+      if (+v > 2 && +v % 4 !== 0) push('info', 'off-grid', `.${name} { ${k}=${v} } hors grille 4/8 → ${snap4(+v)}`, { fix: { style: name, attrs: { [k]: String(snap4(+v)) } } });
+    }
+    if (isLiteral(a.size) && /^\d+(\.\d+)?$/.test(a.size) && !scaleSizes.includes(+a.size)) {
+      const s = +a.size; const nearest = scaleSizes.reduce((b, x) => (Math.abs(x - s) < Math.abs(b - s) ? x : b), scaleSizes[0]);
+      if (Math.abs(nearest - s) <= 2) push('info', 'type-scale', `.${name} { size=${s} } hors échelle « ${project.typescale} » → ${nearest}`, { fix: { style: name, attrs: { size: String(nearest) } } });
+    }
+  }
+  Object.values(project.components).filter((c) => !c.fromKit).forEach((c) => visit(c.node, true));
+  return issues;
+}
+
+// ------------------------------------------------------------------ score & fixes
+const W = { error: 6, warn: 2.5, info: 0.6 };
+export function scoreIssues(issues) {
+  const byCode = new Map(); const cats = {};
+  for (const k of Object.keys(CATEGORIES)) cats[k] = { name: CATEGORIES[k], penalty: 0, count: 0 };
+  for (const i of issues) {
+    const cat = i.cat || CAT[i.code] || 'ux';
+    const p = W[i.level] || 0;
+    const used = byCode.get(i.code) || 0;
+    const add = Math.max(0, Math.min(p, 18 - used));
+    byCode.set(i.code, used + add);
+    cats[cat].penalty += add; cats[cat].count++;
+  }
+  const total = Object.values(cats).reduce((s, c) => s + c.penalty, 0);
+  for (const c of Object.values(cats)) c.score = Math.max(0, Math.round(100 - c.penalty * 2.5));
+  return { score: Math.max(0, Math.round(100 - total)), categories: cats };
+}
+
+// tree mode (editor): mutate nodes
+export function applyFixes(project, issues) {
+  let n = 0;
+  for (const i of issues) {
+    if (!i.fix) continue;
+    if (i.fix.style) {
+      const top = project.rootNode ? project.rootNode.children : project.nodes;
+      for (const st of top.filter((x) => x.tag === 'styles')) { const before = st.raw; st.raw = patchStyle(st.raw, i.fix.style, i.fix.attrs); if (st.raw !== before) { n++; break; } }
+      continue;
+    }
+    const node = project.byId.get(i.fix.id);
+    if (!node) continue;
+    for (const [k, v] of Object.entries(i.fix.attrs)) { if (v === null) delete node.attrs[k]; else node.attrs[k] = v; }
+    n++;
+  }
+  return n;
+}
+
+// source mode (CLI): surgical text patches, keeps comments & formatting
+export function fixSource(src, project, issues) {
+  const edits = [];
+  for (const i of issues) {
+    if (!i.fix) continue;
+    if (i.fix.style) { src = patchStyle(src, i.fix.style, i.fix.attrs); continue; }
+    const node = project.byId.get(i.fix.id);
+    if (node && node.pos !== undefined) edits.push({ pos: node.pos, attrs: i.fix.attrs });
+  }
+  // merge edits on the same element
+  const byPos = new Map();
+  for (const e of edits) byPos.set(e.pos, { pos: e.pos, attrs: { ...(byPos.get(e.pos) || { attrs: {} }).attrs, ...e.attrs } });
+  return { source: patchSource(src, [...byPos.values()]), count: edits.length };
+}
+
+export function formatIssues(issues, withScore = false) {
+  const icon = { error: '✖', warn: '⚠', info: 'ℹ' };
+  let out = issues.length ? issues.map((i) => `${icon[i.level] || '-'} [${i.code}]${i.screen ? ' ' + i.screen + ':' : ''} ${i.msg}${i.fix ? '  ⚙ corrigeable' : ''}`).join('\n') : '✓ Aucun problème détecté';
+  if (withScore) {
+    const s = scoreIssues(issues);
+    out += `\n\nScore d'hygiène : ${s.score}/100\n` + Object.values(s.categories).map((c) => `  ${c.name.padEnd(22)} ${String(c.score).padStart(3)}/100  (${c.count})`).join('\n');
+  }
+  return out;
+}
