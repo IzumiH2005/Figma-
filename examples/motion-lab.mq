@@ -33,7 +33,7 @@
   </keyframes>
 
   <component name="Lab" props="n='01' title='Principe' text='' source=''">
-    <col w=fill h=fill p=20 gap=12 radius=20 fill=$surface stroke="1 $border">
+    <col w=fill h=fill p=20 gap=12 radius=20 fill=$surface>
       <row gap=8><text size=12 mono weight=500 color=$accent>{n}</text><text size=16 weight=600 w=fill>{title}</text></row>
       <text size=14 color=$muted lh=1.45 lines=3>{text}</text>
       <col w=fill h=fill gap=8 justify=center>

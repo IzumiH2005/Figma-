@@ -237,6 +237,32 @@ export function lintScreen(screenEl, project, screenNode) {
     if (r > ideal + 4) push('info', 'nested-radius', `Rayons imbriqués : le parent a ${Math.round(R)}px et ${Math.round(P)}px de padding, l'enfant devrait avoir ≈ ${Math.round(ideal)}px (il a ${Math.round(r)}px)`, ch);
   });
 
+  // --- decorative hairlines: a border doubled by a shadow, or a light border on a surface whose fill already separates it
+  // (Refactoring UI: use fewer borders — background contrast, shadow or space separate better; avoid double edges)
+  const redundant = [];
+  screenEl.querySelectorAll('[data-id], [data-comp]').forEach((el) => {
+    if (!visible(el) || el.closest('.mq-statusbar')) return;
+    // Maquette draws stroke= as a CSS outline (inside/center/outside), stroke-t/b/l/r as borders
+    const cs = getComputedStyle(el); const useOutline = cs.outlineStyle === 'solid' && px(cs.outlineWidth) > 0;
+    const bw = useOutline ? px(cs.outlineWidth) : (cs.borderTopStyle === 'solid' && px(cs.borderLeftWidth) === px(cs.borderTopWidth) ? px(cs.borderTopWidth) : 0);
+    if (!bw || bw > 1.5) return;
+    const comp = el.dataset.comp || '';
+    if (/Field|Select|SearchBar|Input|Checkbox|Radio|Toggle|Textarea/i.test(comp) || el.querySelector('input,textarea') || el.offsetHeight <= 2 || el.offsetWidth <= 2) return; // functional strokes
+    const bc = parseColor(useOutline ? cs.outlineColor : cs.borderTopColor); const bg = parseColor(cs.backgroundColor); if (!bc || !bg || bg[3] < 0.5) return; // outline-only (ghost/outline button): the stroke IS the shape
+    const pbg = effectiveBg(el, screenEl, true); if (!pbg) return;
+    const node = el.dataset.id ? project.byId.get(el.dataset.id) : null;
+    const fix = node && node.attrs.stroke !== undefined && !/[{]/.test(String(node.attrs.stroke)) ? { id: node.id, attrs: { stroke: null } } : undefined;
+    const sh = cs.boxShadow && cs.boxShadow !== 'none' ? [...cs.boxShadow.matchAll(/(-?[\d.]+)px\s+(-?[\d.]+)px\s+([\d.]+)px/g)].some((m) => +m[3] >= 6) && !/inset/.test(cs.boxShadow) : false;
+    // a 'hairline' = a border whose perceived difference with the surface is small (blended if translucent)
+    const bcb = [bg[0] + (bc[0] - bg[0]) * bc[3], bg[1] + (bc[1] - bg[1]) * bc[3], bg[2] + (bc[2] - bg[2]) * bc[3], 1];
+    const subtle = deltaE(bcb, bg) < 16;
+    if (!subtle) return; // a strong, deliberate border (accent, selected state) is not decoration
+    if (sh) { push('info', 'edge-stroke', `Contour + ombre sur « ${label(el)} » : le bord est dessiné deux fois (aspect délavé). Garde l'ombre, retire le liseré`, el, fix); return; }
+    if (deltaE(bg, pbg) > 3) redundant.push({ el, fix });
+  });
+  if (redundant.length >= 3) push('warn', 'edge-stroke', `${redundant.length} surfaces ont un liseré clair alors que leur fond les détache déjà : retire-les (moins de bordures = interface plus calme ; garde-les pour un état, un champ ou une surface sans contraste)`, redundant[0].el, redundant[0].fix);
+  for (const r of redundant.slice(redundant.length >= 3 ? 1 : 0)) push('info', 'edge-stroke', `Liseré superflu sur « ${label(r.el)} » : le fond suffit à séparer la surface`, r.el, r.fix);
+
   // --- colors & shadows
   const colors = new Set(); const shadowX = new Set();
   screenEl.querySelectorAll('[data-tag]').forEach((el) => {

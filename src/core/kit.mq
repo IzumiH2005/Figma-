@@ -295,7 +295,7 @@
 </component>
 
 <component name="Menu" props="w=240" desc="Menu déroulant / contextuel : contient des MenuItem (et des divider)">
-  <col w={w} p=6 radius=12 fill=$bg stroke={'1 ' + $border} shadow=layered gap=2>
+  <col w={w} p=6 radius=12 fill=$bg shadow=layered gap=2>
     <slot/>
   </col>
 </component>

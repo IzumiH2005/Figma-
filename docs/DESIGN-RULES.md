@@ -78,3 +78,30 @@ Dans l'éditeur : onglet **Lint**, avec score, barres par catégorie, marqueurs 
 
 ## Score
 Pénalités : erreur 6, avertissement 2,5, suggestion 0,6, plafonnées par règle. Le score par catégorie s'affiche dans `mq audit` et dans l'onglet Lint. **Objectif avant livraison : ≥ 95 et zéro erreur.**
+
+## Bordures et liserés (`edge-stroke`)
+
+Un contour n'est pas un réflexe décoratif (Refactoring UI : *use fewer borders*). Pour séparer deux zones, essaie dans l'ordre :
+1. un fond contrasté ;
+2. plus d'espace ;
+3. une ombre (élévation).
+
+Garde un contour fin quand il porte une information :
+- un champ de saisie, un bouton outline ou ghost (le trait est la forme) ;
+- un état (sélectionné, erreur, focus) ;
+- une surface plate de même couleur que son parent (sans contraste de fond, le liseré la définit) ;
+- un séparateur de tableau.
+
+Le lint signale `edge-stroke` dans deux cas :
+- **contour + ombre** : le bord est dessiné deux fois, ce qui donne un aspect délavé, surtout en sombre. Garde l'ombre.
+- **liseré clair sur une surface dont le fond la détache déjà** : avertissement à partir de 3 occurrences sur un écran, correction automatique `--fix` (retrait du contour).
+
+En mode sombre, l'élévation vient de surfaces plus claires, pas de liserés. Un fin reflet intérieur (`inset 0 1px rgba(255,255,255,.06)`) se réserve aux surfaces « matière » (verre, cartes premium), avec parcimonie.
+
+## Anatomie des composants
+
+- Écart icône ↔ libellé ≈ la moitié de la taille du texte : 6–8 px pour un texte de 14–16 px (`icon-gap`).
+- Icône de 1 à 1,5× la taille du texte (`icon-size`).
+- Padding horizontal d'un bouton ≥ 12–16 px, environ deux fois le padding vertical (`button-padding`).
+- Rayons imbriqués : rayon intérieur = rayon extérieur − padding (`nested-radius`).
+- Toute surface cliquable réagit au survol ou à l'appui (`no-feedback`, sinon `motion=press`).

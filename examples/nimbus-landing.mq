@@ -49,7 +49,7 @@
   </component>
 
   <component name="AppMock" props="">
-    <col w=fill maxw=980 mx=auto radius=22 fill=$surface stroke="1 $border" shadow="0 40 80 -20 rgba(40,30,120,.25)" clip anim="fade-up 900 delay=350 expo">
+    <col w=fill maxw=980 mx=auto radius=22 fill=$surface shadow="0 40 80 -20 rgba(40,30,120,.25)" clip anim="fade-up 900 delay=350 expo">
       <row h=44 px=16 gap=8 stroke-b="1 $border">
         <ellipse size=11 fill=#FF5F57/><ellipse size=11 fill=#FEBC2E/><ellipse size=11 fill=#28C840/>
         <spacer/>
@@ -82,7 +82,7 @@
   </component>
 
   <component name="Feature" props="f={}">
-    <col gap=16 p=28 radius=22 fill=$surface stroke="1 $border" hover:shadow=lg hover:dy=-4 transition=250>
+    <col gap=16 p=28 radius=22 fill=$surface hover:shadow=lg hover:dy=-4 transition=250>
       <stack w=46 h=46 radius=14 fill=$primary-soft color=$primary center><icon name={f.icon} size=22/></stack>
       <text size=18 weight=600 ls=-0.3>{f.t}</text>
       <text color=$muted lh=1.55>{f.d}</text>
@@ -90,7 +90,7 @@
   </component>
 
   <component name="Plan" props="p={}">
-    <col gap=20 p=32 radius=26 w=fill fill={p.hl ? '#16151A' : $surface} color={p.hl ? '#F2F1F5' : $text} stroke={p.hl ? 'none' : '1 ' + $border} shadow={p.hl ? '0 30 60 -20 rgba(76,59,230,.45)' : 'none'}>
+    <col gap=20 p=32 radius=26 w=fill fill={p.hl ? '#16151A' : $surface} color={p.hl ? '#F2F1F5' : $text} shadow={p.hl ? '0 30 60 -20 rgba(76,59,230,.45)' : 'none'}>
       <row gap=auto>
         <text size=20 weight=600>{p.name}</text>
         <row if={p.hl} h=24 px=12 radius=full fill=#A99BFF color=$text size=12 weight=700><text>Populaire</text></row>
@@ -113,7 +113,7 @@
       <Nav/>
       <!-- hero -->
       <col class=container align=center gap=28 pt=56 md:pt=88 pb=64 stagger="90 fade-up 700 expo">
-        <row gap=8 h=34 px=8 pr=16 radius=full fill=$surface stroke="1 $border" size=12 weight=500>
+        <row gap=8 h=34 px=8 pr=16 radius=full fill=$surface size=12 weight=500>
           <Badge label=Nouveau/><text>Nimbus 2.0 · la planification IA est là</text>
         </row>
         <text class=display align=center maxw=900 balance>Votre semaine, <span italic color=$primary>parfaitement</span> orchestrée.</text>
@@ -152,7 +152,7 @@
             <text class=eyebrow>Tarifs</text>
             <text class=h2 align=center>Simple. Transparent.</text>
           </col>
-          <row p=4 radius=full fill=$surface stroke="1 $border" gap=4>
+          <row p=4 radius=full fill=$surface gap=4>
             <stack name=bill-m h=44 px=20 radius=full center fill={$yearly ? 'transparent' : $text} color={$yearly ? $muted : $bg} weight=600 on:click="set $yearly = false smart 350" cursor=pointer><text>Mensuel</text></stack>
             <row name=bill-y h=44 px=20 gap=8 radius=full fill={$yearly ? $text : 'transparent'} color={$yearly ? $bg : $muted} weight=600 on:click="set $yearly = true smart 350" cursor=pointer><text>Annuel</text><row h=22 px=8 radius=full fill=$accent color=#16151A size=12 weight=700><text>-20 %</text></row></row>
           </row>
@@ -165,7 +165,7 @@
       <col key=faq class=container maxw=820 py=64 md:py=96 gap=32>
         <text class=h2 align=center>Questions fréquentes</text>
         <col gap=12>
-          <col each={$faqs} as=f name={'faq-' + i} p=24 radius=18 fill=$surface stroke="1 $border" gap=12 cursor=pointer on:click="set $faq = $faq == i ? -1 : i smart 320">
+          <col each={$faqs} as=f name={'faq-' + i} p=24 radius=18 fill=$surface gap=12 cursor=pointer on:click="set $faq = $faq == i ? -1 : i smart 320">
             <row gap=16><text size=16 weight=600 w=fill>{f.q}</text><icon name={$faq == i ? 'minus' : 'plus'} size=20 color=$muted/></row>
             <text if={$faq == i} color=$muted lh=1.6>{f.a}</text>
           </col>

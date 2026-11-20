@@ -28,7 +28,7 @@
   </vars>
 
   <styles>
-    .card { col gap=16 p=24 radius=20 fill=$surface stroke="1 $border" }
+    .card { col gap=16 p=24 radius=20 fill=$surface }
     .eyebrow { size=12 weight=600 upper ls=1 color=$accent-text }
     .readout { font=$mono size=12 color=$muted }
   </styles>
@@ -39,7 +39,7 @@
       <stack name=face w={size} h={size} center>
         <shape kind=ellipse absolute x=0 y=0 w={size} h={size} start=135 sweep=270 ratio=0.84 fill=$surface-2/>
         <shape kind=ellipse name=knob-arc absolute x=0 y=0 w={size} h={size} start=135 sweep={max(1, value * 270)} ratio=0.84 fill=$primary/>
-        <stack name=knob-cap w={size * 0.72} h={size * 0.72} radius=full fill=$surface-2 stroke="1 $border" rotate={-135 + value * 270}>
+        <stack name=knob-cap w={size * 0.72} h={size * 0.72} radius=full fill=$surface-2 rotate={-135 + value * 270}>
           <frame absolute x={size * 0.36 - 2} y=8 w=4 h={size * 0.14} radius=full fill=$text/>
         </stack>
       </stack>
@@ -76,7 +76,7 @@
   <!-- 4 · Rig 2D : deux rigs du même groupe forment un pad XY -->
   <component name=XYPad props="x=0.5 y=0.5 size=176" desc="Pad 2D (deux rigs, group=pad)" rig:x="x 0..1 group=pad in=pad" rig:y="y 1..0 group=pad in=pad">
     <col gap=12>
-      <stack name=pad w={size} h={size} radius=16 fill=$surface-2 stroke="1 $border" clip>
+      <stack name=pad w={size} h={size} radius=16 fill=$surface-2 clip>
         <frame absolute x={x * size} y=0 w=1 h={size} fill=$border/>
         <frame absolute x=0 y={(1 - y) * size} w={size} h=1 fill=$border/>
         <ellipse name=pad-dot absolute x={x * size - 10} y={(1 - y) * size - 10} size=20 fill=$primary stroke="3 $on-primary"/>
@@ -115,7 +115,7 @@
 
   <!-- 8 · Slots nommés (Figma « slots ») : header et footer ont un contenu par défaut, remplaçable par l'instance -->
   <component name=Panel props="title='Titre' tone=default" desc="Carte à slots nommés (header, footer, contenu). tone: default|accent">
-    <col w=fill gap=16 p=24 radius=20 fill=$surface stroke={tone == 'accent' ? '1.5 ' + $primary : '1 ' + $border}>
+    <col w=fill gap=16 p=24 radius=20 fill=$surface stroke={tone == 'accent' ? '1.5 ' + $primary : 'none'}>
       <slot name=header><text size=18 weight=600>{title}</text></slot>
       <slot><text color=$muted size=14>Contenu vide</text></slot>
       <slot name=footer><text size=12 color=$muted>Aucune action</text></slot>

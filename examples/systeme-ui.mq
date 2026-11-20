@@ -201,7 +201,7 @@
           <grid cols=3 gap=24 w=fill align=stretch>
             <Testimonial quote="On a divisé par deux le temps passé en allers-retours avec les développeurs." name="Inès Kaci" role="Lead design, Hélios"/>
             <Testimonial quote="Les états des composants sont enfin documentés au même endroit." name="Malik Diallo" role="Développeur front"/>
-            <col gap=16 p=24 radius=20 fill=$surface stroke="1 $border">
+            <col gap=16 p=24 radius=20 fill=$surface>
               <Stat label="Taux de conversion" value="4,8 %" delta="+0,6 pt ce mois"/>
               <SocialProof/>
               <row gap=8 wrap><Chip label=Figma selected/><Chip label=Tokens/><Chip label=A11y icon=accessibility/><Badge label=Nouveau/></row>
