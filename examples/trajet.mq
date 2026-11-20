@@ -1,0 +1,89 @@
+<project name="Suivi de livraison — trajectoire" modes="light dark" typescale=material>
+  <!-- Trois outils réunis sur un même écran :
+       1. Trajectoire : le coursier suit le tracé « route » (along=route at={$progress} orient=90). Il glisse
+          le long de la courbe quand on fait défiler le curseur, et smart animate le fait voyager sur le tracé
+          plutôt qu'en ligne droite (bouton « Simuler »). Redessine la route à la souris : le coursier la suit.
+       2. keys() / remap() : une seule valeur ($progress) pilote plusieurs paliers (minutes restantes,
+          couleur de l'étape, opacité) au lieu de cascades de ternaires.
+       3. Shader interactif : la carte est une grille de points qui se bombe sous le doigt (pointer=lens),
+          la carte promo s'éclaire là où on la touche (pointer=glow). En prototype seulement. -->
+  <system brand=#0B57D0 accent=#E8710A neutral=cool radius=round density=comfortable elevation=soft motion=calm type="Roboto/Roboto"/>
+
+  <vars>
+    progress: 0.35
+  </vars>
+
+  <page name="Suivi">
+    <screen name="Suivi" device=pixel-9 start statusbar homebar fill=$bg>
+      <NavBar title="Commande n° 4821"/>
+      <col w=fill px=16 pt=8 pb=120 gap=16>
+        <!-- la carte : tracé + coursier, même repère (calques absolus, x/y du parent) -->
+        <stack name=carte w=fill h=280 radius=$card-radius fill=$info-100 clip
+               shader="grid shape=circle size=0.16 colors=#E9EEF6,#AFC0DA scale=20 pointer=lens reach=96 strength=1.2">
+          <vector name=route absolute x=40 y=40 w=300 h=200 fill=none stroke="6 $primary" cap=round opacity=0.9
+                  d="M0 200C40 200 30 120 90 110C150 100 140 40 200 40C250 40 260 0 300 0"/>
+          <frame name=depart absolute x=32 y=232 w=16 h=16 radius=full fill=$on-primary stroke="4 $primary"/>
+          <stack name=arrivee absolute x=320 y=20 w=40 h=40 radius=full fill=$accent-400 color={onColor($accent-400)} center>
+            <icon name=house size=20/>
+          </stack>
+          <stack name=coursier along=route at={$progress} orient=90 w=44 h=44 radius=full fill=$primary color=$on-primary center>
+            <icon name=navigation-2 size=20/>
+          </stack>
+        </stack>
+
+        <row w=fill gap=16 align=center>
+          <col w=fill gap=4>
+            <text class=t-title-sm>{$progress < 0.05 ? 'En préparation' : $progress < 0.99 ? 'En route' : 'Livré'}</text>
+            <text class=t-body-sm color=$text-2>Samir · vélo cargo</text>
+          </col>
+          <col gap=0 align=end>
+            <text class=t-h2 color={keys($progress, $primary, $primary, $success)}>{round(keys($progress, 24, 14, 6, 0))} min</text>
+            <text class=t-label color=$text-2>restantes</text>
+          </col>
+        </row>
+
+        <col w=fill gap=8>
+          <Slider name=curseur value={$progress} on:scrub="set $progress = {px}"/>
+          <row w=fill justify=between>
+            <text class=t-label color=$text-2>Restaurant</text>
+            <text class=t-label color=$text-2>Chez toi</text>
+          </row>
+        </col>
+
+        <!-- promo : s'éclaire sous le doigt -->
+        <row w=fill p=16 gap=16 align=center radius=$card-radius fill=$brand-800 color={onColor($brand-800)}
+             shader="mesh warp=0.3 speed=0.25 colors=#0B3D91,#0B57D0,#5E3BC2,#0A2A6B pointer=glow reach=120">
+          <stack w=48 h=48 center><icon name=gift size=28/></stack>
+          <col w=fill gap=2>
+            <text class=t-title-sm>-20 % sur la prochaine</text>
+            <text class=t-body-sm opacity=0.9>Touche la carte pour la faire briller.</text>
+          </col>
+        </row>
+      </col>
+
+      <row fixed place=bottom w=fill px=16 pt=12 pb=safe+16 gap=12 fill=$bg>
+        <Button label="Recommencer" kind=outline w=fill on:click="set $progress = 0 smart 900"/>
+        <Button label="Simuler" w=fill on:click="set $progress = 1 tween 2400 in-out"/>
+      </row>
+    </screen>
+  </page>
+
+  <flow name=demo>
+    start Suivi
+    wait 700
+    hover "depart"
+    wait 500
+    hover "route"
+    wait 500
+    hover "arrivee"
+    wait 700
+    hover "-20 % sur la prochaine"
+    wait 1000
+    hover "Touche la carte pour la faire briller."
+    wait 1000
+    click "Simuler"
+    wait 2800
+    click "Recommencer"
+    wait 1400
+  </flow>
+</project>

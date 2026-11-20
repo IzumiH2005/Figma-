@@ -219,6 +219,7 @@ Tout ce qui se dessine dans Figma (formes, plume, booléens, texte sur chemin) e
     - un `vector` de ce nom donne son tracé dans sa propre boîte ;
     - un **cadre** de ce nom fusionne ses tracés, chacun décalé de son `x`/`y` dans le cadre.
     Dessine donc chaque clé dans un cadre **de la taille du calque cible** (ici 96 × 40, posés sur la page à côté de l'écran) : la clé tombe exactement où la cible dessine, même après une édition qui recalcule la boîte du tracé. En édition de points d'une clé, tous les calques qui l'utilisent suivent **pendant** le geste. Un nom masqué par une variable locale (prop `content` d'un composant…) : mets-le entre guillemets.
+- **Trajectoire** (motion path) : `<stack name=coursier along=route at={$p} orient=90/>` pose le calque sur le vecteur `route` (le centre du calque sur le tracé, `at` de 0 à 1 ou `40%`). Le tracé est lu dans le repère du parent, `x`/`y` du vecteur compris : dessine la route et le mobile dans le même conteneur. `orient` : `auto` (suit la tangente), un angle de correction (`90` pour une icône qui pointe vers le haut) ou `false`. Smart animate fait **voyager** le calque le long de la courbe (et non en ligne droite) quand `at` change ; `anim="along 1200"` / `loop="along 4000"` le parcourt en entrée ou en boucle. Redessine la route à la souris : le calque suit. Modèle : `examples/trajet.mq`.
 - **Modificateurs de tracé (non destructifs)** :
   - `offset=10` grossit et `offset=-6` rétrécit la forme, avec des jonctions arrondies. `offset-smooth` lisse le résultat. Figma n'a pas cette fonction en natif.
   - `width-profile=taper|taper-start|taper-end|brush|ink|calligraphy|bulge|wedge|marker`, ou des points `"0:0.1 0.3:1 1:0.2"`, donne une épaisseur variable au contour (`stroke="14 $ink"`).
@@ -260,6 +261,7 @@ Tout ce qui se dessine dans Figma (formes, plume, booléens, texte sur chemin) e
 
   Alias : `dots`, `mosaic`, `glow`, `chromatic`, `chrome`, `gradient-map`, `contour`… Exemple : `fx="adjust contrast=20; halftone size=6 mode=cmyk; noise amount=0.08"`.
 - **Remplissages shader** (Figma Config 2026 : shader fills) : `shader="type k=v …"` peint un fond WebGL2 animable sous le contenu, découpé par `radius` et par le contour des vecteurs. Types : `mesh` (`warp cols grain`), `clouds` (`coverage softness layers drift`), `noise` (`type=value|perlin|voronoi layers contrast warp`), `wave` (`amplitude frequency thickness glow lines`), `caustics` (`intensity depth`), `nebula` (`travel stars density`), `moire` (`mode=rings|lines offset sharpness angle`), `concentric` (`cx cy period` en px, `steps twist`), `grid` (`shape=diamond|circle|box|triangle|hex|cross|ring layout=grid|brick|hex size rotate wave gradient`). Communs : `colors=#a,#b,#c scale= speed= phase= seed= opacity= blend=`. `speed=0` fige l'image ; sans WebGL, repli en dégradé.
+- **Shaders interactifs** : `pointer=lens|swirl|ripple|repel|glow reach=140 strength=1` fait réagir le shader au doigt ou à la souris en prototype : loupe qui bombe le motif, tourbillon, ondes, répulsion, ou halo de la dernière couleur. Le point suit le doigt avec un ressort et s'efface quand il quitte le calque. Exemple : `shader="grid shape=circle size=0.16 pointer=lens reach=96"`. Donne aussi un `fill` de base au calque : le lint de contraste ne voit pas le shader.
 - **Poignées d'effets** : quand un calque a `fx=` ou `shader=`, des pastilles roses apparaissent sur le canvas (centre de `lens`/`warp`/`vignette`, angle de `halftone`/`hatching`/`refract`/`metal`, taille de trame, position de `stretch`, centre/échelle/décalage des shaders). La souris les glisse ; le pilote aussi : `drive f.mq -e "select photo; rigs; drag rig halftone.angle by 30 0"`. L'inspecteur a une section **Effets avancés** : pile éditable (paramètres, réordonner, retirer, `+param`), ajout depuis la liste, presets (Risographie, Néon, Gravure, Rétro 1-bit, Verre cannelé, Chrome, Film) et réglages du shader.
 - **Groupes de masque** (Figma : Use as mask, Ctrl+Alt+M) : `<stack mask=first mask-type=alpha|vector|luminance>`. Le premier enfant masque les suivants. Un dégradé dans le masque alpha donne un fondu. En luminance, ce sont les zones claires qui révèlent.
 - **Pseudo-3D** : `tilt="20 -12"` (rotateX rotateY [rotateZ]), `perspective=900`, `skew="8 0"`, `depth=8` (extrusion de la vraie silhouette, `depth-color`, `depth-dir="1 1"`), `tilt=pointer` (suit le pointeur).
@@ -485,6 +487,12 @@ Les plugins Figma les plus utilisés existent ici en natif :
 
 Dans une boucle : `item` (ou `as=`), `i`, `first`, `last`.
 Expressions : littéraux, tableaux/objets, `+ - * / %`, comparaisons, `&& || ! ?? ? :`, accès `a.b` / `a[0]`.
+**Convertisseurs (à la Rive)** : une seule valeur pilote plusieurs sorties, sans cascade de ternaires.
+- `keys(t, a, b, c…)` : clés réparties de 0 à 1 (`keys($p, 24, 14, 6, 0)` → minutes restantes) ;
+- `remap(t, [0, 0.3, 1], [a, b, c], 'smooth')` : paliers explicites, courbe de segment `linear | smooth | in | out | step` (entre guillemets) ;
+- `lerp(a, b, u)`.
+Toutes interpolent des nombres, des **couleurs** (OKLab), des **tracés** (comme `pathmix`, clés nommées comprises), des tableaux et des objets ; le reste bascule à mi-chemin.
+
 Fonctions : `len min max round floor ceil abs clamp fixed money(n,'€') percent pad upper lower str num replace split trim join includes push without toggleIn sum slice filter find map first last range pick(i, a, b, c) date(offset) now()`.
 
 ## Prototype : interactions
@@ -540,6 +548,7 @@ Tout se manipule au doigt **et** à la souris (Pointer Events), avec un seuil de
 | `overlay Nom [center|bottom|top|left|right] [dim=.5] [blur=6] [noclose]` | ouvre un écran **ou un composant** en overlay |
 | `close` · `swap Nom` | fermer / remplacer l'overlay |
 | `set $v = expr [smart ms]` · `toggle $v` · `inc $v [n]` · `dec $v` | variables (re-rendu animé en smart par défaut) |
+| `set $v = expr tween ms [easing]` | **la variable elle-même voyage** (nombre, couleur, tracé, tableau, objet), image par image : tout ce qui en dépend suit (texte qui décompte, `keys()`, `along=`, `pathmix`). L'action suivante attend la fin |
 | `change k=v [smart ms easing]` · `inc k` · `dec k` (sans `$`) | dans un composant : modifie la prop de cette instance |
 | `if expr then action [else action]` · `if {expr} action` | conditionnelle |
 | `scroll clé` · `scroll top` | défilement doux vers un élément nommé |
@@ -563,7 +572,7 @@ Tout se manipule au doigt **et** à la souris (Pointer Events), avec un seuil de
 | `<keyframes name="x"> 0 { opacity=0 y=20 } 100 { opacity=1 y=0 } </keyframes>` | Animation custom (`opacity x y scale rotate blur fill color radius w h`). Une animation unique qui finit à `opacity=0` (éclat, confettis) garde sa dernière image ; `hold` force ce comportement (`anim="spark 640 hold"`) |
 
 Entrées : `fade fade-up fade-down fade-left fade-right scale-in zoom-in pop land stretch-in slide-up slide-down slide-left slide-right blur-in rotate-in flip-in drop reveal reveal-up reveal-down typewriter grow grow-up count` (`count` anime le nombre du texte de 0 à sa valeur ; `land` = chute, contact, écrasement à volume constant, rebond).
-Boucles : `moving-hold pulse breathe spin float bounce shake wiggle heartbeat ping blink sway shimmer orbit`. Accents (avec `play clé …`) : `squish jelly rubber shake wiggle`.
+Boucles : `moving-hold pulse breathe spin float bounce shake wiggle heartbeat ping blink sway shimmer orbit along` (`along` : parcourt le tracé de `along=`). Accents (avec `play clé …`) : `squish jelly rubber shake wiggle`.
 
 **Modificateurs** (cumulables, détail dans `docs/MOTION-RULES.md`) : `anticipate` / `antic=0.3` (pré‑mouvement opposé), `snap` (anticipation invisible), `overshoot` / `overshoot=0.2` (follow-through), `arc` / `arc=0.5` (trajectoire courbe), `hard` (accent avec rebond) ou `soft` (accent amorti), `dist=40` (amplitude du preset).
 **Cascade** : `stagger="60 fade-up 450 from=center drag=1.1"` (`from=start|end|center|edges|random`, `drag` = chaque élément suivant dure ×drag).

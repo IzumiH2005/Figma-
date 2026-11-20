@@ -100,13 +100,15 @@ export const PRESETS = {
   blink: () => [{ opacity: 1 }, { opacity: 0, offset: 0.5 }, { opacity: 1 }],
   sway: () => [{ rotate: '-3deg' }, { rotate: '3deg' }, { rotate: '-3deg' }],
   shimmer: () => [{ backgroundPosition: '-200% 0' }, { backgroundPosition: '200% 0' }],
+  // motion path (along=…): ride the whole curve, once (entrance) or in a loop
+  along: () => [{ offsetDistance: '0%' }, { offsetDistance: '100%' }],
   orbit: (d = 6) => [{ translate: T(d, 0) }, { translate: T(0, d) }, { translate: T(-d, 0) }, { translate: T(0, -d) }, { translate: T(d, 0) }],
 };
-export const ENTRANCE = ['fade', 'fade-up', 'fade-down', 'fade-left', 'fade-right', 'scale-in', 'zoom-in', 'pop', 'land', 'stretch-in', 'slide-up', 'slide-down', 'slide-left', 'slide-right', 'blur-in', 'rotate-in', 'flip-in', 'drop', 'reveal', 'reveal-up', 'reveal-down', 'typewriter', 'grow', 'grow-up', 'count'];
-export const LOOPS = ['morph', 'moving-hold', 'pulse', 'breathe', 'spin', 'float', 'bounce', 'shake', 'wiggle', 'heartbeat', 'ping', 'blink', 'sway', 'shimmer', 'orbit'];
+export const ENTRANCE = ['fade', 'fade-up', 'fade-down', 'fade-left', 'fade-right', 'scale-in', 'zoom-in', 'pop', 'land', 'stretch-in', 'slide-up', 'slide-down', 'slide-left', 'slide-right', 'blur-in', 'rotate-in', 'flip-in', 'drop', 'reveal', 'reveal-up', 'reveal-down', 'typewriter', 'grow', 'grow-up', 'count', 'along'];
+export const LOOPS = ['morph', 'moving-hold', 'pulse', 'breathe', 'spin', 'float', 'bounce', 'shake', 'wiggle', 'heartbeat', 'ping', 'blink', 'sway', 'shimmer', 'orbit', 'along'];
 export const ACCENTS = ['squish', 'jelly', 'rubber', 'shake', 'wiggle', 'heartbeat', 'pulse'];
 export const MODIFIERS = ['anticipate', 'snap', 'overshoot', 'arc', 'hard', 'soft'];
-const LOOP_DEFAULT = { 'moving-hold': [3200, 'in-out'], spin: [1200, 'linear'], shimmer: [1600, 'linear'], ping: [1400, 'out'], float: [3000, 'in-out'], breathe: [2400, 'in-out'], pulse: [1600, 'in-out'], sway: [3000, 'in-out'], orbit: [4000, 'linear'] };
+const LOOP_DEFAULT = { 'moving-hold': [3200, 'in-out'], spin: [1200, 'linear'], shimmer: [1600, 'linear'], ping: [1400, 'out'], float: [3000, 'in-out'], breathe: [2400, 'in-out'], pulse: [1600, 'in-out'], sway: [3000, 'in-out'], orbit: [4000, 'linear'], along: [4000, 'in-out'] };
 
 export function parseSpec(spec, kind = 'in') {
   const parts = String(spec).trim().split(/\s+/);

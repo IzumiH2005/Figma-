@@ -119,6 +119,29 @@ const pmx = await page.evaluate(() => {
 });
 ok(/^M4 10C14 10 26 10 36 10/.test(String(pmx).replace(/\s+/g, ' ').replace(/ (?=[A-Z])/g, '')), 'pathmix: clés nommées (cadre + décalage du tracé) → ' + pmx);
 
+// keys()/remap()/lerp(): one driver value, several typed outputs (numbers, colours, paths, objects)
+const kx = await page.evaluate(() => { const S = new MQ.Scope({}); const e = (x) => MQ.evaluate(x, S);
+  return { a: e('keys(0.25, 0, 100)'), b: e('keys(0.75, 0, 100, 0)'), c: e("remap(0.5, [0, 1], ['#000000', '#FFFFFF'])"), d: e("keys(0.5, 'M0 0L10 0', 'M0 10L10 10')"), o: JSON.stringify(e('lerp({x: 0, o: 0}, {x: 10, o: 1}, 0.5)')), l: e('lerp(0, 8, 0.5)'), s: e("remap(0.5, [0, 1], [0, 100], 'in')") }; });
+ok(kx.a === 25 && kx.b === 50 && kx.l === 4 && kx.s === 25, `keys/remap/lerp : nombres et courbes de segment ${JSON.stringify(kx)}`);
+ok(/^#[0-9A-F]{6}$/i.test(kx.c) && kx.c !== '#000000' && /^M0 5L10 5/.test(String(kx.d).replace(/\s+/g, ' ')) && kx.o === '{"x":5,"o":0.5}', `keys : couleur ${kx.c}, tracé ${kx.d}, objet ${kx.o}`);
+
+// along= : a layer rides a named vector (offset-path in the parent's frame, vector x/y included) + tween of a variable
+const alg = await page.evaluate(async () => {
+  const p = MQ.loadProject(`<vars>p: 0</vars><screen name=S w=300 h=200 start><stack w=fill h=fill>
+    <vector name=route absolute x=40 y=20 w=200 h=1 fill=none stroke="2 #000" d="M0 0L200 0"/>
+    <frame name=dot along=route at={$p} orient=auto w=10 h=10 fill=#000/>
+    <text name=go on:click="set $p = 1 tween 300 linear">{round($p * 100)}</text></stack></screen>`);
+  const host = document.createElement('div'); document.body.innerHTML = ''; document.body.appendChild(host);
+  const pl = new MQ.Player(p, host, {}); pl.start();
+  const dot = () => host.querySelector('[data-key=dot]'); const cs = getComputedStyle(dot());
+  const r0 = { path: cs.offsetPath, dist: cs.offsetDistance, rot: cs.offsetRotate };
+  host.querySelector('[data-key=go]').click(); await new Promise((r) => setTimeout(r, 150));
+  const mid = pl.vars.p; await new Promise((r) => setTimeout(r, 350));
+  return { ...r0, mid, end: pl.vars.p, txt: host.querySelector('[data-key=go]').textContent };
+});
+ok(/M\s*40[ ,]+20/.test(alg.path) && alg.dist === '0%' && /auto/.test(alg.rot), `along= : offset-path décalé par x/y du vecteur ${alg.path} · ${alg.dist} · ${alg.rot}`);
+ok(alg.mid > 0.05 && alg.mid < 0.95 && alg.end === 1 && alg.txt === '100', `set … tween : la variable voyage (${alg.mid.toFixed(2)} → ${alg.end}), le texte suit (${alg.txt})`);
+
 // gestures: real pointer drags through the Player (drag + snap + binding, flick projection, scrub, lint gesture-alt)
 await page.evaluate(() => {
   const p = MQ.loadProject(`<vars>s: 0

@@ -8,10 +8,19 @@ const num = (v, d = 0) => { const n = parseFloat(v); return isNaN(n) ? d : n; };
 const HEAD = `#version 300 es
 precision highp float;
 uniform vec2 R; uniform float T, SEED, SC, DPR; uniform float P[8]; uniform vec3 C[16]; uniform int NC;
+uniform vec4 M; uniform vec3 MS; // pointer: x, y (px), presence 0..1, reach (px) · mode, strength, wall clock
 out vec4 o;
-vec2 pix(){ return vec2(gl_FragCoord.x, R.y - gl_FragCoord.y) / DPR; }
+vec2 rawpix(){ return vec2(gl_FragCoord.x, R.y - gl_FragCoord.y) / DPR; }
+float pfall(vec2 p){ vec2 d = p - M.xy; return exp(-dot(d, d) / (M.w * M.w)) * M.z * MS.y; }
+// interactive shaders: the pointer bends the shader's own space (lens, swirl, ripple, repel) before it is evaluated
+vec2 pwarp(vec2 p){ if (M.z < 0.001 || MS.x < 0.5 || MS.x > 4.5) return p; vec2 d = p - M.xy; float l = length(d); float f = pfall(p);
+  if (MS.x < 1.5) return M.xy + d * (1. - 0.55 * f);
+  if (MS.x < 2.5) { float a = f * 2.6, c = cos(a), s = sin(a); return M.xy + mat2(c, -s, s, c) * d; }
+  if (MS.x < 3.5) return p + (l > 0.01 ? d / l : vec2(0.)) * sin(l * 0.11 - MS.z * 7.) * 9. * f;
+  return p - (l > 0.01 ? d / l : vec2(0.)) * M.w * 0.45 * f; }
+vec2 pix(){ return pwarp(rawpix()); }
 vec2 uv(){ return pix() / SC; }
-vec2 nuv(){ return vec2(gl_FragCoord.x, R.y - gl_FragCoord.y) / R; }
+vec2 nuv(){ return pix() * DPR / R; }
 float h21(vec2 p){ p = fract(p * vec2(123.34, 456.21) + SEED * 0.1373); p += dot(p, p + 45.32); return fract(p.x * p.y); }
 vec2 h22(vec2 p){ float n = h21(p); return vec2(n, h21(p + n + 17.0)); }
 float vnoise(vec2 p){ vec2 i = floor(p), f = fract(p); vec2 u = f*f*(3.-2.*f); return mix(mix(h21(i), h21(i+vec2(1,0)), u.x), mix(h21(i+vec2(0,1)), h21(i+vec2(1,1)), u.x), u.y); }
@@ -111,7 +120,7 @@ const SH = {
 // aliases
 const ALIAS = { 'fractal-noise': 'noise', perlin: 'noise', voronoi: 'noise', 'glowing-wave': 'wave', glow: 'wave', water: 'caustics', 'water-caustics': 'caustics', space: 'nebula', 'pattern-grid': 'grid', pattern: 'grid', rings: 'concentric', 'mesh-gradient': 'mesh' };
 export const SHADER_NAMES = Object.keys(SH);
-export const SHADER_DOC = Object.fromEntries(Object.entries(SH).map(([k, v]) => [k, v.p.map(([n, d, e]) => (e ? `${n}=${e.join('|')}` : `${n}=${d}`)).join(' ') + ` colors=${v.colors} scale=${v.scale} speed phase seed`]));
+export const SHADER_DOC = Object.fromEntries(Object.entries(SH).map(([k, v]) => [k, v.p.map(([n, d, e]) => (e ? `${n}=${e.join('|')}` : `${n}=${d}`)).join(' ') + ` colors=${v.colors} scale=${v.scale} speed phase seed pointer=lens|swirl|ripple|repel|glow reach=140 strength=1`]));
 export const shaderDefaults = (name) => { const s = SH[ALIAS[name] || name]; return s ? { params: s.p.map(([n, d, e]) => ({ name: n, def: e ? e[d] : d, options: e || null })), colors: s.colors, scale: s.scale } : null; };
 
 export function parseShader(spec) {
@@ -140,22 +149,27 @@ function program(type) {
   const g = gl(); if (!g) return null;
   const mk = (t, src) => { const s = g.createShader(t); g.shaderSource(s, src); g.compileShader(s); if (!g.getShaderParameter(s, g.COMPILE_STATUS)) { console.warn('shader', type, g.getShaderInfoLog(s)); return null; } return s; };
   const vs = mk(g.VERTEX_SHADER, '#version 300 es\nin vec2 a; void main(){ gl_Position = vec4(a, 0., 1.); }');
-  const fs = mk(g.FRAGMENT_SHADER, HEAD + 'void main(){\n' + SH[type].main + '\n}');
+  // glow: a soft light that follows the pointer, added after the shader (brightest colour of the palette, lifted toward white)
+  const post = '\n if (MS.x > 4.5 && M.z > 0.001) { float f = clamp(pfall(rawpix()), 0., 1.); vec3 g = C[0]; for (int i = 1; i < 16; i++) { if (i >= NC) break; if (dot(C[i], vec3(.3, .59, .11)) > dot(g, vec3(.3, .59, .11))) g = C[i]; } g = mix(g, vec3(1.), .35); o.rgb = mix(o.rgb, 1. - (1. - o.rgb) * (1. - g * .7), f); }';
+  const fs = mk(g.FRAGMENT_SHADER, HEAD + 'void main(){\n' + SH[type].main + post + '\n}');
   if (!vs || !fs) return (progs[type] = null);
   const p = g.createProgram(); g.attachShader(p, vs); g.attachShader(p, fs); g.bindAttribLocation(p, 0, 'a'); g.linkProgram(p);
   if (!g.getProgramParameter(p, g.LINK_STATUS)) return (progs[type] = null);
-  const U = {}; for (const n of ['R', 'T', 'SEED', 'SC', 'DPR', 'P', 'C', 'NC']) U[n] = g.getUniformLocation(p, n === 'P' || n === 'C' ? n + '[0]' : n);
+  const U = {}; for (const n of ['R', 'T', 'SEED', 'SC', 'DPR', 'P', 'C', 'NC', 'M', 'MS']) U[n] = g.getUniformLocation(p, n === 'P' || n === 'C' ? n + '[0]' : n);
   return (progs[type] = { p, U });
 }
 const rgb = (c) => { const p = parseColor(String(c).trim()) || [128, 128, 128]; return [p[0] / 255, p[1] / 255, p[2] / 255]; };
 
+// pointer= modes (index = MS.x in the shader)
+export const POINTER = ['', 'lens', 'swirl', 'ripple', 'repel', 'glow'];
 function resolve(spec) {
   const { type, o, pos } = parseShader(spec); const def = SH[type]; if (!def) return null;
   const P = new Float32Array(8);
   def.p.forEach(([n, d, e], i) => { let v = o[n] ?? (i === 0 && pos[0] !== undefined ? pos[0] : undefined); if (e) { const k = e.indexOf(String(v)); P[i] = k >= 0 ? k : num(v, d); } else P[i] = num(v, d); });
   const cols = String(o.colors || def.colors).split(/[,\s]+/).filter(Boolean).slice(0, 16).map(rgb); while (cols.length < 2) cols.push(cols[0] || [0, 0, 0]);
   const C = new Float32Array(48); cols.forEach((c, i) => C.set(c, i * 3));
-  return { type, P, C, NC: cols.length, cols, scale: num(o.scale, def.scale), speed: num(o.speed, 0), phase: num(o.phase, 0), seed: num(o.seed, 1), opacity: num(o.opacity, 1), blend: o.blend };
+  return { type, P, C, NC: cols.length, cols, scale: num(o.scale, def.scale), speed: num(o.speed, 0), phase: num(o.phase, 0), seed: num(o.seed, 1), opacity: num(o.opacity, 1), blend: o.blend,
+    pointer: Math.max(0, POINTER.indexOf(String(o.pointer || '').toLowerCase())), reach: num(o.reach ?? o.radius, 140), strength: num(o.strength, 1) };
 }
 
 function draw(entry, t) {
@@ -169,6 +183,7 @@ function draw(entry, t) {
   g.bindBuffer(g.ARRAY_BUFFER, vbo); g.enableVertexAttribArray(0); g.vertexAttribPointer(0, 2, g.FLOAT, false, 0, 0);
   const U = pr.U; g.uniform2f(U.R, w, h); g.uniform1f(U.T, t); g.uniform1f(U.SEED, r.seed); g.uniform1f(U.SC, Math.max(1, r.scale)); g.uniform1f(U.DPR, entry.dpr);
   g.uniform1fv(U.P, r.P); g.uniform3fv(U.C, r.C); g.uniform1i(U.NC, r.NC);
+  const m = entry.m; g.uniform4f(U.M, m ? m.x : 0, m ? m.y : 0, m ? m.i : 0, Math.max(8, r.reach)); g.uniform3f(U.MS, m ? r.pointer : 0, r.strength, (performance.now() - t0) / 1000);
   g.drawArrays(g.TRIANGLES, 0, 3);
   c2.clearRect(0, 0, w, h); c2.drawImage(glc, 0, glc.height - h, w, h, 0, 0, w, h);
 }
@@ -178,9 +193,30 @@ function loop() {
   raf = 0; const now = (performance.now() - t0) / 1000;
   for (const e of live) {
     if (!e.cv.isConnected) { if (++e.miss > 120) live.delete(e); continue; }
-    e.miss = 0; if (e.r.speed) draw(e, e.r.phase + now * e.r.speed);
+    e.miss = 0; const moved = e.m ? stepPointer(e) : false;
+    if (e.r.speed || moved) draw(e, e.r.phase + now * e.r.speed);
   }
-  if ([...live].some((e) => e.r.speed)) raf = requestAnimationFrame(loop);
+  if ([...live].some((e) => e.r.speed || (e.m && e.m.busy))) raf = requestAnimationFrame(loop);
+}
+
+// the pointer is followed by a light spring (a little lag = the membrane feel); presence fades in and out
+function stepPointer(e) {
+  const m = e.m; const k = 0.16, damp = 0.7;
+  m.vx = (m.vx + (m.tx - m.x) * k) * damp; m.vy = (m.vy + (m.ty - m.y) * k) * damp; m.x += m.vx; m.y += m.vy;
+  m.i += (m.ti - m.i) * 0.12;
+  const still = Math.abs(m.vx) + Math.abs(m.vy) < 0.02 && Math.abs(m.tx - m.x) + Math.abs(m.ty - m.y) < 0.1 && Math.abs(m.ti - m.i) < 0.002;
+  m.busy = !still || (e.r.pointer === 3 && m.i > 0.002); // ripple keeps moving while the pointer is there
+  return !still || m.busy;
+}
+function bindPointer(e, el) {
+  const m = (e.m = { x: 0, y: 0, vx: 0, vy: 0, tx: 0, ty: 0, i: 0, ti: 0, busy: false });
+  const at = (ev) => { const r = el.getBoundingClientRect(); const sx = r.width / (el.offsetWidth || r.width || 1), sy = r.height / (el.offsetHeight || r.height || 1);
+    return [(ev.clientX - r.left) / (sx || 1), (ev.clientY - r.top) / (sy || 1)]; };
+  const wake = () => { m.busy = true; if (!raf) raf = requestAnimationFrame(loop); };
+  const move = (ev) => { const [x, y] = at(ev); if (m.ti === 0 && m.i < 0.01) { m.x = x; m.y = y; } m.tx = x; m.ty = y; m.ti = 1; wake(); };
+  el.addEventListener('pointerenter', move); el.addEventListener('pointermove', move); el.addEventListener('pointerdown', move);
+  el.addEventListener('pointerleave', () => { m.ti = 0; wake(); });
+  el.addEventListener('pointercancel', () => { m.ti = 0; wake(); });
 }
 
 function fit(e) {
@@ -205,6 +241,7 @@ export function applyShader(el, spec, ctx) {
   el.insertBefore(cv, el.firstChild);
   const e = { cv, r, dpr: 1, miss: 0 };
   live.add(e);
+  if (r.pointer && !(ctx && ctx.editor)) bindPointer(e, el); // interactive only in the prototype (the editor keeps layers still)
   const tryFit = (k) => { if (fit(e)) return; if (k < 60) requestAnimationFrame(() => tryFit(k + 1)); };
   requestAnimationFrame(() => tryFit(0));
   if (typeof ResizeObserver !== 'undefined') { const ro = new ResizeObserver(() => { if (!cv.isConnected) { ro.disconnect(); return; } fit(e); }); ro.observe(el); }

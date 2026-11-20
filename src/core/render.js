@@ -54,7 +54,7 @@ let UID = 0;
 // Named shape for pathmix($t, triste, neutre, content): a vector layer named so (its d in its own box),
 // or a frame of that name whose vector children are merged, each offset by its x/y in the frame.
 // Draw the keyframes in frames the size of the target vector and they land exactly where it draws.
-export function namedShape(project, name) {
+export function namedShape(project, name, opts = {}) {
   let hit = null;
   const find = (n) => { if (hit || !n || n.tag === '#text') return; if (n.attrs && n.attrs.name === name && n.tag !== 'screen' && n.tag !== 'page') { hit = n; return; } (n.children || []).forEach(find); };
   project.pages.forEach(find);
@@ -66,7 +66,8 @@ export function namedShape(project, name) {
     const subs = nodePath(n, a, boxOf(a));
     return serializePath(dx || dy ? translatePath(subs, dx, dy) : subs);
   };
-  if (['vector', 'path', 'svg', 'shape', 'ellipse', 'rect'].includes(hit.tag)) return geom(hit, 0, 0) || null;
+  // opts.pos: the vector's own literal x/y are added (a motion path drawn beside the layer that follows it)
+  if (['vector', 'path', 'svg', 'shape', 'ellipse', 'rect'].includes(hit.tag)) { const ha = hit.attrs; return geom(hit, opts.pos && lit(ha.x) ? +(ha.x || 0) : 0, opts.pos && lit(ha.y) ? +(ha.y || 0) : 0) || null; }
   const parts = [];
   const walk = (n, ox, oy) => (n.children || []).forEach((c) => {
     if (!c.attrs) return;
@@ -81,7 +82,7 @@ export function namedShape(project, name) {
 export function rootScope(project, state) {
   const shapes = new Map();
   const root = {
-    shape: (n) => { const k = FALLBACK.gen + ':' + n; if (!shapes.has(k)) shapes.set(k, namedShape(project, n)); return shapes.get(k); },
+    shape: (n, pos) => { const k = FALLBACK.gen + ':' + (pos ? '@' : '') + n; if (!shapes.has(k)) shapes.set(k, namedShape(project, n, { pos })); return shapes.get(k); },
     platform: null, // posée par renderScreen : $platform = ios | android | web
     dollar: (n) => {
       if (state.vars && n in state.vars) return state.vars[n];
@@ -371,6 +372,22 @@ function placeParts(v) {
 }
 
 // compute css for element
+// motion path: along="M… | name" at=0..1 orient → CSS offset-path. The path lives in the parent's
+// coordinates (origin = the layer's x/y, 0 0 by default) and the layer's centre rides on it.
+export function alongPath(v, ctx) {
+  const d = String(v || '').trim(); if (!d) return null; if (/^[Mm]/.test(d)) return d;
+  const sc = ctx && ctx.scope && ctx.scope.root; return sc && sc.shape ? sc.shape(d, true) : ctx && ctx.project ? namedShape(ctx.project, d, { pos: true }) : null;
+}
+function alongCss(a, s, ctx) {
+  const d = alongPath(a.along, ctx); if (!d) { ctx && ctx.errors && ctx.errors.push?.({ msg: `along : tracé introuvable « ${a.along} »` }); return; }
+  if (s.left === undefined && s.right === undefined) s.left = '0px';
+  if (s.top === undefined && s.bottom === undefined) s.top = '0px';
+  s.offsetPath = `path('${d.replace(/'/g, '')}')`;
+  const at = a.at === undefined ? 0 : String(a.at).trim();
+  s.offsetDistance = /%$/.test(at) ? at : `${+(num(at, 0) * 100).toFixed(3)}%`;
+  const o = a.orient; s.offsetRotate = o === undefined || o === false || o === 'false' ? '0deg' : o === true || o === 'true' || o === 'auto' ? 'auto' : o === 'reverse' ? 'reverse' : `auto ${num(o, 0)}deg`;
+}
+
 export function cssFor(tag, a, parentLayout, ctx, isText) {
   const s = {};
   const tf = [];
@@ -442,7 +459,7 @@ export function cssFor(tag, a, parentLayout, ctx, isText) {
 
   // ---------- positioning
   const hasPos = ['x', 'y', 'top', 'left', 'right', 'bottom', 'inset'].some((k) => a[k] !== undefined);
-  const absolute = a.absolute || a.fixed || (hasPos && tag !== 'screen');
+  const absolute = a.absolute || a.fixed || (a.along && tag !== 'screen') || (hasPos && tag !== 'screen');
   if (absolute) {
     s.position = 'absolute';
     if (a.inset !== undefined) { const [t, r, b, l] = boxShorthand(a.inset); Object.assign(s, { top: px(t), right: px(r), bottom: px(b), left: px(l) }); }
@@ -456,6 +473,7 @@ export function cssFor(tag, a, parentLayout, ctx, isText) {
     if (a.x !== undefined) { const c = cen(a.x); if (c) { s.left = c; tf.push('translateX(-50%)'); } else s.left = px(a.x); }
     if (a.y !== undefined) { const c = cen(a.y); if (c) { s.top = c; tf.push('translateY(-50%)'); } else s.top = px(a.y); }
     for (const k of ['top', 'left', 'right', 'bottom']) if (a[k] !== undefined) s[k] = px(a[k]);
+    if (a.along) alongCss(a, s, ctx);
   } else if (pl === 'stack' && tag !== 'screen') {
     s.gridArea = '1 / 1';
     if (a.place) { const pp = placeParts(a.place); s.justifySelf = pp.h; s.alignSelf = pp.v; }

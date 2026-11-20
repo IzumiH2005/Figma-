@@ -1,8 +1,8 @@
 // Prototype runtime: navigation, transitions (incl. Smart Animate), overlays, variables, triggers.
 import { makeCtx, renderScreen, renderStandalone } from './render.js';
-import { evaluate, interp } from './expr.js';
+import { evaluate, interp, lerpAny } from './expr.js';
 import { splitTop } from './project.js';
-import { playAnims, resolveEasing, EASINGS, prefersReducedMotion, easeFn } from './anim.js';
+import { playAnims, resolveEasing, EASINGS, prefersReducedMotion, easeFn, getTimeScale } from './anim.js';
 import { morphBetween, liveBoolean } from './vector.js';
 import { GestureMixin } from './gesture.js';
 import { groupRigs, groupPos, groupValues, rigBox, toBox } from './rig.js';
@@ -187,6 +187,26 @@ export class Player {
     });
   }
 
+  // set $x = v tween 2400 [courbe] : the VARIABLE itself travels (numbers, colours, paths, arrays, objects), one
+  // instant re-render per frame, so every binding (text, keys(), along=, pathmix) follows. Resolves at the end.
+  tweenVar(name, to, dur, ease) {
+    const from = this.vars[name]; this._tw = this._tw || {};
+    if (this._tw[name]) this._tw[name].cancel();
+    if (prefersReducedMotion() || from === undefined || dur <= 0) { this.vars[name] = to; return this.rerender({ type: 'instant' }); }
+    const f = easeFn(resolveEasing(ease || 'in-out').easing);
+    return new Promise((done) => {
+      const t0 = performance.now(); let raf = 0;
+      const tw = (this._tw[name] = { cancel: () => { cancelAnimationFrame(raf); done(); } });
+      const tick = (now) => {
+        const u = Math.min(1, ((now - t0) * getTimeScale()) / dur);
+        this.vars[name] = u >= 1 ? to : lerpAny(from, to, f(u));
+        this.rerender({ type: 'instant' });
+        if (u < 1) raf = requestAnimationFrame(tick); else { if (this._tw[name] === tw) delete this._tw[name]; done(); }
+      };
+      raf = requestAnimationFrame(tick);
+    });
+  }
+
   scheduleRerender(t) {
     if (this._rr) return;
     this._rr = true;
@@ -224,10 +244,12 @@ export class Player {
         case 'close': return await this.closeOverlay(w.slice(1));
         case 'swap': { await this.closeOverlay(['instant']); return await this.openOverlay(resolveName(w[1]), w.slice(2), scope); }
         case 'set': {
-          const m = /^set\s+\$?([\w-]+)\s*=\s*(.+?)(\s+(smart|instant|dissolve)(\s+\d+)?(\s+\S+)?)?$/.exec(step);
+          const m = /^set\s+\$?([\w-]+)\s*=\s*(.+?)(\s+(smart|instant|dissolve|tween)(\s+\d+)?(\s+\S+)?)?$/.exec(step);
           if (!m) throw new Error(`set invalide: ${step}`);
           const ex = m[2].trim();
-          this.vars[m[1]] = /^\{[^{}]*\}$/.test(ex) ? interp(ex, scope) : evaluate(ex, scope);
+          const val = /^\{[^{}]*\}$/.test(ex) ? interp(ex, scope) : evaluate(ex, scope);
+          if (m[4] === 'tween') { await this.tweenVar(m[1], val, m[5] ? +m[5] : 600, (m[6] || '').trim()); return; }
+          this.vars[m[1]] = val;
           return { dirty: true, transition: m[3] ? parseTransition(words(m[3])) : null };
         }
         case 'change': { // change k=v k2={expr} [smart 300 ease] → the enclosing instance's own props (Figma "Change to", on any prop)
@@ -455,7 +477,7 @@ export class Player {
     // elements driven by a running animation (loops, entrances) have no stable geometry: never FLIP them
     const animated = new Set();
     for (const a of oldEl.getAnimations({ subtree: true })) { if (a.effect && a.effect.target && a.playState === 'running') { let n = a.effect.target; while (n && n !== oldEl) { animated.add(n); n = n.parentElement; } } }
-    for (const [k, els] of oldMap) oldInfo.set(k, els.map((el) => { const cs = getComputedStyle(el); return { el, d: el.dataset.d, bool: el._bool, r: rect(el), bg: cs.backgroundColor, color: cs.color, radius: cs.borderTopLeftRadius, opacity: cs.opacity, moving: animated.has(el) && !el.contains(oldEl), visible: cs.display !== 'none' && cs.visibility !== 'hidden' && el.getClientRects().length > 0 }; }));
+    for (const [k, els] of oldMap) oldInfo.set(k, els.map((el) => { const cs = getComputedStyle(el); return { el, d: el.dataset.d, bool: el._bool, r: rect(el), bg: cs.backgroundColor, color: cs.color, radius: cs.borderTopLeftRadius, opacity: cs.opacity, od: cs.offsetPath && cs.offsetPath !== 'none' ? cs.offsetPath + '|' + cs.offsetDistance : null, moving: animated.has(el) && !el.contains(oldEl), visible: cs.display !== 'none' && cs.visibility !== 'hidden' && el.getClientRects().length > 0 }; }));
     const oldBg = getComputedStyle(oldEl).backgroundColor;
 
     host.appendChild(newEl);
@@ -505,8 +527,12 @@ export class Player {
       if (isText) { const u = Math.abs(sx - sy) < 0.35 ? (sx + sy) / 2 : 1; sx = sy = u; }
       if (ap) { sx = 1; sy = 1; }
       const cs = getComputedStyle(el);
-      const changed = Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5 || Math.abs(sx - 1) > 0.01 || Math.abs(sy - 1) > 0.01;
+      // a layer riding a motion path: travel along the curve (offset-distance), not in a straight line
+      const odNow = cs.offsetPath && cs.offsetPath !== 'none' ? cs.offsetPath + '|' + cs.offsetDistance : null;
+      const onPath = o.od && odNow && o.od !== odNow && o.od.split('|')[0] === odNow.split('|')[0];
+      const changed = !onPath && (Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5 || Math.abs(sx - 1) > 0.01 || Math.abs(sy - 1) > 0.01);
       const from = {}, to = {};
+      if (onPath) { from.offsetDistance = o.od.split('|')[1]; to.offsetDistance = cs.offsetDistance; }
       if (changed) { from.translate = `${dx}px ${dy}px`; to.translate = '0px 0px'; from.scale = `${sx} ${sy}`; to.scale = '1 1'; }
       if (o.bg !== cs.backgroundColor) { from.backgroundColor = o.bg; to.backgroundColor = cs.backgroundColor; }
       if (o.color !== cs.color) { from.color = o.color; to.color = cs.color; }

@@ -97,6 +97,27 @@ function parseExpr(src) {
 const pc = (c) => parseColor(String(c)) || [0, 0, 0, 1];
 const pct = (p, d) => { const n = Number(p ?? d); return n > 1 ? n / 100 : n; };
 export const FALLBACK = { morph: null, shape: null, gen: 0 }; // gen: bump to invalidate named-shape caches (live key editing)
+// keys / remap: one value curve through several stops (numbers, colours, paths, arrays, objects),
+// like Rive's data-binding converters or Framer's useTransform
+const isPathStr = (v) => typeof v === 'string' && /^\s*[Mm]\s*-?[\d.]/.test(v);
+const asNum = (v) => (typeof v === 'number' ? v : typeof v === 'string' && /^\s*-?\d*\.?\d+\s*$/.test(v) ? +v : NaN);
+export function lerpAny(a, b, u) {
+  if (Array.isArray(a) && Array.isArray(b)) return a.map((x, i) => lerpAny(x, b[i] ?? x, u));
+  const na = asNum(a), nb = asNum(b); if (!isNaN(na) && !isNaN(nb)) return na + (nb - na) * u;
+  if (isPathStr(a) && isPathStr(b)) return BUILTINS.pathmix(u, a, b);
+  const ca = typeof a === 'string' && parseColor(a), cb = typeof b === 'string' && parseColor(b); if (ca && cb) return toCss(_mix(ca, cb, u));
+  if (a && b && typeof a === 'object' && typeof b === 'object') { const o = { ...a }; for (const k of Object.keys(b)) o[k] = k in a ? lerpAny(a[k], b[k], u) : b[k]; return o; }
+  return u < 0.5 ? a : b;
+}
+const SEG_EASE = { linear: (u) => u, smooth: (u) => u * u * (3 - 2 * u), in: (u) => u * u, out: (u) => 1 - (1 - u) * (1 - u), step: (u) => (u < 1 ? 0 : 1) };
+function remapAny(t, stops, vals, ease) {
+  stops = (stops || []).map(Number); vals = vals || []; const n = Math.min(stops.length, vals.length);
+  if (!n) return undefined; if (n === 1) return vals[0];
+  t = Number(t) || 0; if (t <= stops[0]) return vals[0]; if (t >= stops[n - 1]) return vals[n - 1];
+  let i = 0; while (i < n - 2 && t > stops[i + 1]) i++;
+  const u = (t - stops[i]) / (stops[i + 1] - stops[i] || 1);
+  return lerpAny(vals[i], vals[i + 1], (SEG_EASE[ease] || SEG_EASE.linear)(Math.min(1, Math.max(0, u))));
+}
 const BUILTINS = {
   fake: (k, seed) => fake(k, seed), fakeList: (n, fields, seed) => fakeList(n, fields, seed),
   shade: (c, p) => toCss(_shade(pc(c), pct(p, 10))), tint: (c, p) => toCss(_tint(pc(c), pct(p, 10))),
@@ -107,6 +128,10 @@ const BUILTINS = {
   pathmix: (t, ...ds) => { ds = ds.flat().map(String); if (ds.length < 2) return ds[0] || ''; const r = pathMixSame(t, ds); if (r != null) return r;
     const n = ds.length - 1; const x = Math.min(1, Math.max(0, +t || 0)) * n; const i = Math.min(n - 1, Math.floor(x)); const u = x - i;
     return FALLBACK.morph ? FALLBACK.morph(ds[i], ds[i + 1])(u) : (u < 0.5 ? ds[i] : ds[i + 1]); },
+  // remap($t, [0, .3, 1], [a, b, c] [, smooth]) · keys($t, a, b, c) (stops spaced evenly over 0..1) · lerp(a, b, u)
+  remap: (t, stops, vals, ease) => remapAny(t, stops, vals, ease),
+  keys: (t, ...vals) => { if (vals.length === 1 && Array.isArray(vals[0])) vals = vals[0]; const n = vals.length; return remapAny(t, vals.map((_, i) => (n < 2 ? 0 : i / (n - 1))), vals); },
+  lerp: (a, b, u) => lerpAny(a, b, Number(u) || 0),
   min: (...a) => Math.min(...a.flat()), max: (...a) => Math.max(...a.flat()), round: Math.round, floor: Math.floor, ceil: Math.ceil, abs: Math.abs,
   len: (x) => (x == null ? 0 : x.length ?? Object.keys(x).length),
   upper: (s) => String(s).toUpperCase(), lower: (s) => String(s).toLowerCase(),
@@ -142,12 +167,14 @@ function ev(e, scope) {
     case 'tern': return ev(e.c, scope) ? ev(e.a, scope) : ev(e.b, scope);
     case 'call': {
       if (e.f.k === 'id' && e.f.v === 'dollar') return scope.lookup('$' + ev(e.args[0], scope));
-      if (e.f.k === 'id' && e.f.v === 'pathmix') { // keyframes: path data, or the name of a vector layer (bare or quoted)
-        const [t, ...rest] = e.args;
-        const ds = rest.map((x) => { let v = ev(x, scope); if (v === undefined && x.k === 'id' && !x.v.startsWith('$')) v = x.v;
-          if (typeof v === 'string' && !/^\s*[Mm]/.test(v)) { const r = scope.root && scope.root.shape ? scope.root.shape(v.trim()) : FALLBACK.shape ? FALLBACK.shape(v.trim()) : null; if (r) v = r; }
+      if (e.f.k === 'id' && (e.f.v === 'pathmix' || e.f.v === 'keys')) { // keyframes: path data, or the name of a vector layer (bare or quoted)
+        const [t, ...rest] = e.args; const pm = e.f.v === 'pathmix';
+        const shape = (n) => (scope.root && scope.root.shape ? scope.root.shape(n) : FALLBACK.shape ? FALLBACK.shape(n) : null);
+        const ds = rest.map((x) => { let v = ev(x, scope); const bare = v === undefined && x.k === 'id' && !x.v.startsWith('$'); if (bare) v = x.v;
+          // keys(): only a bare name (or any string for pathmix) is looked up as a layer; colours and text stay as they are
+          if (typeof v === 'string' && !/^\s*[Mm]/.test(v) && (pm || bare)) { const r = shape(v.trim()); if (r) v = r; }
           return v; });
-        return BUILTINS.pathmix(ev(t, scope), ...ds);
+        return pm ? BUILTINS.pathmix(ev(t, scope), ...ds) : BUILTINS.keys(ev(t, scope), ...ds);
       }
       const fn = e.f.k === 'id' ? BUILTINS[e.f.v] : null;
       if (!fn) throw new Error(`Fonction inconnue: ${e.f.v}`);
