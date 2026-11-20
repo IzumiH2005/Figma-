@@ -4,7 +4,7 @@ import { Project, DEVICES, parseAttrString, parseColor, withAlpha, splitTop, TYP
 import * as Color from './color.js';
 import { makeCtx, renderScreen, renderStandalone, renderNode, BASE_CSS, fontsHref, layoutOf, cssFor, resolveAttrs, imageSrc, fillToCss } from './render.js';
 import { Player, TRANSITIONS, parseTransition } from './proto.js';
-import { playAnims, PRESETS, ENTRANCE, LOOPS, EASINGS, parseSpec, totalDuration, springEasing } from './anim.js';
+import { playAnims, PRESETS, ENTRANCE, LOOPS, ACCENTS, MODIFIERS, EASINGS, parseSpec, totalDuration, springEasing, resolveEasing, shapeFrames, setTimeScale, getTimeScale, prefersReducedMotion } from './anim.js';
 import { inspectScreen, lintScreen, lintProject, formatIssues, contrast, scoreIssues, applyFixes, fixSource, CATEGORIES } from './inspect.js';
 import { genImage, SCENE_NAMES } from './gen.js';
 import { ICONS } from './icons.js';
@@ -93,7 +93,7 @@ export {
   Project, DEVICES, parseAttrString, parseColor, withAlpha, splitTop, TYPESCALES, SPACING, Color,
   makeCtx, renderScreen, renderStandalone, renderNode, BASE_CSS, fontsHref, layoutOf, cssFor, resolveAttrs, imageSrc, fillToCss,
   Player, TRANSITIONS, parseTransition,
-  playAnims, PRESETS, ENTRANCE, LOOPS, EASINGS, parseSpec, totalDuration, springEasing,
+  playAnims, PRESETS, ENTRANCE, LOOPS, ACCENTS, MODIFIERS, EASINGS, parseSpec, totalDuration, springEasing, resolveEasing, shapeFrames, setTimeScale, getTimeScale, prefersReducedMotion,
   inspectScreen, lintScreen, lintProject, formatIssues, contrast, scoreIssues, applyFixes, fixSource, CATEGORIES, patchSource, patchStyle,
   genImage, SCENE_NAMES, ICONS, deviceFrame, evaluate, interp, Scope, KIT,
 };

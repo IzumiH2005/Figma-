@@ -84,6 +84,8 @@ function boot() {
     runLint: () => runLint(),
     onZoom: () => { zoomLabel.textContent = Math.round(app.zoom * 100) + '%'; },
     itemEl: (id) => canvas.items.get(id),
+    setTrails: (t) => { canvas.trails = t; canvas.drawOverlay(); },
+    toWorld: (x, y) => canvas.toWorld(x, y),
     setMarkers: (issues) => { canvas.markers = issues.filter((i) => i.level !== 'info' && i.id); canvas.drawOverlay(); },
   };
   canvas = new Canvas(app, canvasEl, hooks);
@@ -271,7 +273,7 @@ function boot() {
     const target = s || (app.page && app.page.children.find((c) => c.tag === 'screen'));
     if (!target) return;
     const el = canvas.screenEl(target.id);
-    if (el && el._mq) MQ.playAnims(el._mq.anims, { project: app.project });
+    if (el && el._mq) MQ.playAnims(el._mq.anims, { project: app.project, ignoreReduced: true });
   }
   function runLint() {
     let issues = MQ.lintProject(app.project);

@@ -18,6 +18,7 @@ export class PlayMode {
       h('button.btn', { title: 'Recommencer (R)', onclick: () => this.player.start(start.attrs.name) }, icon('rotate-ccw', 14)),
       p.modes.length > 1 ? h('button.btn', { title: 'Changer de mode', onclick: () => this.player.exec('mode next', this.player.ctx().scope) }, icon('sun-moon', 14), p.modes.join('/')) : null,
       h('button.btn', { title: 'Zones cliquables (H)', onclick: () => this.flashHotspots() }, icon('pointer', 14)),
+      h('select.sel.play-rate', { title: 'Ralenti : vérifie anticipation, arcs et follow-through', onchange: (e) => MQ.setTimeScale(+e.target.value), onkeydown: (e) => e.stopPropagation() }, [1, 0.5, 0.25, 0.1].map((r) => h('option', { value: r }, r === 1 ? 'Vitesse 1×' : `Ralenti ${r}×`))),
       h('span.grow'),
       h('button.btn', { title: 'Quitter (Échap)', onclick: () => this.close() }, icon('x', 14), 'Fermer'));
     this.stage = h('div.play-stage');
@@ -44,6 +45,7 @@ export class PlayMode {
   close() {
     if (!this.root) return;
     this.proto.destroy();
+    MQ.setTimeScale(1);
     removeEventListener('keydown', this.onKey, true);
     this.root.remove(); this.root = null;
   }

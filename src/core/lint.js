@@ -4,15 +4,17 @@ import { parseColor } from './project.js';
 import { TYPESCALES } from './project.js';
 import { contrast, deltaE, toOklch, hueDistance, mix, toHex } from './color.js';
 import { patchSource, patchStyle } from './parse.js';
+import { parseSpec } from './anim.js';
 
-export const CATEGORIES = { a11y: 'Accessibilité', spacing: 'Espacement & grille', type: 'Typographie', color: 'Couleur', ux: 'Composants & UX', proto: 'Prototype' };
+export const CATEGORIES = { a11y: 'Accessibilité', spacing: 'Espacement & grille', type: 'Typographie', color: 'Couleur', ux: 'Composants & UX', motion: 'Motion', proto: 'Prototype' };
 const CAT = {
   contrast: 'a11y', 'contrast-ui': 'a11y', 'tap-target': 'a11y', 'tiny-text': 'a11y', 'body-size': 'a11y', 'input-label': 'a11y', 'link-style': 'a11y',
   'off-grid': 'spacing', 'edge-margin': 'spacing', crowded: 'spacing', bounds: 'spacing', overflow: 'spacing',
   'type-scale': 'type', 'type-count': 'type', 'line-length': 'type', 'caps-long': 'type',
   hardcoded: 'color', 'pure-color': 'color', 'gradient-muddy': 'color', 'color-count': 'color', 'shadow-light': 'color',
   'multi-primary': 'ux', 'vague-label': 'ux', destructive: 'ux', asterisk: 'ux', 'thumb-zone': 'ux', 'card-height': 'ux', placeholder: 'ux',
-  'broken-link': 'proto', unreachable: 'proto', 'overlay-escape': 'proto', 'smart-keys': 'proto', render: 'proto',
+  'broken-link': 'proto', unreachable: 'proto', 'overlay-escape': 'proto', 'smart-keys': 'motion', render: 'proto',
+  'motion-linear': 'motion', 'motion-duration': 'motion', 'motion-settle': 'motion', 'motion-sync': 'motion', 'motion-loops': 'motion', 'motion-tempo': 'motion', 'motion-step': 'motion', 'transition-duration': 'motion',
 };
 
 function rel(el, root) {
@@ -53,7 +55,8 @@ const DESTRUCTIVE = /\b(supprimer|effacer|delete|remove|retirer|désactiver|deac
 export function lintScreen(screenEl, project, screenNode) {
   const issues = [];
   const name = screenEl.dataset.screen;
-  const push = (level, code, msg, el, fix) => issues.push({ level, code, cat: CAT[code] || 'ux', screen: name, msg, id: el && el.dataset ? (el.dataset.id || (ownerNode(el, project) || {}).id) : el && el.id, key: el && el.dataset ? el.dataset.key : undefined, fix });
+  const ignored = String(screenNode.attrs['lint-ignore'] || '').split(/[\s,]+/).filter(Boolean);
+  const push = (level, code, msg, el, fix) => ignored.includes(code) || ignored.includes(CAT[code]) ? null : issues.push({ level, code, cat: CAT[code] || 'ux', screen: name, msg, id: el && el.dataset ? (el.dataset.id || (ownerNode(el, project) || {}).id) : el && el.id, key: el && el.dataset ? el.dataset.key : undefined, fix });
   const W = screenEl.offsetWidth, H = screenEl.offsetHeight;
   const dev = project.sizeOf(screenNode).device;
   const kind = dev ? dev.kind : 'phone';
@@ -200,6 +203,34 @@ export function lintScreen(screenEl, project, screenNode) {
   if (colors.size > 14) push('info', 'color-count', `${colors.size} couleurs distinctes à l'écran : règle 60-30-10 (une primaire, des neutres, un accent)`);
   if (shadowX.size > 1) push('info', 'shadow-light', `Ombres orientées dans des directions différentes (${[...shadowX].join(' · ')}) : une seule source de lumière`);
 
+  // --- motion (Illusion of Life / Animator's Survival Kit appliqués à l'interface)
+  const anims = ((screenEl._mq && screenEl._mq.anims) || []).filter((x) => x.el && x.el.isConnected && visible(x.el));
+  const entr = anims.filter((x) => x.kind === 'in').map((x) => { const sp = parseSpec(x.spec, 'in'); return { x, sp, start: (sp.delay || 0) + (x.delay || 0), dur: sp.duration * (x.durScale || 1) }; });
+  const loops = anims.filter((x) => x.kind === 'loop').map((x) => ({ x, sp: parseSpec(x.spec, 'loop') }));
+  const MOVING = new Set(['fade-up', 'fade-down', 'fade-left', 'fade-right', 'scale-in', 'zoom-in', 'pop', 'land', 'stretch-in', 'slide-up', 'slide-down', 'slide-left', 'slide-right', 'rotate-in', 'drop', 'grow', 'grow-up']);
+  const srcFix = (x, mut) => { const node = ownerNode(x.el, project); return node && node.attrs && node.attrs.anim ? { id: node.id, attrs: { anim: mut(String(node.attrs.anim)) } } : undefined; };
+  for (const e of entr) {
+    const nm = label(e.x.el);
+    if (e.sp.easing === 'linear' && MOVING.has(e.sp.name)) push('warn', 'motion-linear', `« ${e.sp.name} » en linéaire sur ${nm} : mouvement mécanique, utilise un slow in/out (smooth, expo, cushion)`, e.x.el, srcFix(e.x, (s) => s.replace(/\blinear\b/, 'smooth')));
+    if (e.dur > 900 && e.sp.name !== 'count' && e.sp.name !== 'typewriter') push('warn', 'motion-duration', `Entrée de ${Math.round(e.dur)} ms sur ${nm} : en interface, vise 200–600 ms (le contenu doit se poser vite)`, e.x.el, srcFix(e.x, (s) => s.replace(/(^\S+\s+)(\d+)/, (m, a) => a + '600')));
+    else if (e.dur < 120) push('info', 'motion-duration', `Entrée de ${Math.round(e.dur)} ms sur ${nm} : trop courte pour être lue (≥ 150 ms)`, e.x.el);
+  }
+  if (entr.length) {
+    const end = Math.max(...entr.map((e) => e.start + e.dur));
+    if (end > 1600) push('warn', 'motion-settle', `L'écran met ${Math.round(end)} ms à se poser : l'utilisateur attend. Réduis les délais ou le pas de cascade (vise < 1 200 ms)`);
+    const groups = new Map();
+    for (const e of entr) { const k = `${e.sp.name}|${Math.round(e.start)}|${Math.round(e.dur)}`; groups.set(k, (groups.get(k) || 0) + 1); }
+    const maxSame = Math.max(...groups.values());
+    if (maxSame >= 5) push('info', 'motion-sync', `${maxSame} éléments partent exactement en même temps avec la même animation : décale-les (overlapping action, stagger) pour une entrée vivante`);
+    const durs = new Set(entr.filter((e) => MOVING.has(e.sp.name)).map((e) => Math.round(e.dur / 50)));
+    if (entr.length >= 6 && durs.size === 1) push('info', 'motion-tempo', `Toutes les entrées ont la même durée : joue avec le tempo (principal plus ample, détails plus vifs)`);
+    const delays = entr.map((e) => e.start).sort((a, b) => a - b);
+    let maxStep = 0; for (let i = 1; i < delays.length; i++) maxStep = Math.max(maxStep, delays[i] - delays[i - 1]);
+    if (maxStep > 250 && delays.length > 2) push('info', 'motion-step', `Écart de ${Math.round(maxStep)} ms entre deux entrées : la cascade semble hachée (pas de 30–90 ms)`);
+  }
+  const visibleLoops = loops.filter((l) => l.sp.name !== 'spin' && l.sp.name !== 'shimmer' && l.sp.name !== 'moving-hold');
+  if (visibleLoops.length > 2) push('warn', 'motion-loops', `${visibleLoops.length} animations en boucle visibles (${[...new Set(visibleLoops.map((l) => l.sp.name))].join(', ')}) : les actions secondaires se concurrencent, garde-en une (staging)`);
+
   const errs = (screenEl._mq && screenEl._mq.errors) || [];
   [...new Set(errs)].forEach((e) => push('error', 'render', e));
   return issues;
@@ -252,6 +283,22 @@ export function lintProject(project) {
     while (q.length) { const s = q.shift(); for (const t of graph.get(s) || []) if (!seen.has(t) && names.has(t)) { seen.add(t); q.push(t); } }
     for (const n of names) if (!seen.has(n)) push('info', 'unreachable', `Écran « ${n} » inaccessible depuis « ${start.attrs.name} »`, { screen: n });
   }
+
+  // transitions between screens/states: durations & spacing
+  const tVisit = (n, owner) => {
+    for (const [k, v] of Object.entries(n.attrs || {})) {
+      if (!k.startsWith('on:') && !k.startsWith('@')) continue;
+      for (const step of String(v).split(';')) {
+        const m = /\b(go|overlay|set|toggle|back)\b(.*)$/.exec(step); if (!m) continue;
+        const ms = (m[2].match(/(?:^|\s)(\d+)(?:ms)?(?=\s|$)/) || [])[1];
+        if (ms && m[1] !== 'set' && +ms > 800) push('warn', 'transition-duration', `Transition de ${ms} ms (${m[1]}) : au-delà de ~600 ms une navigation paraît lente`, { screen: owner, id: n.id, fix: { id: n.id, attrs: { [k]: String(v).replace(new RegExp('\\b' + ms + '\\b'), '500') } } });
+        if (/\blinear\b/.test(m[2]) && /\b(smart|push|slide|ios|scale)/.test(m[2])) push('warn', 'motion-linear', `Transition linéaire (${m[1]}) : mouvement mécanique, utilise un easing`, { screen: owner, id: n.id, fix: { id: n.id, attrs: { [k]: String(v).replace(/\blinear\b/, 'smooth') } } });
+      }
+    }
+    (n.children || []).forEach((c) => tVisit(c, owner));
+  };
+  for (const s of project.screens()) tVisit(s, s.attrs.name);
+  Object.values(project.components).filter((c) => !c.fromKit).forEach((c) => tVisit(c.node, '◆ ' + c.name));
 
   // smart animate without shared layer names
   const keysOf = (n, acc = new Set()) => { if (n.attrs && (n.attrs.name || n.attrs.key) && n.tag !== 'screen' && n.tag !== 'icon') acc.add(String(n.attrs.name || n.attrs.key)); if (/^[A-Z]/.test(n.tag) && project.components[n.tag] && project.components[n.tag].root) keysOf(project.components[n.tag].root, acc); (n.children || []).forEach((c) => keysOf(c, acc)); return acc; };

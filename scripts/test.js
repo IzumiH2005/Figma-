@@ -70,6 +70,26 @@ ok(['off-grid', 'type-scale', 'destructive'].every((c) => hyg.codes.includes(c))
 ok(hyg.comment && hyg.gap && hyg.size && hyg.danger, 'fix chirurgical : corrections appliquées, commentaires conservés');
 ok(/^#[0-9A-F]{6}$/.test(hyg.tint) && hyg.tint !== '#000000', 'fonctions de couleur tint()/shade() ' + hyg.tint);
 
+// motion: modifiers shape keyframes, lint motion rules, stagger options
+const mot = await page.evaluate(() => {
+  const sp = MQ.parseSpec('fade-up 500 anticipate overshoot', 'in');
+  const r = MQ.shapeFrames(MQ.PRESETS['fade-up'](16), sp, 'ease');
+  const pre = parseFloat(r.frames[1].translate.split(' ')[1]), over = parseFloat(r.frames[2].translate.split(' ')[1]);
+  const arc = MQ.shapeFrames(MQ.PRESETS['fade-left'](40), MQ.parseSpec('fade-left 500 arc', 'in'), 'ease').frames;
+  const bowed = arc.some((f) => Math.abs(parseFloat(String(f.translate).split(' ')[1])) > 1);
+  const hard = MQ.parseSpec('pop 400 hard', 'in'), soft = MQ.parseSpec('pop 400 soft', 'in');
+  const p = MQ.loadProject(`<screen name=S device=iphone-16><col stagger="50 fade-up 400 from=end drag=1.2"><text>a</text><text>b</text><text>c</text></col><text anim="fade-up 1500 linear">lent</text></screen>`);
+  document.body.innerHTML = ''; const el = MQ.screenElement(p, 'S'); document.body.appendChild(el);
+  const codes = MQ.lintScreen(el, p, p.screen('S')).map((i) => i.code);
+  const st = el._mq.anims.filter((a) => a.delay !== undefined).map((a) => [a.delay, +(a.durScale || 1).toFixed(2)]);
+  return { pre, over, bowed, hard: hard.overshoot > 0, soft: soft.overshoot === 0, codes, st };
+});
+ok(mot.pre > 16 && mot.over < 0, `anticipation (${mot.pre}) puis dépassement (${mot.over}) opposés au mouvement`);
+ok(mot.bowed, 'arc : trajectoire courbée');
+ok(mot.hard && mot.soft, 'accent dur = rebond, doux = amorti');
+ok(mot.codes.includes('motion-linear') && mot.codes.includes('motion-duration'), 'lint motion : linéaire et durée excessive détectés');
+ok(JSON.stringify(mot.st.slice(0, 3)) === JSON.stringify([[100, 1.44], [50, 1.2], [0, 1]]), 'cascade from=end avec traîne ' + JSON.stringify(mot.st));
+
 // prototype runtime: navigation + variables
 const proto = await page.evaluate(async () => {
   const p = MQ.loadProject(`<vars>n: 0</vars><screen name=A start><text name=t on:click="inc $n">{$n}</text><text name=go on:click="go B smart 50">go</text></screen><screen name=B><text name=t on:click="back">B</text></screen>`);

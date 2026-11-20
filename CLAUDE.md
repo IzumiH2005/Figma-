@@ -18,13 +18,14 @@ Playwright et Chromium sont préinstallés dans l'environnement ; ffmpeg sert po
 2. **Vérifier sans pixels** : `node cli/mq.js inspect f.mq -s Écran --depth 4` affiche l'arbre de layout calculé (boîtes `[x,y w×h]`, ⚠ débordements, ▶ zones interactives).
 3. **Auditer et corriger** : `node cli/mq.js audit f.mq` donne un score d'hygiène par catégorie. `node cli/mq.js lint f.mq --fix` applique les corrections sûres par patch chirurgical du source (grille 4/8, échelle typo, tokens, `kind=danger`…). `--only contrast,spacing` filtre par règle ou par catégorie. Règles détaillées : `docs/DESIGN-RULES.md`. **Ne livre rien sous 95/100 ou avec une erreur.**
 4. **Regarder** : `node cli/mq.js render f.mq -s Écran --frame -o out` (PNG avec cadre d'appareil), ou `board` pour tout le canvas. Lis le PNG avec l'outil Read.
-5. **Animer** : `node cli/mq.js video f.mq --flow demo -o out/demo.mp4` (ajoute `--gif` si besoin) ; `anim -s Écran` pour les animations d'entrée seules.
+5. **Animer** : `node cli/mq.js motion f.mq -s Écran` lit la motion en texte (timing, spacing en points, transitions) ; `node cli/mq.js video f.mq --flow demo -o out/demo.mp4` (`--gif`, `--slowmo 0.25` pour vérifier anticipation et arcs) ; `anim -s Écran` pour les entrées seules. Principes et syntaxe : `docs/MOTION-RULES.md`.
 6. **Livrer** : `node cli/mq.js build f.mq -o out/maquette.html`, puis publie ce fichier en artifact ; envoie PNG et MP4 avec SendUserFile.
 
 ## Règles de conception utiles
 
 - Fondations d'abord : `primary: ramp(#hex)`, `gray: neutrals($primary)`, `typescale=…` puis `class=t-h1` / `t-body`… plutôt que des tailles libres ; espacements dans 4 · 8 · 12 · 16 · 24 · 32 · 48 · 64.
 - Un seul `Button` primaire par vue ; verbes d'action ; `kind=danger` et `ConfirmDialog` pour le destructif ; formulaires avec `Field label=… optional error=…`.
+- Motion : décide séparément le timing (durée) et le spacing (courbe) ; jamais de `linear` pour un déplacement ; `anticipate`/`snap` avant une action importante, `hard` (rebond) ou `soft` (amorti) pour l'arrivée, `arc` pour les trajets longs, cascades décalées (`stagger … drag=1.1`), une seule boucle visible, l'écran posé en moins de 1,2 s.
 - Pour lire un texte sur une couleur arbitraire : `color={onColor($fond)}`. Pour les variations : `shade($primary, 10)` au survol, `alpha($primary, 12)` pour un fond doux.
 
 - Nomme (`name=`) les éléments qui doivent se transformer entre deux écrans ou deux états : c'est la clé du smart animate.

@@ -7,7 +7,7 @@ const FONTS = ['Inter', 'Manrope', 'DM Sans', 'Plus Jakarta Sans', 'Space Grotes
 const WEIGHTS = [['300', 'Light'], ['400', 'Regular'], ['500', 'Medium'], ['600', 'Semibold'], ['700', 'Bold'], ['800', 'Extrabold'], ['900', 'Black']];
 const TRIGGERS = [['on:click', 'Au clic'], ['on:enter', 'Survol (entrée)'], ['on:leave', 'Survol (sortie)'], ['on:press', 'Appui'], ['on:longpress', 'Appui long'], ['on:swipe-left', 'Swipe ←'], ['on:swipe-right', 'Swipe →'], ['on:swipe-up', 'Swipe ↑'], ['on:swipe-down', 'Swipe ↓'], ['on:load', 'Au chargement'], ['on:after-2000', 'Après délai'], ['on:key-Enter', 'Touche clavier'], ['on:change', 'Saisie (input)']];
 const TRANS = ['instant', 'dissolve', 'smart', 'ios', 'push', 'push-right', 'push-up', 'push-down', 'slide-up', 'slide-down', 'slide-left', 'slide-right', 'scale', 'flip'];
-const EASES = ['smooth', 'spring', 'bouncy', 'snappy', 'gentle', 'expo', 'back', 'in-out', 'out', 'in', 'linear', 'bounce'];
+const EASES = ['smooth', 'expo', 'cushion', 'snap', 'spring', 'bouncy', 'snappy', 'gentle', 'back', 'in-out', 'out', 'in', 'linear', 'bounce'];
 
 export class RightPanel {
   constructor(app, root, hooks) {
@@ -285,20 +285,23 @@ easings : ${EASES.join(' ')}`)));
       const rest = m ? m[3].split(/\s+/).filter(Boolean) : action.trim().split(/\s+/).slice(1);
       const tr = MQ.parseTransition(rest.filter((w) => !/=/.test(w) && !['center', 'bottom', 'top', 'left', 'right'].includes(w)));
       const pos = rest.find((w) => ['center', 'bottom', 'top', 'left', 'right'].includes(w)) || 'center';
+      const flags0 = ['arc', 'overlap', 'smear'].filter((f) => tr[f]);
       const compose = (o) => {
-        const k2 = o.kind ?? kind, t2 = o.target ?? target, tt = o.type ?? tr.type, d2 = o.dur ?? tr.duration, e2 = o.ease ?? tr.easing, p2 = o.pos ?? pos;
+        const k2 = o.kind ?? kind, t2 = o.target ?? target, tt = o.type ?? tr.type, d2 = o.dur ?? tr.duration, e2 = o.ease ?? tr.easing, p2 = o.pos ?? pos, fl = o.flags ?? flags0;
         if (k2 === 'back' || k2 === 'close') return k2 + (tt !== 'instant' && k2 === 'back' && o.type ? ' ' + tt : '');
         let s = `${k2} ${q(t2 || screens[0] || '')}`;
         if (k2 === 'overlay') s += ` ${p2}`;
         if (tt !== 'instant' || k2 === 'go') s += ` ${tt}`;
         if (d2 && d2 !== 300 && d2 !== 420 && d2 !== 380) s += ` ${d2}`;
         if (e2 && e2 !== 'smooth') s += ` ${e2}`;
+        if (tt === 'smart' && fl.length) s += ' ' + fl.join(' ');
         return s;
       };
       body = h('div.ibody', null,
         h('div.grid2', null, select([['go', 'Naviguer vers'], ['overlay', 'Ouvrir overlay'], ['back', 'Retour'], ['close', 'Fermer overlay']], kind, (v) => set(key, compose({ kind: v }))),
           kind === 'go' || kind === 'overlay' ? select([...screens.map((s) => [s, s]), ...(kind === 'overlay' ? comps.map((c) => [c, '◆ ' + c]) : [])], target, (v) => set(key, compose({ target: v }))) : h('span')),
         kind === 'go' || kind === 'overlay' ? h('div.grid3', null, select(TRANS.map((t) => [t, t]), tr.type, (v) => set(key, compose({ type: v }))), num('ms', tr.duration, (v) => set(key, compose({ dur: v }))), select(EASES.map((e) => [e, e]), tr.easing, (v) => set(key, compose({ ease: v })))) : null,
+        (kind === 'go') && tr.type === 'smart' ? h('div.chips', null, [['arc', 'Arc', 'Trajectoires courbes'], ['overlap', 'Overlap', 'Les éléments partent en léger décalé'], ['smear', 'Smear', 'Étirement + flou au milieu des grands déplacements']].map(([f, l, t]) => h('button.chip' + (flags0.includes(f) ? '.on' : ''), { title: t, onclick: () => set(key, compose({ flags: flags0.includes(f) ? flags0.filter((x) => x !== f) : [...flags0, f] })) }, l))) : null,
         kind === 'overlay' ? h('div.prow', null, h('label', null, 'Position'), select([['center', 'Centre'], ['bottom', 'Bas (sheet)'], ['top', 'Haut'], ['left', 'Gauche'], ['right', 'Droite']], pos, (v) => set(key, compose({ pos: v })))) : null);
     }
     const raw = input('act-' + key, action, (v) => set(key, v), { mono: true });
@@ -310,19 +313,45 @@ easings : ${EASES.join(' ')}`)));
     const app = this.app; const b = this.body; const n = nodes[0]; const ids = nodes.map((x) => x.id);
     const set = (k, v) => app.change(() => app.setAttr(ids, k, v));
     const sp = n.attrs.anim ? MQ.parseSpec(n.attrs.anim, 'in') : null;
-    const compose = (o) => { const name = o.name ?? sp?.name ?? 'fade-up'; if (!name) return null; const d = o.dur ?? sp?.duration ?? 500, dl = o.delay ?? sp?.delay ?? 0, e = o.ease ?? sp?.easing ?? 'smooth'; return `${name} ${d}${dl ? ' delay=' + dl : ''}${e !== 'smooth' ? ' ' + e : ''}`; };
-    b.appendChild(sec('Entrée (à l\'apparition)',
-      h('div.prow', null, h('label', null, 'Animation'), select([['', 'Aucune'], ...MQ.ENTRANCE.map((x) => [x, x]), ...Object.keys(app.project.keyframes).map((k) => [k, '★ ' + k])], sp ? sp.name : '', (v) => set('anim', v ? compose({ name: v }) : null))),
-      sp ? h('div.grid3', null, num('Durée', sp.duration, (v) => set('anim', compose({ dur: v }))), num('Délai', sp.delay, (v) => set('anim', compose({ delay: v }))), select(EASES.map((e) => [e, e]), sp.easing, (v) => set('anim', compose({ ease: v })))) : null,
-      sp ? easeCurve(sp.easing) : null));
+    // timing (durée, délai) et spacing (courbe) sont deux décisions distinctes
+    const compose = (o) => {
+      const c = { name: sp?.name ?? 'fade-up', dur: sp?.duration ?? 450, delay: sp?.delay ?? 0, ease: sp?.easing ?? 'smooth', antic: !!sp?.antic && !sp?.snap, snap: !!sp?.snap, over: !!sp?.overshoot && !sp?.accent, arc: !!sp?.arc, accent: sp?.accent || '', ...o };
+      const parts = [c.name, c.dur]; if (c.delay) parts.push('delay=' + c.delay);
+      if (c.ease && c.ease !== 'smooth') parts.push(c.ease);
+      if (c.antic) parts.push('anticipate'); if (c.snap) parts.push('snap'); if (c.over) parts.push('overshoot'); if (c.arc) parts.push('arc'); if (c.accent) parts.push(c.accent);
+      return parts.join(' ');
+    };
+    const rows = [h('div.prow', null, h('label', null, 'Animation'), select([['', 'Aucune'], ...MQ.ENTRANCE.map((x) => [x, x]), ...Object.keys(app.project.keyframes).map((k) => [k, '★ ' + k])], sp ? sp.name : '', (v) => set('anim', v ? compose({ name: v }) : null)))];
+    if (sp) {
+      rows.push(h('div.mlabel', null, 'Timing', h('span', null, 'combien de temps')));
+      rows.push(h('div.grid2', null, num('Durée', sp.duration, (v) => set('anim', compose({ dur: v })), 'ms'), num('Délai', sp.delay, (v) => set('anim', compose({ delay: v })), 'ms')));
+      rows.push(h('div.mlabel', null, 'Spacing', h('span', null, 'comment le mouvement se répartit')));
+      rows.push(h('div.chips', null, ['smooth', 'expo', 'cushion', 'snap', 'back', 'spring', 'bouncy', 'gentle', 'in-out', 'linear'].map((e) => h('button.chip' + (sp.easing === e ? '.on' : ''), { title: EASE_HELP[e] || e, onclick: () => set('anim', compose({ ease: e })) }, e))));
+      rows.push(bezierEditor(sp.easing, (v) => set('anim', compose({ ease: v }))));
+      rows.push(h('div.mlabel', null, 'Principes', h('span', null, 'Disney · Williams')));
+      const flag = (label, key, on, help) => h('div.prow', { title: help }, h('label', null, label), toggle(on, (v) => set('anim', compose({ [key]: v, ...(key === 'snap' && v ? { antic: false } : {}), ...(key === 'antic' && v ? { snap: false } : {}) }))));
+      rows.push(flag('Anticipation', 'antic', !!sp.antic && !sp.snap, 'Petit mouvement opposé, lent, avant l\'action (Williams : grammaire universelle)'));
+      rows.push(flag('Anticipation invisible (snap)', 'snap', !!sp.snap, '1–2 images opposées sous le seuil de perception : donne du claquant'));
+      rows.push(flag('Follow-through (dépassement)', 'over', !!sp.overshoot && !sp.accent, 'Dépasse légèrement la position finale puis revient'));
+      rows.push(flag('Trajectoire en arc', 'arc', !!sp.arc, 'Les choses vivantes se déplacent en arcs, pas en lignes droites'));
+      rows.push(h('div.prow', { title: 'Dur : rebond après contact (assertif). Doux : arrivée amortie sans rebond (posé).' }, h('label', null, 'Accent'), seg([['', 'circle-off', 'Aucun'], ['hard', 'zap', 'Dur (rebond)'], ['soft', 'feather', 'Doux (amorti)']], sp.accent || '', (v) => set('anim', compose({ accent: v, ease: v === 'hard' ? 'expo' : v === 'soft' ? 'cushion' : sp.easing })))));
+    }
+    b.appendChild(sec('Entrée (à l\'apparition)', ...rows));
     const lp = n.attrs.loop ? MQ.parseSpec(n.attrs.loop, 'loop') : null;
-    b.appendChild(sec('Boucle', h('div.prow', null, h('label', null, 'Animation'), select([['', 'Aucune'], ...MQ.LOOPS.map((x) => [x, x])], lp ? lp.name : '', (v) => set('loop', v ? `${v}${lp ? ' ' + lp.duration : ''}` : null))), lp ? num('Durée', lp.duration, (v) => set('loop', `${lp.name} ${v}`)) : null));
+    b.appendChild(sec('Boucle', h('div.prow', null, h('label', null, 'Animation'), select([['', 'Aucune'], ...MQ.LOOPS.map((x) => [x, x === 'moving-hold' ? 'moving-hold (pose vivante)' : x])], lp ? lp.name : '', (v) => set('loop', v ? `${v}${lp ? ' ' + lp.duration : ''}` : null))), lp ? num('Durée', lp.duration, (v) => set('loop', `${lp.name} ${v}`), 'ms') : null, h('div.hint', null, 'Une seule boucle visible à la fois : une action secondaire ne doit jamais voler la vedette à l\'action principale.')));
     if (isContainer(n)) {
-      const st = n.attrs.stagger ? String(n.attrs.stagger).split(/\s+/) : null;
-      b.appendChild(sec('Cascade (enfants)', h('div.prow', null, h('label', null, 'Activer'), toggle(!!st, (v) => set('stagger', v ? '70 fade-up 450' : null))), st ? h('div.grid2', null, num('Pas (ms)', st[0], (v) => set('stagger', [v, ...st.slice(1)].join(' '))), select(MQ.ENTRANCE.map((x) => [x, x]), st[1] || 'fade-up', (v) => set('stagger', [st[0], v, ...st.slice(2)].join(' ')))) : null));
+      const raw = n.attrs.stagger ? String(n.attrs.stagger).split(/\s+/) : null;
+      const opt = (k, d) => { const m = raw && raw.find((x) => x.startsWith(k + '=')); return m ? m.split('=')[1] : d; };
+      const plain = raw ? raw.filter((x) => !/^(from|drag)=/.test(x)) : [];
+      const build = (o) => { const step = o.step ?? plain[0] ?? 60; const preset = o.preset ?? (plain.slice(1).join(' ') || 'fade-up 450'); const from = o.from ?? opt('from', 'start'); const drag = o.drag ?? opt('drag', '1'); return [step, preset, from !== 'start' ? 'from=' + from : '', +drag !== 1 ? 'drag=' + drag : ''].filter(Boolean).join(' '); };
+      b.appendChild(sec('Cascade des enfants (overlapping action)', h('div.prow', null, h('label', null, 'Activer'), toggle(!!raw, (v) => set('stagger', v ? '60 fade-up 450' : null))),
+        raw ? h('div.grid2', null, num('Pas', plain[0], (v) => set('stagger', build({ step: v })), 'ms'), select(MQ.ENTRANCE.map((x) => [x + ' 450', x]), (plain[1] || 'fade-up') + ' 450', (v) => set('stagger', build({ preset: v })))) : null,
+        raw ? h('div.prow', null, h('label', null, 'Départ'), select([['start', 'Du premier'], ['end', 'Du dernier'], ['center', 'Du centre'], ['edges', 'Des bords'], ['random', 'Aléatoire']], opt('from', 'start'), (v) => set('stagger', build({ from: v })))) : null,
+        raw ? num('Traîne (drag)', opt('drag', '1'), (v) => set('stagger', build({ drag: v })), '×') : null,
+        h('div.hint', null, 'Pas de 30–90 ms. Traîne > 1 : chaque élément suivant dure un peu plus, comme une masse qui suit.')));
     }
     b.appendChild(sec('Survol / appui', h('div.grid2', null, numOpt('Échelle survol', n.attrs['hover:scale'], (v) => set('hover:scale', v)), numOpt('Échelle appui', n.attrs['press:scale'], (v) => set('press:scale', v))), h('div.prow', null, h('label', null, 'Remplissage survol'), colorField(app, n.attrs['hover:fill'], (v) => set('hover:fill', v), 'hfill'))));
-    b.appendChild(h('div.pad', null, h('button.btn.primary', { onclick: () => this.hooks.previewMotion() }, icon('play', 13), 'Prévisualiser les animations'), h('button.btn', { onclick: () => this.hooks.toggleTimeline() }, icon('gantt-chart', 13), 'Timeline')));
+    b.appendChild(h('div.pad', null, h('button.btn.primary', { onclick: () => this.hooks.previewMotion() }, icon('play', 13), 'Prévisualiser'), h('button.btn', { onclick: () => this.hooks.toggleTimeline() }, icon('gantt-chart', 13), 'Timeline & trajectoires')));
   }
 
   // ------------------------------------------------------------ code
@@ -376,7 +405,8 @@ easings : ${EASES.join(' ')}`)));
     const order = { error: 0, warn: 1, info: 2 };
     for (const i of [...shown].sort((x, y) => order[x.level] - order[y.level])) b.appendChild(h('div.issue.' + i.level, { onclick: () => { if (i.id && app.node(i.id)) { app.select(i.id); this.hooks.focus(i.id); } } }, icon(ic[i.level], 14),
       h('div.ibody2', null, h('div.imsg', null, i.msg), h('div.imeta', null, `${MQ.CATEGORIES[i.cat] || ''} · ${i.code}${i.screen ? ' · ' + i.screen : ''}`)),
-      i.fix ? h('button.btn.fixbtn', { title: 'Appliquer la correction', onclick: (e) => { e.stopPropagation(); app.change(() => MQ.applyFixes(app.project, [i])); } }, icon('wand-sparkles', 12), 'Corriger') : null));
+      i.fix ? h('button.btn.fixbtn', { title: 'Appliquer la correction', onclick: (e) => { e.stopPropagation(); app.change(() => MQ.applyFixes(app.project, [i])); } }, icon('wand-sparkles', 12), 'Corriger') : null,
+      i.screen && app.project.screen(i.screen) ? h('button.mini', { title: `Ignorer « ${i.code} » sur cet écran (lint-ignore)`, onclick: (e) => { e.stopPropagation(); const s = app.project.screen(i.screen); app.change(() => { const cur = String(s.attrs['lint-ignore'] || '').split(/[\s,]+/).filter(Boolean); if (!cur.includes(i.code)) cur.push(i.code); s.attrs['lint-ignore'] = cur.join(','); }); } }, icon('eye-off', 12)) : null));
   }
 }
 
@@ -487,6 +517,59 @@ function iconPicker(value, onCommit) {
   const el = input('icon', value, onCommit, { mono: true });
   el.setAttribute('list', id);
   return h('div.iconpick', null, icon(value, 16), el);
+}
+
+const EASE_HELP = {
+  smooth: 'Slow out rapide, longue arrivée : défaut polyvalent', expo: 'Départ vif, arrivée très amortie : entrées assertives', cushion: 'Arrivée coussinée sans rebond (accent doux)',
+  snap: 'Accélère puis claque : actions décidées', back: 'Léger dépassement en fin de course', spring: 'Ressort physique', bouncy: 'Ressort avec rebonds (accent dur)', gentle: 'Ressort lent et calme',
+  'in-out': 'Symétrique : déplacements d\'un point à un autre', linear: 'Mécanique : réservé aux rotations continues et aux barres de progression',
+};
+
+// cubic-bezier evaluation (x → y) by bisection
+function bez(x1, y1, x2, y2) {
+  const c = (a, b2, t) => 3 * a * t * (1 - t) * (1 - t) + 3 * b2 * t * t * (1 - t) + t * t * t;
+  return (x) => { let lo = 0, hi = 1; for (let i = 0; i < 30; i++) { const m = (lo + hi) / 2; if (c(x1, x2, m) < x) lo = m; else hi = m; } return c(y1, y2, (lo + hi) / 2); };
+}
+const BEZ = { smooth: [0.2, 0.8, 0.2, 1], expo: [0.16, 1, 0.3, 1], cushion: [0.22, 1, 0.36, 1], snap: [0.7, 0, 0.2, 1], back: [0.34, 1.56, 0.64, 1], 'in-out': [0.4, 0, 0.2, 1], in: [0.4, 0, 1, 1], out: [0, 0, 0.2, 1], linear: [0, 0, 1, 1], ease: [0.25, 0.1, 0.25, 1], standard: [0.2, 0, 0, 1], emphasized: [0.05, 0.7, 0.1, 1], anticipate: [0.68, -0.55, 0.27, 1.55], accelerate: [0.55, 0, 1, 0.45] };
+
+// Editable cubic-bezier curve + Williams spacing chart (dots at equal time steps)
+function bezierEditor(name, onCommit) {
+  const m = /^cubic-bezier\(([^)]+)\)$/.exec(name || '');
+  let P = m ? m[1].split(',').map(Number) : BEZ[name] ? BEZ[name].slice() : null;
+  const NS = 'http://www.w3.org/2000/svg';
+  const W = 236, H = 150, x0 = 18, x1 = W - 18, y0 = H - 32, y1 = 30; // y in [-0.25, 1.25]
+  const sx = (v) => x0 + v * (x1 - x0), sy = (v) => y0 - v * (y0 - y1);
+  const svg = document.createElementNS(NS, 'svg'); svg.setAttribute('viewBox', `0 0 ${W} ${H}`); svg.setAttribute('class', 'bezier');
+  const el = (t, a) => { const e = document.createElementNS(NS, t); for (const [k, v] of Object.entries(a)) e.setAttribute(k, v); svg.appendChild(e); return e; };
+  el('rect', { x: x0, y: y1, width: x1 - x0, height: y0 - y1, class: 'bz-box' });
+  const curve = el('path', { class: 'bz-curve' });
+  const l1 = el('line', { class: 'bz-arm' }), l2 = el('line', { class: 'bz-arm' });
+  const dots = el('g', {});
+  const h1 = el('circle', { r: 6, class: 'bz-h' }), h2 = el('circle', { r: 6, class: 'bz-h' });
+  const label = h('div.bz-label');
+  const sampleNamed = () => { // non-bezier easings (springs, bounce): sample through WAAPI
+    const d = document.createElement('div'); document.body.appendChild(d); const pts = [];
+    try { const ez = MQ.resolveEasing(name, 500).easing; const a = d.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 1000, easing: ez, fill: 'both' }); a.pause(); for (let i = 0; i <= 60; i++) { a.currentTime = i * (1000 / 60); pts.push(parseFloat(getComputedStyle(d).opacity)); } } catch (e) { /* */ }
+    d.remove(); return pts;
+  };
+  const draw = () => {
+    let f;
+    if (P) { f = bez(...P); h1.setAttribute('cx', sx(P[0])); h1.setAttribute('cy', sy(P[1])); h2.setAttribute('cx', sx(P[2])); h2.setAttribute('cy', sy(P[3])); l1.setAttribute('x1', sx(0)); l1.setAttribute('y1', sy(0)); l1.setAttribute('x2', sx(P[0])); l1.setAttribute('y2', sy(P[1])); l2.setAttribute('x1', sx(1)); l2.setAttribute('y1', sy(1)); l2.setAttribute('x2', sx(P[2])); l2.setAttribute('y2', sy(P[3])); }
+    else { const pts = sampleNamed(); f = (x) => pts[Math.round(x * 60)] ?? x; h1.style.display = h2.style.display = l1.style.display = l2.style.display = 'none'; }
+    let d = ''; for (let i = 0; i <= 60; i++) { const x = i / 60; d += `${i ? 'L' : 'M'}${sx(x).toFixed(1)} ${sy(f(x)).toFixed(1)}`; } curve.setAttribute('d', d);
+    while (dots.firstChild) dots.removeChild(dots.firstChild);
+    for (let i = 0; i <= 12; i++) { const v = f(i / 12); const c = document.createElementNS(NS, 'circle'); c.setAttribute('cx', sx(Math.max(-0.1, Math.min(1.1, v)))); c.setAttribute('cy', H - 12); c.setAttribute('r', i === 0 || i === 12 ? 3.5 : 2.5); c.setAttribute('class', 'bz-dot'); dots.appendChild(c); }
+    label.textContent = P ? `cubic-bezier(${P.map((v) => +v.toFixed(2)).join(', ')})` : `${name} (ressort, non éditable : choisis une courbe pour la modifier)`;
+  };
+  const drag = (k) => (e) => {
+    e.preventDefault(); const r = svg.getBoundingClientRect(); const scale = W / r.width;
+    const mv = (ev) => { const x = ((ev.clientX - r.left) * scale - x0) / (x1 - x0), y = (y0 - (ev.clientY - r.top) * scale) / (y0 - y1); P[k] = Math.max(0, Math.min(1, x)); P[k + 1] = Math.max(-0.6, Math.min(1.6, y)); draw(); };
+    const up = () => { removeEventListener('pointermove', mv); removeEventListener('pointerup', up); onCommit(`cubic-bezier(${P.map((v) => +v.toFixed(2)).join(',')})`.replace(/0\./g, '.')); };
+    addEventListener('pointermove', mv); addEventListener('pointerup', up);
+  };
+  h1.addEventListener('pointerdown', drag(0)); h2.addEventListener('pointerdown', drag(2));
+  draw();
+  return h('div.bzbox', null, svg, label, h('div.hint', null, 'Points du bas = position à intervalles de temps égaux (spacing). Serrés = lent, espacés = rapide.'));
 }
 
 function easeCurve(name) {

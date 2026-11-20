@@ -19,7 +19,7 @@
 <component name="Button" props="label='Bouton' kind=primary size=md icon='' iconRight='' full=false loading=false disabled=false state=''" desc="Bouton. kind: primary|secondary|tonal|outline|ghost|link|danger ; size: sm|md|lg (40/48/56px) ; state: hover|pressed|focus|disabled|loading (pour documenter les états)">
   <ButtonBase label={label} kind={kind} size={size} icon={icon} iconRight={iconRight} full={full} loading={loading || state == 'loading'} disabled={disabled || state == 'disabled'} state={state}
     bg={kind == 'primary' ? $primary : kind == 'danger' ? $danger : kind == 'secondary' ? $surface : kind == 'tonal' ? $primary-soft : 'transparent'}
-    fg={kind == 'primary' ? $on-primary : kind == 'danger' ? '#FFFFFF' : kind == 'secondary' ? $text : $primary}/>
+    fg={kind == 'primary' ? $on-primary : kind == 'danger' ? '#FFFFFF' : kind == 'secondary' ? $text : mix($primary, $text, 50)}/>
 </component>
 
 <component name="ButtonBase" props="label='' kind=primary size=md icon='' iconRight='' full=false loading=false disabled=false state='' bg='transparent' fg='#000000'" desc="(interne) rendu commun des boutons">
@@ -60,7 +60,7 @@
 <component name="Badge" props="label='Nouveau' tone=primary" desc="Étiquette. tone: primary|success|danger|warning|neutral">
   <row h=22 px=8 radius=full size=12 weight=600
     fill={tone == 'success' ? 'rgba(46,182,125,.14)' : tone == 'danger' ? 'rgba(229,72,77,.14)' : tone == 'warning' ? 'rgba(245,165,36,.16)' : tone == 'neutral' ? $surface : $primary-soft}
-    color={tone == 'success' ? mix($success, $text, 45) : tone == 'danger' ? mix($danger, $text, 35) : tone == 'warning' ? mix($warning, $text, 55) : tone == 'neutral' ? $muted : mix($primary, $text, 20)}>
+    color={tone == 'success' ? mix($success, $text, 45) : tone == 'danger' ? mix($danger, $text, 35) : tone == 'warning' ? mix($warning, $text, 55) : tone == 'neutral' ? $muted : mix($primary, $text, 55)}>
     <text nowrap>{label}</text>
   </row>
 </component>

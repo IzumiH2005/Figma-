@@ -1,0 +1,148 @@
+<project name="Motion Lab — principes d'animation" typescale=ui fonts="Inter:400;500;600;700|JetBrains Mono:500" modes="dark light">
+  <!-- Les 12 principes (Thomas & Johnston) et les formules de Richard Williams, appliqués à l'interface.
+       Chaque carte compare « sans » et « avec ». Lis la timeline (trajectoires) et `mq motion` pour la spec. -->
+  <tokens>
+    brand: ramp(#7C5CFF)
+    gray: neutrals(#7C5CFF, 0.014)
+    primary: $brand-600
+    on-primary: #FFFFFF
+    primary-soft: alpha($brand-400, 16)
+    bg: $gray-950 | $gray-50
+    surface: $gray-900 | #FFFFFF
+    surface-2: $gray-800 | $gray-100
+    text: $gray-50 | $gray-950
+    muted: $gray-400 | $gray-600
+    border: alpha(#FFFFFF, 8) | $gray-200
+    accent: #FFB547
+    ball: linear(135, $brand-300, $brand-600)
+  </tokens>
+
+  <vars>
+    pos: false
+    open: false
+    bars: [64, 92, 48, 110, 76, 100, 58]
+  </vars>
+
+  <keyframes name="travel">
+    0 { x=-80 }
+    100 { x=80 }
+  </keyframes>
+  <keyframes name="hop">
+    0 { x=-80 y=0 }
+    100 { x=80 y=0 }
+  </keyframes>
+
+  <component name="Lab" props="n='01' title='Principe' text='' source=''">
+    <col w=fill h=fill p=20 gap=12 radius=20 fill=$surface stroke="1 $border">
+      <row gap=8><text size=12 mono weight=500 color=$accent>{n}</text><text size=16 weight=600 w=fill>{title}</text></row>
+      <text size=14 color=$muted lh=1.45 lines=3>{text}</text>
+      <col w=fill h=fill gap=8 justify=center>
+        <slot/>
+      </col>
+      <text if={source} size=12 color=$muted mono>{source}</text>
+    </col>
+  </component>
+
+  <component name="Lane" props="label='sans' ball=true">
+    <row gap=12 w=fill h=40>
+      <text w=56 size=12 mono color=$muted nowrap>{label}</text>
+      <stack w=fill h=fill center radius=full fill=$surface-2>
+        <slot/>
+      </stack>
+    </row>
+  </component>
+
+  <page name="Lab">
+    <screen name="Motion Lab" device=desktop start fill=$bg p=40 gap=24 lint-ignore=motion-loops>
+      <row gap=auto>
+        <col gap=4>
+          <text size=12 mono color=$accent upper ls=1>Motion Lab</text>
+          <text size=32 weight=700 ls=-0.6>Huit principes, côte à côte</text>
+        </col>
+        <row gap=12>
+          <text size=14 color=$muted>Astuce : Présenter → Ralenti 0.25× · Timeline → Trajectoires</text>
+          <Button label="Rejouer les entrées" icon=rotate-ccw kind=secondary size=sm on:click="restart"/>
+        </row>
+      </row>
+      <grid cols=4 gap=16 w=fill h=fill>
+        <Lab n={'01'} title="Timing ≠ spacing" text="Même durée, autre répartition : le linéaire est mécanique, le slow in/out est vivant." source="ease linear · smooth">
+          <Lane label=linear><ellipse size=24 fill=$ball loop="travel 1600 alternate linear"/></Lane>
+          <Lane label=smooth><ellipse size=24 fill=$ball loop="travel 1600 alternate smooth"/></Lane>
+        </Lab>
+        <Lab n={'02'} title="Anticipation" text="Un petit recul lent, opposé à l'action, prépare l'œil et donne du poids au départ." source="anticipate · snap">
+          <Lane label=sans><ellipse size=24 fill=$ball loop="travel 1800 alternate expo"/></Lane>
+          <Lane label=avec><ellipse size=24 fill=$ball loop="travel 1800 alternate expo anticipate"/></Lane>
+        </Lab>
+        <Lab n={'03'} title="Follow-through" text="Accent dur : la masse dépasse puis rebondit. Accent doux : elle se pose, amortie, sans rebond." source="hard · soft">
+          <Lane label=doux><ellipse size=24 fill=$ball loop="travel 1600 alternate soft"/></Lane>
+          <Lane label=dur><ellipse size=24 fill=$ball loop="travel 1600 alternate hard"/></Lane>
+        </Lab>
+        <Lab n={'04'} title="Arcs" text="Le vivant se déplace en courbes. Une ligne droite se justifie (geste direct, mécanique)." source="arc">
+          <Lane label=droit><ellipse size=24 fill=$ball loop="hop 1600 alternate smooth"/></Lane>
+          <Lane label=arc><ellipse size=24 fill=$ball loop="hop 1600 alternate smooth arc=0.6"/></Lane>
+        </Lab>
+        <Lab n={'05'} title="Squash & stretch" text="Étirement en chute, image de contact pur, écrasement à volume constant, rebond." source="land (sx · sy ≈ 1)">
+          <row gap=40 h=fill align=end justify=center pb=8>
+            <col gap=8 align=center><frame w=44 h=44 radius=12 fill=$ball loop="fade-down 1400 dist=60"/><text size=12 mono color=$muted>rigide</text></col>
+            <col gap=8 align=center><frame w=44 h=44 radius=12 fill=$ball loop="land 1400 dist=60"/><text size=12 mono color=$muted>land</text></col>
+          </row>
+        </Lab>
+        <Lab n={'06'} title="Moving hold" text="Une pose tenue longtemps ne se fige pas : elle respire à peine. Le figé paraît mort." source="loop=moving-hold">
+          <row gap=32 h=fill justify=center>
+            <col gap=8 align=center><Avatar name="Léa Martin" size=72/><text size=12 mono color=$muted>figé</text></col>
+            <col gap=8 align=center><Avatar name="Léa Martin" size=72 loop="moving-hold 2600"/><text size=12 mono color=$muted>moving hold</text></col>
+          </row>
+        </Lab>
+        <Lab n={'07'} title="Overlapping action" text="Rien ne part ni n'arrive d'un bloc : chaque partie suit avec un léger retard, les plus lourdes traînent." source="stagger 60 grow-up · drag=1.12">
+          <row h=fill gap=8 align=end stagger="70 grow-up 520 cushion drag=1.12 from=center">
+            <frame each={$bars} as=b w=fill h={b} radius=8 fill={i == 3 ? $accent : $brand-500}/>
+          </row>
+        </Lab>
+        <Lab n={'08'} title="Smart animate" text="Changement d'état : les calques nommés voyagent en arc, en léger décalé, avec un smear sur les grands sauts." source="toggle $$pos smart arc overlap smear">
+          <col gap=12 h=fill justify=center>
+            <row w=fill h=56 p=8 radius=16 fill=$surface-2 justify={$pos ? 'end' : 'start'} gap=8>
+              <frame name=puck w=40 h=40 radius=12 fill=$ball/>
+              <frame name=puck-2 w=24 h=40 radius=8 fill=$accent/>
+            </row>
+            <Button label={$pos ? 'Revenir' : 'Déplacer'} size=sm full kind=tonal on:click="toggle $pos smart arc overlap smear"/>
+          </col>
+        </Lab>
+      </grid>
+    </screen>
+
+    <screen name="Appli" device=iphone-16 statusbar homebar fill=$bg pt=safe px=20 pb=110 gap=20 stagger="55 fade-up 420 drag=1.06" x=1540>
+      <row h=56 gap=12>
+        <col w=fill gap=0><text size=12 color=$muted>Mardi 18 nov.</text><text size=24 weight=700 ls=-0.4>Aujourd'hui</text></col>
+        <Avatar name="Ada Lovelace" size=40 loop="moving-hold 3200"/>
+      </row>
+      <col gap=12 p=16 radius=20 fill=$surface>
+        <row gap=auto><text weight=600>Focus du jour</text><Badge label="3 / 5"/></row>
+        <Progress value=0.6/>
+      </col>
+      <col gap=8>
+        <ListItem each={['Revue design','Écrire la spec','Appel Léa','Sport']} as=t title={t} subtitle="09:00 – 10:00" icon={pick(i, 'pen-tool', 'file-text', 'phone', 'dumbbell')} chevron=false/>
+      </col>
+      <FAB fixed place=bottom-right m=24 icon=plus anim="land 700 delay=500" on:click="overlay Nouvelle bottom"/>
+    </screen>
+
+    <screen name="Nouvelle" device=iphone-16 h=420 fill=$surface p=24 gap=16 x=1540 y=960>
+      <text size=20 weight=700 anim="fade-up 360 expo">Nouvelle tâche</text>
+      <Field label="Titre" placeholder="Préparer la démo"/>
+      <Button label="Créer la tâche" full anim="fade-up 360 delay=80 snap" on:click="close"/>
+    </screen>
+  </page>
+
+  <flow name="demo">
+    start "Motion Lab"
+    caption "Motion Lab — huit principes côte à côte"
+    wait 3600
+    caption "Smart animate : arc, overlap, smear"
+    click Déplacer
+    wait 1400
+    click Revenir
+    wait 1500
+    caption "Overlapping action : cascade depuis le centre, avec traîne"
+    click "Rejouer les entrées"
+    wait 2600
+  </flow>
+</project>

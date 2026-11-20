@@ -54,6 +54,7 @@ export function rootScope(project, state) {
 export function resolveDollars(v, ctx) {
   if (typeof v !== 'string') return v;
   if (!v.includes('$')) return resolveColorFns(v);
+  if (v.includes('$$')) return resolveDollars(v.split('$$').join('\u0001'), ctx).split('\u0001').join('$');
   const r = resolveDollarsRaw(v, ctx);
   return typeof r === 'string' ? resolveColorFns(r) : r;
 }
@@ -744,16 +745,27 @@ function decorate(el, node, a, states, events, scope, parentLayout, ctx) {
   if (!isText && !['icon', 'image', 'img', 'vector', 'svg', 'input', 'textarea', 'divider', 'line'].includes(tag)) {
     const layout = layoutOf(tag, a);
     const kids = renderChildren(node.children, scope, layout, ctx, el);
-    if (a.stagger) {
-      const parts = String(a.stagger).split(/\s+/);
-      const step = num(parts[0], 60); const rest = parts.slice(1).join(' ') || 'fade-up 450';
-      kids.forEach((k, idx) => {
-        const own = ctx.anims.find((x) => x.el === k && x.kind === 'in');
-        if (own) own.delay = (own.delay || 0) + idx * step;
-        else ctx.anims.push({ el: k, spec: rest, kind: 'in', delay: idx * step, id: k.dataset.id });
-      });
-    }
+    if (a.stagger) applyStagger(kids, a.stagger, ctx);
   }
+}
+
+// Cascade (overlapping action): "60 fade-up 450 from=center drag=1.1"
+//   from=start|end|center|edges|random  ordre de départ ; drag = chaque élément suivant dure un peu plus (traîne)
+export function applyStagger(kids, spec, ctx) {
+  const parts = String(spec).split(/\s+/);
+  const step = num(parts[0], 60);
+  let from = 'start', drag = 1; const rest = [];
+  for (const p of parts.slice(1)) { const m = /^(from|drag)=(.+)$/.exec(p); if (m) { if (m[1] === 'from') from = m[2]; else drag = num(m[2], 1); } else rest.push(p); }
+  const animSpec = rest.join(' ') || 'fade-up 450';
+  const n = kids.length; const mid = (n - 1) / 2;
+  let rnd = 7;
+  const order = kids.map((_, i) => from === 'end' ? n - 1 - i : from === 'center' ? Math.abs(i - mid) : from === 'edges' ? mid - Math.abs(i - mid) : from === 'random' ? ((rnd = (rnd * 9301 + 49297) % 233280) / 233280) * (n - 1) : i);
+  kids.forEach((k, idx) => {
+    const o = order[idx];
+    const own = ctx.anims.find((x) => x.el === k && x.kind === 'in');
+    if (own) { own.delay = (own.delay || 0) + o * step; own.durScale = Math.pow(drag, o); }
+    else ctx.anims.push({ el: k, spec: animSpec, kind: 'in', delay: o * step, durScale: Math.pow(drag, o), id: k.dataset.id });
+  });
 }
 
 // ------------------------------------------------------------------ screens
@@ -799,10 +811,7 @@ export function renderScreen(screen, ctx) {
   outer.appendChild(fixedLayer);
   if (a.statusbar) outer.appendChild(makeStatusBar(a.statusbar === true ? 'auto' : a.statusbar, device, outer.style.color));
   if (a.homebar) outer.appendChild(makeHomeBar(a.homebar === true ? 'auto' : a.homebar, outer.style.color));
-  if (a.stagger) {
-    const parts = String(a.stagger).split(/\s+/); const step = num(parts[0], 60); const rest = parts.slice(1).join(' ') || 'fade-up 450';
-    [...inner.children].forEach((k, idx) => { const own = ctx.anims.find((x) => x.el === k && x.kind === 'in'); if (own) own.delay = (own.delay || 0) + idx * step; else ctx.anims.push({ el: k, spec: rest, kind: 'in', delay: idx * step, id: k.dataset.id }); });
-  }
+  if (a.stagger) applyStagger([...inner.children].filter((k) => k.tagName !== 'STYLE'), a.stagger, ctx);
   if (Object.keys(events).length && ctx.runtime) ctx.runtime.bind(outer, events);
   else if (ctx.editor) for (const [trig, ev] of Object.entries(events)) { const m = /\b(?:go|overlay|swap)\s+([\w\-]+|"[^"]+")/.exec(String(ev.action)); ctx.links.push({ from: outer, owner: screen.id, trigger: trig, action: String(ev.action), target: m ? m[1].replace(/"/g, '') : null }); }
   if (ctx.rules.length || ctx.project.css) {

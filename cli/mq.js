@@ -17,7 +17,8 @@ const HELP = `Maquette CLI
   mq inspect <file.mq> [-s Écran] [--depth 4]                        arbre de layout calculé (texte)
   mq lint    <file.mq> [--fix] [--only code,cat] [--min-score 90]    hygiène UI : contraste, cibles, grille 4/8, échelle typo, tokens, CTA…
   mq audit   <file.mq>                                               score d'hygiène par catégorie (erreurs et avertissements seulement)
-  mq video   <file.mq> [--flow nom|fichier.flow] [-o demo.mp4] [--gif] [--scale 2] [--no-frame]
+  mq motion  <file.mq> [-s Écran]                                    spec de motion : timing, spacing (graphe), transitions
+  mq video   <file.mq> [--flow nom|fichier.flow] [-o demo.mp4] [--gif] [--scale 2] [--no-frame] [--slowmo 0.25]
   mq anim    <file.mq> -s Écran [-o anim.mp4] [--ms 2500]            enregistre les animations d'entrée
   mq build   <file.mq...> [-o maquette.html] [--artifact]            éditeur autonome avec projets intégrés (--artifact : pour publication)
   mq export  <file.mq> [-o proto.html]                               prototype HTML autonome (lecture seule)
@@ -224,6 +225,58 @@ async function cmdLint(o, audit = false) {
   return out.n;
 }
 
+// ---------------------------------------------------------------- motion spec (timing ≠ spacing)
+async function cmdMotion(o) {
+  const src = readProject(o._[1]);
+  const { browser, page } = await browserPage();
+  const info = await loadInPage(page, src, o.mode);
+  const wanted = o.s ? String(o.s).split(',') : info.screens;
+  const txt = await page.evaluate(({ wanted }) => {
+    const p = window.__p; const out = [];
+    const dummy = document.createElement('div'); document.body.appendChild(dummy);
+    const spacing = (easing, W = 32, N = 12) => {
+      // dots at equal time steps: tight dots = slow, far apart = fast (Williams' spacing chart)
+      let pts = [];
+      try { const a = dummy.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 1000, easing, fill: 'both' }); a.pause(); for (let i = 0; i <= N; i++) { a.currentTime = (i / N) * 1000; pts.push(parseFloat(getComputedStyle(dummy).opacity)); } a.cancel(); } catch (e) { pts = Array.from({ length: N + 1 }, (_, i) => i / N); }
+      const lo = Math.min(0, ...pts), hi = Math.max(1, ...pts); const row = Array(W + 1).fill('·');
+      for (const v of pts) row[Math.round(((v - lo) / (hi - lo)) * W)] = '●';
+      return row.join('');
+    };
+    const easeName = (sp) => sp.easing;
+    for (const name of wanted) {
+      const s = p.screen(name); if (!s) { out.push(`✖ écran introuvable : ${name}`); continue; }
+      document.body.innerHTML = ''; document.body.appendChild(dummy);
+      const el = MQ.screenElement(p, s); document.body.appendChild(el);
+      const anims = el._mq.anims;
+      const rows = anims.map((a) => {
+        const sp = MQ.parseSpec(a.spec, a.kind);
+        const ez = MQ.resolveEasing(sp.easing, sp.duration);
+        const base = /^spring|bouncy|snappy|gentle|wobbly|stiff/.test(sp.easing || '') ? ez.duration : sp.duration;
+        const shaped = MQ.shapeFrames([{ opacity: 0, translate: '0px 10px' }, { opacity: 1, translate: '0px 0px' }], sp, ez.easing);
+        const dur = Math.round(base * (a.durScale || 1) * shaped.durMul);
+        const start = Math.round((sp.delay || 0) + (a.delay || 0));
+        const who = a.el.dataset.key || a.el.dataset.comp || (a.el.dataset.tag === 'text' ? '"' + a.el.textContent.trim().slice(0, 18) + '"' : a.el.dataset.tag) || '?';
+        const mods = ['antic', 'snap', 'overshoot', 'arc', 'accent'].filter((k) => sp[k]).map((k) => k === 'accent' ? sp.accent : k === 'antic' ? 'anticipation' : k);
+        return { who, kind: a.kind, name: sp.name, start, dur, ease: easeName(sp), mods, chart: spacing(ez.easing), loop: a.kind === 'loop' };
+      }).sort((x, y) => x.start - y.start);
+      const ents = rows.filter((r) => !r.loop);
+      const settle = ents.length ? Math.max(...ents.map((r) => r.start + r.dur)) : 0;
+      out.push(`${name} — ${ents.length} entrée(s), ${rows.length - ents.length} boucle(s) · l'écran se pose en ${settle} ms`);
+      for (const r of rows) out.push(`  ${r.who.padEnd(22).slice(0, 22)} ${(r.loop ? '∞ ' : '') + r.name.padEnd(12)} ${('t=' + r.start).padStart(7)} ${(r.dur + 'ms').padStart(7)}  ${r.ease.padEnd(10).slice(0, 18)} |${r.chart}| ${r.mods.join(' ')}`);
+      // transitions leaving this screen
+      const tr = [];
+      const walk = (n) => { for (const [k, v] of Object.entries(n.attrs || {})) if (k.startsWith('on:')) for (const step of String(v).split(';')) { const m = /\b(go|overlay|back|set|toggle)\b\s*(.*)$/.exec(step.trim()); if (m && (m[1] !== 'set' || /smart|dissolve/.test(m[2]))) { const t = MQ.parseTransition(m[2].split(/\s+/)); tr.push(`  ${k.padEnd(14)} ${m[1]} ${m[2].split(/\s+/)[0] || ''}`.padEnd(40) + ` ${t.type} ${t.autoDur ? '≈distance' : t.duration + 'ms'} ${t.easing}${['arc', 'overlap', 'smear'].filter((f) => t[f]).map((f) => ' +' + f).join('')}`); } } (n.children || []).forEach(walk); };
+      walk(s);
+      if (tr.length) { out.push('  transitions :'); out.push(...[...new Set(tr)].map((x) => '  ' + x)); }
+      out.push('');
+    }
+    out.push('Graphe de spacing : un point par intervalle de temps égal. Points serrés = lent, espacés = rapide.');
+    return out.join('\n');
+  }, { wanted });
+  console.log(txt);
+  await browser.close();
+}
+
 // ---------------------------------------------------------------- video
 
 function parseFlow(text) {
@@ -317,6 +370,7 @@ async function cmdVideo(o, animOnly = false) {
   const { browser, context, page } = await browserPage({ scale, viewport: { width: vw, height: vh }, video: { dir: tmpDir, size: { width: vw * scale, height: vh * scale } } });
   await loadInPage(page, src, o.mode);
   await page.addScriptTag({ content: STAGE_JS });
+  if (o.slowmo) await page.evaluate((k) => MQ.setTimeScale(+k), o.slowmo);
   const t0 = Date.now();
   let started = false;
   const shots = [];
@@ -451,6 +505,6 @@ async function cmdScenes() {
 
 const o = args(process.argv.slice(2));
 const cmd = o._[0];
-const table = { render: cmdRender, board: cmdBoard, inspect: cmdInspect, lint: (x) => cmdLint(x), audit: (x) => cmdLint(x, true), video: (x) => cmdVideo(x), anim: (x) => cmdVideo(x, true), build: cmdBuild, export: cmdExport, fmt: cmdFmt, kit: cmdKit, icons: cmdIcons, scenes: cmdScenes };
+const table = { motion: cmdMotion, render: cmdRender, board: cmdBoard, inspect: cmdInspect, lint: (x) => cmdLint(x), audit: (x) => cmdLint(x, true), video: (x) => cmdVideo(x), anim: (x) => cmdVideo(x, true), build: cmdBuild, export: cmdExport, fmt: cmdFmt, kit: cmdKit, icons: cmdIcons, scenes: cmdScenes };
 if (!cmd || !table[cmd]) { console.log(HELP); process.exit(cmd ? 1 : 0); }
 try { await table[cmd](o); } catch (e) { console.error('✖ ' + (e && e.message || e)); process.exit(1); }

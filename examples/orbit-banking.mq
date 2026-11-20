@@ -127,7 +127,7 @@
     <col w=320 fill=$surface radius=32 p=28 gap=16 align=center shadow=2xl>
       <stack w=88 h=88 center>
         <ellipse size=88 fill=$success opacity=.18 loop="ping 1600"/>
-        <ellipse size=72 fill=$success center anim="pop 600 spring"><icon name=check size=36 stroke=3 color=$bg/></ellipse>
+        <ellipse size=72 fill=$success center anim="pop 520 hard snap"><icon name=check size=36 stroke=3 color=$bg/></ellipse>
       </stack>
       <col gap=8 align=center anim="fade-up 500 delay=200">
         <text class=h2 size=24>Envoyé !</text>
@@ -141,7 +141,7 @@
 
   <page name="App mobile">
     <screen name="Splash" device=iphone-16 start statusbar homebar fill="radial(at 50% 40%, #2A2350, $bg 70)" center on:after-1800="go Onboarding dissolve 500">
-      <col gap=20 align=center anim="scale-in 900 spring">
+      <col gap=20 align=center anim="land 900 dist=36">
         <Logo size=96 name=logo/>
         <text name=wordmark font=$display size=40 weight=700 ls=-1.5>orbit</text>
       </col>
@@ -180,7 +180,7 @@
       <row gap=auto>
         <Dots count=3 active={$slide}/>
         <Button if={$slide < 2} label=Suivant iconRight=arrow-right on:click="set $slide = $slide + 1 smart 450 spring" name=cta/>
-        <Button if={$slide == 2} label="Commencer" iconRight=arrow-right on:click="go Home ios" name=cta/>
+        <Button if={$slide == 2} label="Commencer" iconRight=arrow-right on:click="go Home ios" name=cta anim="pop 420 hard"/>
       </row>
     </screen>
 
@@ -214,7 +214,7 @@
       <col gap=12>
         <row px=20 gap=auto><text class=h2>Mes cartes</text><text size=12 color=$link weight=600>Gérer</text></row>
         <row scroll=x snap px=20 gap=12 css="scroll-padding:20px">
-          <CreditCard w=300 compact frozen={$frozen} snap=item on:click="go Card smart 520 spring" class=pressable/>
+          <CreditCard w=300 compact frozen={$frozen} snap=item on:click="go Card smart spring arc" class=pressable/>
           <CreditCard w=300 compact tone=sunset last=7730 snap=item/>
           <CreditCard w=300 compact tone=ink last=0192 snap=item/>
         </row>

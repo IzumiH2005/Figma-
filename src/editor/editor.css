@@ -353,3 +353,18 @@ body[data-view="contrast-low"] .cv-world, body[data-view="contrast-low"] .play-h
 .sccount { color: var(--ui-faint); font-size: 11px; font-variant-numeric: tabular-nums; }
 .tsize { min-width: 30px; height: 22px; border-radius: 6px; background: var(--ui-input); display: grid; place-items: center; font-weight: 600; font-variant-numeric: tabular-nums; }
 .tsize.off { background: rgba(217,144,11,.16); color: var(--ui-warn); }
+
+/* ---------- motion */
+.mlabel { display: flex; align-items: baseline; gap: 8px; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .6px; color: var(--ui-text); margin-top: 6px; }
+.mlabel span { text-transform: none; letter-spacing: 0; font-weight: 400; color: var(--ui-faint); }
+.bzbox { display: flex; flex-direction: column; gap: 6px; background: var(--ui-input); border-radius: 10px; padding: 8px; }
+.bezier { width: 100%; height: auto; touch-action: none; }
+.bz-box { fill: none; stroke: var(--ui-line-2); stroke-dasharray: 3 3; }
+.bz-curve { fill: none; stroke: var(--ui-accent); stroke-width: 2.2; }
+.bz-arm { stroke: var(--ui-faint); stroke-width: 1.2; }
+.bz-h { fill: var(--ui-panel); stroke: var(--ui-accent); stroke-width: 2; cursor: grab; }
+.bz-dot { fill: var(--ui-text); opacity: .75; }
+.bz-label { font: 11px "JetBrains Mono", monospace; color: var(--ui-muted); }
+.cv-trail { fill: none; stroke-width: 1.5; opacity: .55; }
+.cv-trail-dot { stroke: #fff; stroke-width: 1; }
+.tl-rate, .play-rate { width: auto; }

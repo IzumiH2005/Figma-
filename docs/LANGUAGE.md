@@ -177,7 +177,7 @@ Fonctions : `len min max round floor ceil abs clamp fixed money(n,'€') percent
 | `wait 300` · `restart` · `url https://…` | divers |
 
 **Transitions** : `instant dissolve smart ios push push-left|right|up|down slide slide-left|right|up|down scale flip`.
-**Easings** : `smooth spring bouncy snappy gentle wobbly stiff expo back anticipate in out in-out linear bounce standard emphasized`, `spring(raideur, amortissement)`, `cubic-bezier(…)`.
+**Easings** : `smooth expo cushion snap accelerate spring bouncy snappy gentle wobbly stiff back anticipate in out in-out linear bounce standard emphasized`, `spring(raideur, amortissement)`, `cubic-bezier(…)`.
 
 **Smart animate** : les éléments de même `name` (ou `key`) entre deux états/écrans sont interpolés (position, taille, couleur, rayon, opacité) ; les autres apparaissent/disparaissent en fondu. Fonctionne aussi sur les changements de variables (`set … smart`), ce que Figma ne sait pas faire.
 
@@ -191,8 +191,13 @@ Fonctions : `len min max round floor ceil abs clamp fixed money(n,'€') percent
 | `transition=250` | Transition CSS sur tout changement (états, smart) |
 | `<keyframes name="x"> 0 { opacity=0 y=20 } 100 { opacity=1 y=0 } </keyframes>` | Animation custom (`opacity x y scale rotate blur fill color radius w h`) |
 
-Entrées : `fade fade-up fade-down fade-left fade-right scale-in zoom-in pop slide-up slide-down slide-left slide-right blur-in rotate-in flip-in drop reveal reveal-up reveal-down typewriter grow grow-up count` (`count` anime le nombre du texte de 0 à sa valeur).
-Boucles : `pulse breathe spin float bounce shake wiggle heartbeat ping blink sway shimmer orbit`.
+Entrées : `fade fade-up fade-down fade-left fade-right scale-in zoom-in pop land stretch-in slide-up slide-down slide-left slide-right blur-in rotate-in flip-in drop reveal reveal-up reveal-down typewriter grow grow-up count` (`count` anime le nombre du texte de 0 à sa valeur ; `land` = chute, contact, écrasement à volume constant, rebond).
+Boucles : `moving-hold pulse breathe spin float bounce shake wiggle heartbeat ping blink sway shimmer orbit`. Accents (avec `play clé …`) : `squish jelly rubber shake wiggle`.
+
+**Modificateurs** (cumulables, détail dans `docs/MOTION-RULES.md`) : `anticipate` / `antic=0.3` (pré‑mouvement opposé), `snap` (anticipation invisible), `overshoot` / `overshoot=0.2` (follow-through), `arc` / `arc=0.5` (trajectoire courbe), `hard` (accent avec rebond) ou `soft` (accent amorti), `dist=40` (amplitude du preset).
+**Cascade** : `stagger="60 fade-up 450 from=center drag=1.1"` (`from=start|end|center|edges|random`, `drag` = chaque élément suivant dure ×drag).
+**Transitions smart** : `go X smart arc overlap smear` (sans durée explicite, la durée suit la distance parcourue).
+`prefers-reduced-motion` est respecté (boucles coupées, entrées et transitions en fondu court).
 
 ## Flows (vidéos)
 

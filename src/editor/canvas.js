@@ -125,6 +125,16 @@ export class Canvas {
     if (this.drag && this.drag.draw) this.overlay.appendChild(h('div.ov.cv-draw', { style: box(this.drag.draw) }));
     if (this.drag && this.drag.noodle) { const { a, b } = this.drag.noodle; this.curve(a.x, a.y, b.x, b.y, true); }
     if (this.measure) this.drawMeasure(this.measure);
+    if (this.trails && this.trails.length) {
+      const NS = 'http://www.w3.org/2000/svg'; const R = this.rect;
+      const toS = (p) => ({ x: p.x * this.app.zoom + this.app.panX, y: p.y * this.app.zoom + this.app.panY });
+      for (const tr of this.trails) {
+        const col = `hsl(${tr.hue} 85% 55%)`;
+        const pts = tr.pts.map(toS);
+        const pl = document.createElementNS(NS, 'polyline'); pl.setAttribute('points', pts.map((p) => `${p.x},${p.y}`).join(' ')); pl.setAttribute('class', 'cv-trail'); pl.style.stroke = col; this.svg.appendChild(pl);
+        pts.forEach((p, i) => { const c = document.createElementNS(NS, 'circle'); c.setAttribute('cx', p.x); c.setAttribute('cy', p.y); c.setAttribute('r', i === 0 || i === pts.length - 1 ? 4.5 : 2.6); c.setAttribute('class', 'cv-trail-dot'); c.style.fill = col; this.svg.appendChild(c); });
+      }
+    }
     if (this.markers && this.markers.length) {
       const seen = new Set();
       for (const m of this.markers) {

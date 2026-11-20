@@ -19,7 +19,7 @@ const SPRINGS = {
 };
 export const EASINGS = {
   linear: 'linear', ease: 'ease', in: 'cubic-bezier(.4,0,1,1)', out: 'cubic-bezier(0,0,.2,1)', 'in-out': 'cubic-bezier(.4,0,.2,1)',
-  smooth: 'cubic-bezier(.2,.8,.2,1)', expo: 'cubic-bezier(.16,1,.3,1)', back: 'cubic-bezier(.34,1.56,.64,1)', anticipate: 'cubic-bezier(.68,-0.55,.27,1.55)',
+  smooth: 'cubic-bezier(.2,.8,.2,1)', expo: 'cubic-bezier(.16,1,.3,1)', cushion: 'cubic-bezier(.22,1,.36,1)', snap: 'cubic-bezier(.7,0,.2,1)', accelerate: 'cubic-bezier(.55,0,1,.45)', back: 'cubic-bezier(.34,1.56,.64,1)', anticipate: 'cubic-bezier(.68,-0.55,.27,1.55)',
   'ease-in': 'cubic-bezier(.4,0,1,1)', 'ease-out': 'cubic-bezier(0,0,.2,1)', 'ease-in-out': 'cubic-bezier(.4,0,.2,1)', standard: 'cubic-bezier(.2,0,0,1)', emphasized: 'cubic-bezier(.05,.7,.1,1)',
 };
 
@@ -57,7 +57,19 @@ export const PRESETS = {
   typewriter: () => [{ clipPath: 'inset(0 100% 0 0)' }, { clipPath: 'inset(0 0% 0 0)' }],
   grow: () => [{ scale: '0 1', transformOrigin: 'left center' }, { scale: '1 1', transformOrigin: 'left center' }],
   'grow-up': () => [{ scale: '1 0', transformOrigin: 'center bottom' }, { scale: '1 1', transformOrigin: 'center bottom' }],
+  // physique : contact pur avant écrasement, volume conservé (sx · sy ≈ 1)
+  land: (d = 48) => [
+    { opacity: 0, translate: T(0, -d), scale: '0.94 1.07', transformOrigin: '50% 100%' },
+    { opacity: 1, translate: T(0, 0), scale: '0.94 1.07', offset: 0.5, transformOrigin: '50% 100%' },
+    { translate: T(0, 0), scale: '1.14 0.88', offset: 0.62, transformOrigin: '50% 100%' },
+    { translate: T(0, -d * 0.12), scale: '0.97 1.03', offset: 0.8, transformOrigin: '50% 100%' },
+    { opacity: 1, translate: T(), scale: '1 1', transformOrigin: '50% 100%' }],
+  squish: () => [{ scale: '1 1' }, { scale: '1.12 0.89', offset: 0.3 }, { scale: '0.96 1.04', offset: 0.62 }, { scale: '1.02 0.98', offset: 0.82 }, { scale: '1 1' }],
+  jelly: () => [{ scale: '1 1' }, { scale: '1.18 0.85', offset: 0.22 }, { scale: '0.88 1.13', offset: 0.42 }, { scale: '1.06 0.94', offset: 0.62 }, { scale: '0.98 1.02', offset: 0.8 }, { scale: '1 1' }],
+  rubber: () => [{ scale: '1' }, { scale: '1.18', offset: 0.35 }, { scale: '0.94', offset: 0.6 }, { scale: '1.03', offset: 0.8 }, { scale: '1' }],
+  'stretch-in': (d = 40) => [{ opacity: 0, translate: T(0, d), scale: '0.9 1.12' }, { opacity: 1, translate: T(0, 0), scale: '1.04 0.96', offset: 0.75 }, { opacity: 1, translate: T(), scale: '1 1' }],
   // loops & attention
+  'moving-hold': () => [{ scale: '1', translate: T(0, 0), rotate: '0deg' }, { scale: '1.012', translate: T(0, -1.5), rotate: '0.25deg' }, { scale: '1', translate: T(0, 0), rotate: '0deg' }],
   pulse: () => [{ scale: '1' }, { scale: '1.06' }, { scale: '1' }],
   breathe: () => [{ opacity: 1 }, { opacity: 0.55 }, { opacity: 1 }],
   spin: () => [{ rotate: '0deg' }, { rotate: '360deg' }],
@@ -72,9 +84,11 @@ export const PRESETS = {
   shimmer: () => [{ backgroundPosition: '-200% 0' }, { backgroundPosition: '200% 0' }],
   orbit: (d = 6) => [{ translate: T(d, 0) }, { translate: T(0, d) }, { translate: T(-d, 0) }, { translate: T(0, -d) }, { translate: T(d, 0) }],
 };
-export const ENTRANCE = ['fade', 'fade-up', 'fade-down', 'fade-left', 'fade-right', 'scale-in', 'zoom-in', 'pop', 'slide-up', 'slide-down', 'slide-left', 'slide-right', 'blur-in', 'rotate-in', 'flip-in', 'drop', 'reveal', 'reveal-up', 'reveal-down', 'typewriter', 'grow', 'grow-up', 'count'];
-export const LOOPS = ['pulse', 'breathe', 'spin', 'float', 'bounce', 'shake', 'wiggle', 'heartbeat', 'ping', 'blink', 'sway', 'shimmer', 'orbit'];
-const LOOP_DEFAULT = { spin: [1200, 'linear'], shimmer: [1600, 'linear'], ping: [1400, 'out'], float: [3000, 'in-out'], breathe: [2400, 'in-out'], pulse: [1600, 'in-out'], sway: [3000, 'in-out'], orbit: [4000, 'linear'] };
+export const ENTRANCE = ['fade', 'fade-up', 'fade-down', 'fade-left', 'fade-right', 'scale-in', 'zoom-in', 'pop', 'land', 'stretch-in', 'slide-up', 'slide-down', 'slide-left', 'slide-right', 'blur-in', 'rotate-in', 'flip-in', 'drop', 'reveal', 'reveal-up', 'reveal-down', 'typewriter', 'grow', 'grow-up', 'count'];
+export const LOOPS = ['moving-hold', 'pulse', 'breathe', 'spin', 'float', 'bounce', 'shake', 'wiggle', 'heartbeat', 'ping', 'blink', 'sway', 'shimmer', 'orbit'];
+export const ACCENTS = ['squish', 'jelly', 'rubber', 'shake', 'wiggle', 'heartbeat', 'pulse'];
+export const MODIFIERS = ['anticipate', 'snap', 'overshoot', 'arc', 'hard', 'soft'];
+const LOOP_DEFAULT = { 'moving-hold': [3200, 'in-out'], spin: [1200, 'linear'], shimmer: [1600, 'linear'], ping: [1400, 'out'], float: [3000, 'in-out'], breathe: [2400, 'in-out'], pulse: [1600, 'in-out'], sway: [3000, 'in-out'], orbit: [4000, 'linear'] };
 
 export function parseSpec(spec, kind = 'in') {
   const parts = String(spec).trim().split(/\s+/);
@@ -90,6 +104,9 @@ export function parseSpec(spec, kind = 'in') {
       else if (k === 'dist' || k === 'd') out.dist = parseFloat(v);
       else if (k === 'times' || k === 'repeat') out.iterations = v === 'infinite' ? Infinity : parseFloat(v);
       else if (k === 'to') out.to = parseFloat(v);
+      else if (k === 'antic' || k === 'anticipate') out.antic = parseFloat(v);
+      else if (k === 'overshoot' || k === 'settle') out.overshoot = parseFloat(v);
+      else if (k === 'arc') out.arc = parseFloat(v);
       continue;
     }
     if (/^-?\d+(\.\d+)?(ms|s)?$/.test(p)) {
@@ -99,9 +116,18 @@ export function parseSpec(spec, kind = 'in') {
     if (p === 'infinite' || p === 'loop') { out.iterations = Infinity; continue; }
     if (p === 'alternate' || p === 'yoyo') { out.direction = 'alternate'; continue; }
     if (p === 'reverse') { out.direction = 'reverse'; continue; }
+    if (p === 'anticipate' || p === 'antic') { out.antic = out.antic ?? 0.18; continue; }
+    if (p === 'snap') { out.snap = true; continue; }
+    if (p === 'overshoot' || p === 'settle') { out.overshoot = out.overshoot ?? 0.1; continue; }
+    if (p === 'arc') { out.arc = out.arc ?? 0.22; continue; }
+    if (p === 'hard') { out.accent = 'hard'; continue; }
+    if (p === 'soft') { out.accent = 'soft'; continue; }
     out.easing = p;
   }
   if (out.duration == null) out.duration = kind === 'loop' ? (LOOP_DEFAULT[out.name]?.[0] || 1600) : 500;
+  // accent dur = rebond après contact ; accent doux = continuation amortie (pas de rebond)
+  if (out.accent === 'hard') { out.overshoot = out.overshoot ?? 0.14; out.easing = out.easing || 'expo'; }
+  if (out.accent === 'soft') { out.overshoot = 0; out.easing = out.easing || 'cushion'; }
   if (!out.easing) out.easing = kind === 'loop' ? (LOOP_DEFAULT[out.name]?.[1] || 'in-out') : 'smooth';
   return out;
 }
@@ -126,20 +152,28 @@ function customFrames(name, project) {
 }
 
 // play entrance/loop anims gathered by the renderer. returns timeline entries
-export function playAnims(list, { project, paused = false, offset = 0 } = {}) {
+export function playAnims(list, { project, paused = false, offset = 0, ignoreReduced = false } = {}) {
   const entries = [];
   for (const a of list || []) {
     if (!a.el || !a.el.animate) continue;
     const sp = parseSpec(a.spec, a.kind);
+    const reduce = !ignoreReduced && prefersReducedMotion();
+    if (reduce && a.kind === 'loop') continue;
     const ez = resolveEasing(sp.easing, sp.duration);
-    const duration = /^spring|bouncy|snappy|gentle|wobbly|stiff/.test(sp.easing || '') ? ez.duration : sp.duration;
+    let duration = (/^spring|bouncy|snappy|gentle|wobbly|stiff/.test(sp.easing || '') ? ez.duration : sp.duration) * (a.durScale || 1);
     const delay = (sp.delay || 0) + (a.delay || 0) + offset;
     let frames;
     if (sp.name === 'count') frames = [{ opacity: 1 }, { opacity: 1 }];
     else frames = customFrames(sp.name, project) || (PRESETS[sp.name] ? PRESETS[sp.name](sp.dist) : PRESETS.fade());
+    let easing = sp.name === 'typewriter' ? `steps(${Math.max(4, (a.el.textContent || '').length)})` : ez.easing;
+    if (reduce) { frames = [{ opacity: 0 }, { opacity: 1 }]; duration = Math.min(200, duration); easing = 'ease-out'; }
+    else if (sp.name !== 'count' && sp.name !== 'typewriter') {
+      const shaped = shapeFrames(frames, sp, easing);
+      frames = shaped.frames; if (shaped.easing) easing = shaped.easing; duration *= shaped.durMul;
+    }
     try {
       const anim = a.el.animate(frames, {
-        duration, delay, easing: sp.name === 'typewriter' ? `steps(${Math.max(4, (a.el.textContent || '').length)})` : ez.easing,
+        duration, delay, easing,
         iterations: sp.iterations, direction: sp.direction, fill: a.kind === 'loop' ? 'none' : 'backwards',
       });
       if (sp.name === 'count') attachCounter(a.el, anim, duration, delay, sp.to);
@@ -173,6 +207,102 @@ function attachCounter(el, anim, duration, delay, toOverride) {
   };
   set(0); requestAnimationFrame(tick);
 }
+
+// ------------------------------------------------------------------ modifiers
+// Values of translate / scale / rotate / opacity as numeric vectors (units kept)
+const MOVE = ['translate', 'scale', 'rotate'];
+function pv(prop, v) {
+  if (v === undefined || v === null) return null;
+  const parts = String(v).trim().split(/\s+/);
+  const n = [], u = [];
+  for (const p of parts) { const m = /^(-?\d*\.?\d+)(px|%|deg|turn)?$/.exec(p); if (!m) return null; n.push(+m[1]); u.push(m[2] || ''); }
+  if (prop === 'scale' && n.length === 1) { n.push(n[0]); u.push(''); }
+  if (prop === 'translate' && n.length === 1) { n.push(0); u.push('px'); }
+  return { n, u };
+}
+const fv = (prop, x) => (prop === 'opacity' ? +x.n[0].toFixed(3) : x.n.map((k, i) => +k.toFixed(3) + x.u[i]).join(' '));
+function mixv(a, b, t) {
+  const n = a.n.map((x, i) => x + ((b.n[i] ?? x) - x) * t);
+  const u = a.u.map((x, i) => (a.n[i] === 0 && b.u[i] ? b.u[i] : x || b.u[i] || ''));
+  return { n, u };
+}
+function extrap(a, b, k) { // a + (a - b) * k  (going beyond a, away from b)
+  const n = a.n.map((x, i) => x + (x - (b.n[i] ?? x)) * k);
+  const u = a.u.map((x, i) => x || b.u[i] || '');
+  return { n, u };
+}
+const props = (f) => Object.keys(f).filter((k) => k !== 'offset' && k !== 'easing' && k !== 'composite');
+
+// Anticipation (pre-move opposite to the action), invisible anticipation (snap), follow-through (overshoot) and arcs.
+export function shapeFrames(frames, sp, mainEasing) {
+  const antic = sp.snap ? 0.1 : sp.antic || 0;
+  const over = sp.overshoot || 0;
+  const arc = sp.arc || 0;
+  if (!antic && !over && !arc) return { frames, durMul: 1 };
+  let F = frames.map((f, i) => ({ ...f, offset: f.offset ?? (frames.length === 1 ? 1 : i / (frames.length - 1)) }));
+  const first = F[0], last = F[F.length - 1];
+  // arc: bend the straight translate path (2-frame presets) along a quadratic curve
+  if (arc && F.length === 2) {
+    const a = pv('translate', first.translate), b = pv('translate', last.translate);
+    if (a && b && a.u.every((x) => x !== '%') && b.u.every((x) => x !== '%')) {
+      const dx = b.n[0] - a.n[0], dy = b.n[1] - a.n[1], dist = Math.hypot(dx, dy);
+      if (dist > 0.5) {
+        let nx = -dy / dist, ny = dx / dist; if (ny > 0) { nx = -nx; ny = -ny; } // bow upward
+        const cx = (a.n[0] + b.n[0]) / 2 + nx * dist * arc, cy = (a.n[1] + b.n[1]) / 2 + ny * dist * arc;
+        const N = antic || over ? 2 : 6; const out = [first];
+        for (let k = 1; k < N; k++) {
+          const t = k / N; const x = (1 - t) * (1 - t) * a.n[0] + 2 * (1 - t) * t * cx + t * t * b.n[0], y = (1 - t) * (1 - t) * a.n[1] + 2 * (1 - t) * t * cy + t * t * b.n[1];
+          const f = { offset: t, translate: `${x.toFixed(2)}px ${y.toFixed(2)}px` };
+          for (const p of props(first)) if (p !== 'translate') { const pa = pv(p, first[p]), pb = pv(p, last[p]); if (pa && pb) f[p] = fv(p, mixv(pa, pb, t)); else f[p] = t < 0.5 ? first[p] : last[p]; }
+          out.push(f);
+        }
+        out.push(last); F = out;
+      }
+    }
+  }
+  if (!antic && !over) return { frames: F, durMul: 1 };
+  const A = antic ? (sp.snap ? 0.07 : 0.24) : 0, O = over ? 0.3 : 0;
+  const out = [];
+  const head = { ...F[0], offset: 0 };
+  out.push(head);
+  if (antic) {
+    const pre = { ...F[0] };
+    const nxt = F[1];
+    for (const p of MOVE) { const s = pv(p, F[0][p]), t = pv(p, nxt[p]); if (s && t) pre[p] = fv(p, extrap(s, t, antic)); }
+    if (F[0].opacity !== undefined && nxt.opacity !== undefined) pre.opacity = +(F[0].opacity + (nxt.opacity - F[0].opacity) * 0.6).toFixed(3);
+    pre.offset = A;
+    head.easing = 'cubic-bezier(.45,0,.55,1)'; // anticipation : lente
+    out.push(pre);
+  }
+  const E = over ? 1 - O : 1;
+  const mids = F.slice(1, F.length - 1);
+  for (const m of mids) out.push({ ...m, offset: A + m.offset * (E - A) });
+  if (over) {
+    const prev = F[F.length - 2], end = F[F.length - 1];
+    const ov = { ...end, offset: E };
+    for (const p of MOVE) { const s = pv(p, end[p]), t = pv(p, prev[p]); if (s && t) ov[p] = fv(p, extrap(s, t, over)); }
+    out.push(ov);
+    ov.easing = 'cubic-bezier(.3,0,.35,1)'; // retour amorti
+    out.push({ ...end, offset: 1 });
+  } else out.push({ ...F[F.length - 1], offset: 1 });
+  // the action segments keep the main spacing
+  for (let i = antic ? 1 : 0; i < out.length - (over ? 2 : 1); i++) if (!out[i].easing) out[i].easing = mids.length ? 'linear' : mainEasing;
+  if (mids.length && antic) out[1].easing = mainEasing.startsWith('linear(') ? 'cubic-bezier(.2,.8,.2,1)' : mainEasing;
+  return { frames: out, easing: 'linear', durMul: 1 + (antic ? (sp.snap ? 0.06 : 0.3) : 0) + (over ? 0.35 : 0) };
+}
+
+// ------------------------------------------------------------------ global time scale (slow motion) & reduced motion
+let TIME_SCALE = 1, patched = false;
+export function setTimeScale(k) {
+  TIME_SCALE = k;
+  if (!patched && typeof Element !== 'undefined') {
+    const orig = Element.prototype.animate;
+    Element.prototype.animate = function (...args) { const an = orig.apply(this, args); if (TIME_SCALE !== 1) { try { an.playbackRate = TIME_SCALE; } catch (e) { /* */ } } return an; };
+    patched = true;
+  }
+}
+export const getTimeScale = () => TIME_SCALE;
+export const prefersReducedMotion = () => typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 export function totalDuration(entries) {
   let t = 0;

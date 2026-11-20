@@ -2,7 +2,7 @@
 import { makeCtx, renderScreen, renderStandalone } from './render.js';
 import { evaluate, interp } from './expr.js';
 import { splitTop } from './project.js';
-import { playAnims, resolveEasing, EASINGS } from './anim.js';
+import { playAnims, resolveEasing, EASINGS, prefersReducedMotion } from './anim.js';
 
 export const TRANSITIONS = ['instant', 'none', 'dissolve', 'fade', 'smart', 'push', 'push-left', 'push-right', 'push-up', 'push-down', 'slide', 'slide-left', 'slide-right', 'slide-up', 'slide-down', 'ios', 'scale', 'zoom', 'flip'];
 const EASE_NAMES = new Set([...Object.keys(EASINGS), 'spring', 'bouncy', 'snappy', 'gentle', 'wobbly', 'stiff', 'bounce']);
@@ -16,8 +16,9 @@ export function parseTransition(words) {
     if (/^\d+(ms)?$/.test(w)) { t.duration = parseFloat(w); durSet = true; continue; }
     if (/^\d+(\.\d+)?s$/.test(w)) { t.duration = parseFloat(w) * 1000; durSet = true; continue; }
     if (EASE_NAMES.has(w) || /^spring\(/.test(w) || /^cubic-bezier/.test(w)) { t.easing = w; continue; }
+    if (w === 'arc' || w === 'overlap' || w === 'smear') { t[w] = true; continue; }
   }
-  if (!durSet && t.type === 'smart') t.duration = 420;
+  if (!durSet && t.type === 'smart') { t.duration = 420; t.autoDur = true; }
   if (!durSet && (t.type === 'ios' || t.type.startsWith('push') || t.type.startsWith('slide'))) t.duration = 380;
   return t;
 }
@@ -300,6 +301,7 @@ export class Player {
     if (reverse) type = REVERSE[type] || type;
     const W = (newEl._mq && newEl._mq.w) || host.offsetWidth;
     if (newEl._mq) this.fitHost(newEl);
+    if (prefersReducedMotion() && type !== 'instant') { type = 'dissolve'; t = { ...t, duration: Math.min(t.duration, 200) }; }
     const cleanup = (...els) => els.forEach((e) => { e.getAnimations().forEach((a) => a.cancel()); e.style.translate = ''; });
     const D = t.duration;
     switch (type) {
@@ -372,7 +374,10 @@ export class Player {
     };
     const oldMap = collect(oldEl);
     const oldInfo = new Map();
-    for (const [k, els] of oldMap) oldInfo.set(k, els.map((el) => { const cs = getComputedStyle(el); return { el, r: rect(el), bg: cs.backgroundColor, color: cs.color, radius: cs.borderTopLeftRadius, opacity: cs.opacity, visible: cs.display !== 'none' && cs.visibility !== 'hidden' && el.getClientRects().length > 0 }; }));
+    // elements driven by a running animation (loops, entrances) have no stable geometry: never FLIP them
+    const animated = new Set();
+    for (const a of oldEl.getAnimations({ subtree: true })) { if (a.effect && a.effect.target && a.playState === 'running') { let n = a.effect.target; while (n && n !== oldEl) { animated.add(n); n = n.parentElement; } } }
+    for (const [k, els] of oldMap) oldInfo.set(k, els.map((el) => { const cs = getComputedStyle(el); return { el, r: rect(el), bg: cs.backgroundColor, color: cs.color, radius: cs.borderTopLeftRadius, opacity: cs.opacity, moving: animated.has(el) && !el.contains(oldEl), visible: cs.display !== 'none' && cs.visibility !== 'hidden' && el.getClientRects().length > 0 }; }));
     const oldBg = getComputedStyle(oldEl).backgroundColor;
 
     host.appendChild(newEl);
@@ -381,14 +386,17 @@ export class Player {
     const pairs = [];
     for (const [k, els] of newMap) {
       const olds = oldInfo.get(k); if (!olds) continue;
-      els.forEach((el, i) => { const o = olds[i]; if (o && o.visible && el.getClientRects().length) pairs.push({ el, o, k, r: rect(el) }); });
+      els.forEach((el, i) => { const o = olds[i]; if (o && o.visible && !o.moving && el.getClientRects().length) pairs.push({ el, o, k, r: rect(el) }); });
     }
     const matchedNew = new Set(pairs.map((p) => p.el));
     const matchedOld = new Set(pairs.map((p) => p.o.el));
     const ancestorsOfMatched = new Set();
     for (const p of pairs) { let n = p.el.parentElement; while (n && n !== newEl) { ancestorsOfMatched.add(n); n = n.parentElement; } }
     const pairOf = new Map(pairs.map((p) => [p.el, p]));
-    const D = t.duration;
+    let overlapIndex = 0;
+    // timing ∝ distance (un grand déplacement prend plus de temps qu'un petit)
+    let D = t.duration;
+    if (t.autoDur && pairs.length) { const maxD = Math.max(...pairs.map((p) => Math.hypot(p.o.r.x - p.r.x, p.o.r.y - p.r.y) + Math.abs(p.o.r.w - p.r.w) * 0.5)); D = Math.round(Math.max(260, Math.min(620, 240 + maxD * 0.45))); }
     const ez = resolveEasing(t.easing, D);
     const dur = /^spring|bouncy|snappy|gentle|wobbly|stiff/.test(t.easing || '') ? ez.duration : D;
     const opts = { duration: dur, easing: ez.easing, fill: 'both' };
@@ -429,7 +437,22 @@ export class Player {
       if (!Object.keys(from).length) continue;
       const prevOrigin = el.style.transformOrigin;
       if (changed) el.style.transformOrigin = '0 0';
-      const a = el.animate([from, to], opts);
+      const frames = [from, to];
+      const dist = Math.hypot(dx, dy);
+      p.delta = [dx, dy];
+      const parentStill = !ap || !ap.delta || (Math.abs(ap.delta[0]) < 0.5 && Math.abs(ap.delta[1]) < 0.5);
+      if ((t.arc || t.smear) && changed && dist > 40 && parentStill) {
+        const mid = { offset: 0.5 };
+        let mx = dx / 2, my = dy / 2;
+        if (t.arc) { let nx = -dy / dist, ny = dx / dist; if (ny > 0) { nx = -nx; ny = -ny; } mx += nx * dist * 0.2; my += ny * dist * 0.2; }
+        mid.translate = `${mx}px ${my}px`;
+        let msx = (sx + 1) / 2, msy = (sy + 1) / 2;
+        if (t.smear) { if (Math.abs(dx) > Math.abs(dy)) msx *= 1.08; else msy *= 1.08; mid.filter = 'blur(1.2px)'; from.filter = 'blur(0px)'; to.filter = 'blur(0px)'; }
+        mid.scale = `${msx} ${msy}`;
+        frames.splice(1, 0, mid);
+      }
+      const lag = t.overlap && changed && dist > 2 && parentStill ? Math.min(180, (overlapIndex++) * 45) : 0;
+      const a = el.animate(frames, { ...opts, delay: lag });
       a.finished.catch(() => {}).then(() => { el.style.transformOrigin = prevOrigin; });
       anims.push(a);
     }
