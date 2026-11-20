@@ -1,0 +1,230 @@
+<!-- Maquette Kit — composants de base, thémables via tokens (un projet peut redéfinir n'importe quel token ou composant) -->
+<tokens>
+  primary: #5B5BF7
+  on-primary: #FFFFFF
+  primary-soft: rgba(91,91,247,.12)
+  bg: #FFFFFF
+  surface: #F4F4F7
+  surface-2: #EAEAF0
+  text: #14141A
+  muted: #6B6B78
+  border: rgba(20,20,26,.10)
+  danger: #D93644
+  success: #2EB67D
+  warning: #F5A524
+  radius: 14
+</tokens>
+
+<component name="Button" props="label='Bouton' kind=primary size=md icon='' iconRight='' full=false loading=false" desc="Bouton principal. kind: primary|secondary|ghost|outline|danger ; size: sm|md|lg">
+  <row class="mq-btn" gap=8 justify=center radius={size == 'lg' ? 16 : 12} h={size == 'sm' ? 36 : size == 'lg' ? 56 : 48} px={size == 'sm' ? 14 : 20} w={full ? 'fill' : 'hug'}
+    fill={kind == 'primary' ? $primary : kind == 'danger' ? $danger : kind == 'secondary' ? $surface : 'transparent'}
+    color={kind == 'primary' || kind == 'danger' ? $on-primary : kind == 'secondary' ? $text : $primary}
+    stroke={kind == 'outline' ? '1.5 ' + $border : 'none'}
+    size={size == 'sm' ? 14 : size == 'lg' ? 17 : 16} weight=600 press:scale=0.97 hover:opacity=0.92>
+    <icon if={loading} name=loader-circle size=18 loop="spin 900"/>
+    <icon if={icon && !loading} name={icon} size=18/>
+    <text if={label} nowrap>{label}</text>
+    <icon if={iconRight} name={iconRight} size=18/>
+  </row>
+</component>
+
+<component name="IconButton" props="icon=plus kind=ghost size=44 badge=0" desc="Bouton icône. kind: ghost|filled|tonal|outline">
+  <stack w={size} h={size} radius=full center press:scale=0.92
+    fill={kind == 'filled' ? $primary : kind == 'tonal' ? $primary-soft : kind == 'glass' ? 'rgba(255,255,255,.16)' : 'transparent'}
+    color={kind == 'filled' ? $on-primary : kind == 'tonal' ? $primary : 'inherit'}
+    stroke={kind == 'outline' ? '1 ' + $border : 'none'} bgblur={kind == 'glass' ? 16 : 0}>
+    <icon name={icon} size={round(size * 0.48)}/>
+    <stack if={badge > 0} absolute top=2 right=2 minw=18 h=18 px=5 radius=full fill=$danger center stroke={'2 ' + $bg + ' outside'}>
+      <text size=11 weight=700 color=#fff lh=1>{badge}</text>
+    </stack>
+  </stack>
+</component>
+
+<component name="Chip" props="label='Filtre' selected=false icon=''" desc="Puce de filtre / tag sélectionnable">
+  <row gap=6 h=34 px=14 radius=full size=14 weight=500 press:scale=0.96
+    fill={selected ? $text : $surface} color={selected ? $bg : $text}>
+    <icon if={icon} name={icon} size=16/>
+    <text nowrap>{label}</text>
+  </row>
+</component>
+
+<component name="Badge" props="label='Nouveau' tone=primary" desc="Étiquette. tone: primary|success|danger|warning|neutral">
+  <row h=22 px=8 radius=full size=12 weight=600
+    fill={tone == 'success' ? 'rgba(46,182,125,.14)' : tone == 'danger' ? 'rgba(229,72,77,.14)' : tone == 'warning' ? 'rgba(245,165,36,.16)' : tone == 'neutral' ? $surface : $primary-soft}
+    color={tone == 'success' ? $success : tone == 'danger' ? $danger : tone == 'warning' ? '#B26B00' : tone == 'neutral' ? $muted : $primary}>
+    <text nowrap>{label}</text>
+  </row>
+</component>
+
+<component name="Avatar" props="name='Ada Lovelace' size=40 src='' ring=false online=false" desc="Avatar illustré généré depuis le nom (ou src)">
+  <stack w={size} h={size}>
+    <image src={src || 'avatar:' + name} w={size} h={size} radius=full stroke={ring ? '2 ' + $bg + ' outside' : 'none'}/>
+    <ellipse if={online} absolute right=0 bottom=0 size={round(size * 0.28)} fill=$success stroke={'2 ' + $bg + ' outside'}/>
+  </stack>
+</component>
+
+<component name="Toggle" props="value=false" desc="Interrupteur. Ex: &lt;Toggle value={$wifi} on:click=&quot;toggle $wifi&quot;/&gt;">
+  <stack w=52 h=32 radius=full p=3 fill={value ? $success : $surface-2} justify={value ? 'end' : 'start'} align=center transition=220>
+    <ellipse name=knob size=26 fill=#fff shadow="0 2 6 rgba(0,0,0,.18)"/>
+  </stack>
+</component>
+
+<component name="Checkbox" props="checked=false label=''" desc="Case à cocher">
+  <row gap=12>
+    <stack w=24 h=24 radius=7 center fill={checked ? $primary : 'transparent'} stroke={checked ? 'none' : '2 ' + $border} color=$on-primary transition=160>
+      <icon if={checked} name=check size=16 stroke=3/>
+    </stack>
+    <text if={label}>{label}</text>
+  </row>
+</component>
+
+<component name="Radio" props="checked=false label=''" desc="Bouton radio">
+  <row gap=12>
+    <stack w=24 h=24 radius=full center stroke={checked ? '2 ' + $primary : '2 ' + $border}>
+      <ellipse if={checked} size=12 fill=$primary/>
+    </stack>
+    <text if={label}>{label}</text>
+  </row>
+</component>
+
+<component name="Field" props="label='' placeholder='Saisir…' bind='' icon='' type=text hint='' error=''" desc="Champ texte réellement saisissable en prototype (bind=nomDeVariable)">
+  <col gap=6 w=fill>
+    <text if={label} size=13 weight=600 color=$muted>{label}</text>
+    <row gap=10 h=52 px=16 radius=$radius fill=$surface stroke={error ? '1.5 ' + $danger : 'none'} focus:stroke={'2 ' + $primary}>
+      <icon if={icon} name={icon} size=18 color=$muted/>
+      <input w=fill h=fill placeholder={placeholder} bind={bind} type={type} size=16/>
+    </row>
+    <text if={error} size=12 color=$danger>{error}</text>
+    <text if={hint && !error} size=12 color=$muted>{hint}</text>
+  </col>
+</component>
+
+<component name="SearchBar" props="placeholder='Rechercher' bind=''" desc="Barre de recherche">
+  <row gap=10 h=44 px=14 radius=12 fill=$surface w=fill color=$muted>
+    <icon name=search size=18/>
+    <input w=fill placeholder={placeholder} bind={bind} size=16 color=$text/>
+  </row>
+</component>
+
+<component name="ListItem" props="title='Titre' subtitle='' icon='' avatar='' image='' trailing='' chevron=true tone=''" desc="Ligne de liste (icône/avatar/image + titre + sous-titre + valeur)">
+  <row gap=14 py=12 w=fill press:opacity=0.6>
+    <stack if={icon} w=40 h=40 radius=12 center fill={tone || $primary-soft} color={tone ? '#fff' : $primary}><icon name={icon} size=20/></stack>
+    <Avatar if={avatar} name={avatar} size=44/>
+    <image if={image} src={image} w=48 h=48 radius=12/>
+    <col gap=2 w=fill>
+      <text weight=600 truncate>{title}</text>
+      <text if={subtitle} size=13 color=$muted truncate>{subtitle}</text>
+    </col>
+    <text if={trailing} weight=600 tabular nowrap>{trailing}</text>
+    <icon if={chevron} name=chevron-right size=18 color=$muted/>
+  </row>
+</component>
+
+<component name="Card" props="pad=16" desc="Carte conteneur (slot)">
+  <col gap=12 p={pad} radius={$radius + 6} fill=$surface w=fill>
+    <slot/>
+  </col>
+</component>
+
+<component name="NavBar" props="title='' back=true action='' large=false" desc="Barre de navigation (back → action back)">
+  <col w=fill pt=safe>
+    <row h=48 px=8 gap=4>
+      <IconButton if={back} icon=chevron-left on:click="back"/>
+      <spacer if={!back} size=8/>
+      <text if={!large} w=fill align=center weight=600 size=17 truncate>{title}</text>
+      <spacer if={large}/>
+      <IconButton if={action} icon={action}/>
+      <spacer if={!action} size={back ? 44 : 8}/>
+    </row>
+    <text if={large} px=20 pb=8 size=32 weight=800 ls=-0.5>{title}</text>
+  </col>
+</component>
+
+<component name="TabBar" props="items={[]} active=0" desc="Barre d'onglets. items={[{icon:'house',label:'Accueil',to:'Home'}]}">
+  <row w=fill justify=evenly pt=10 pb=safe+4 fill=$bg/92 bgblur=20 stroke-t={'1 ' + $border}>
+    <col each={items} gap=4 align=center w=fill press:scale=0.92 color={i == active ? ($tab-active || $primary) : $muted} on:click="go {item.to} instant">
+      <icon name={item.icon} size=24 stroke={i == active ? 2.4 : 2}/>
+      <text size=11 weight={i == active ? 600 : 500}>{item.label}</text>
+    </col>
+  </row>
+</component>
+
+<component name="Segmented" props="items={['Jour','Semaine','Mois']} active=0 var=''" desc="Contrôle segmenté. var=nom de variable à mettre à jour">
+  <row w=fill p=3 radius=12 fill=$surface gap=2>
+    <stack each={items} w=fill h=34 radius=9 center size=14 weight={i == active ? 600 : 500} fill={i == active ? $bg : 'transparent'} shadow={i == active ? 'sm' : 'none'} color={i == active ? $text : $muted} on:click="set ${var} = {i}">
+      <text>{item}</text>
+    </stack>
+  </row>
+</component>
+
+<component name="Progress" props="value=0.6 h=8 tone=''" desc="Barre de progression (value 0..1)">
+  <stack w=fill h={h} radius=full fill=$surface-2 clip>
+    <frame name=progress-fill w={round(value * 1000) / 10 + '%'} h=fill radius=full fill={tone || $primary}/>
+  </stack>
+</component>
+
+<component name="Slider" props="value=0.5" desc="Curseur (visuel)">
+  <stack w=fill h=28 align=center>
+    <frame w=fill h=6 radius=full fill=$surface-2/>
+    <frame w={value * 100 + '%'} h=6 radius=full fill=$primary/>
+    <ellipse absolute x={'calc(' + value * 100 + '% - 13px)'} y=1 size=26 fill=#fff shadow=md/>
+  </stack>
+</component>
+
+<component name="Skeleton" props="w=120 h=14 r=6" desc="Placeholder de chargement animé">
+  <frame w={w} h={h} radius={r} fill="linear(90, rgba(127,127,127,.12) 0, rgba(127,127,127,.24) 50, rgba(127,127,127,.12) 100)" css="background-size:200% 100%" loop="shimmer 1400"/>
+</component>
+
+<component name="Toast" props="message='Enregistré' icon=check-circle-2" desc="Notification flottante">
+  <row gap=10 px=16 h=48 radius=full fill=#111114 color=#fff shadow=lg size=14 weight=500>
+    <icon name={icon} size=18 color=$success/>
+    <text nowrap>{message}</text>
+  </row>
+</component>
+
+<component name="Stat" props="label='Revenus' value='12 480 €' delta='' up=true" desc="Indicateur chiffré">
+  <col gap=4>
+    <text size=13 color=$muted>{label}</text>
+    <text size=24 weight=700 tabular ls=-0.5>{value}</text>
+    <row if={delta} gap=4 size=13 weight=600 color={up ? $success : $danger}>
+      <icon name={up ? 'trending-up' : 'trending-down'} size=14/>
+      <text>{delta}</text>
+    </row>
+  </col>
+</component>
+
+<component name="Dots" props="count=3 active=0" desc="Indicateur de pagination">
+  <row gap=6>
+    <frame repeat={count} name={'dot' + i} h=8 w={i == active ? 24 : 8} radius=full fill={i == active ? $primary : $surface-2}/>
+  </row>
+</component>
+
+<component name="Rating" props="value=4 max=5 size=16" desc="Note en étoiles">
+  <row gap=2>
+    <icon repeat={max} name=star size={size} color={i < value ? '#FFB020' : $surface-2} fill={i < value ? '#FFB020' : 'none'}/>
+  </row>
+</component>
+
+<component name="Grabber" props="" desc="Poignée de bottom sheet">
+  <frame w=40 h=5 radius=full fill=$border self=center/>
+</component>
+
+<component name="Sheet" props="title=''" desc="Contenu de bottom sheet (à ouvrir avec overlay … bottom)">
+  <col w=fill fill=$bg radius="28 28 0 0" pt=10 pb=safe+16 px=20 gap=16>
+    <Grabber/>
+    <text if={title} size=20 weight=700>{title}</text>
+    <slot/>
+  </col>
+</component>
+
+<component name="Dialog" props="title='Confirmer' message='' confirm='OK' cancel='Annuler'" desc="Boîte de dialogue centrée (overlay)">
+  <col w=300 fill=$bg radius=24 p=24 gap=12 shadow=xl>
+    <text size=19 weight=700 align=center>{title}</text>
+    <text if={message} color=$muted align=center>{message}</text>
+    <slot/>
+    <row gap=10 pt=8>
+      <Button label={cancel} kind=secondary full on:click="close"/>
+      <Button label={confirm} full on:click="close"/>
+    </row>
+  </col>
+</component>

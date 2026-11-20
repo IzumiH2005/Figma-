@@ -1,0 +1,205 @@
+# Langage Maquette (`.mq`) — référence
+
+Un fichier `.mq` décrit **tout** un projet : tokens, variables, styles, composants, pages, écrans, interactions, animations.
+C'est la source de vérité : l'éditeur visuel le lit et le réécrit, la CLI le rend en PNG ou en vidéo.
+
+```xml
+<project name="Mon app" fonts="Inter:400;600;700|Space Grotesk:500;700" modes="light dark">
+  <tokens> … </tokens>
+  <vars> … </vars>
+  <styles> … </styles>
+  <keyframes name="…"> … </keyframes>
+  <component name="Carte" props="titre='…' actif=false"> <col>…</col> </component>
+  <page name="Mobile">
+    <screen name="Accueil" device=iphone-16 start statusbar homebar fill=$bg pt=safe px=20 gap=16> … </screen>
+  </page>
+  <flow name="demo"> start Accueil / wait 800 / click cta … </flow>
+</project>
+```
+
+## Syntaxe
+
+- Attributs : `clé=valeur`, `clé="avec espaces"`, `clé={expression}`, ou drapeau seul (`row`, `clip`, `start`).
+- Les valeurs nues acceptent les parenthèses : `fill=linear(90, #f0f, #0ff)`.
+- `$nom` → token (ou variable). `$nom/40` → même couleur à 40 % d'opacité.
+- `{expr}` → expression (dans un attribut ou dans du texte : `Bonjour {$prenom}`).
+- Commentaires : `<!-- … -->` et `// …` entre les éléments.
+- Du texte posé directement dans un conteneur devient un `<text>` implicite.
+
+## Éléments
+
+| Balise | Rôle |
+|---|---|
+| `screen` | Artboard / écran de prototype. `device=`, `w`/`h`, `h=auto` (hug, pages web), `start`, `statusbar[=dark|light]`, `homebar`, `x`/`y` sur le canvas |
+| `frame` `box` | Conteneur ; **sans** `row`/`col`/`grid` c'est une pile superposée (ZStack) |
+| `row` `col` `grid` `stack` | Raccourcis de conteneurs auto layout |
+| `text` | Texte ; enfants inline : `<b>`, `<i>`, `<u>`, `<s>`, `<code>`, `<span …>`, `<br/>`, `<icon>` |
+| `icon name=heart` | 2 400 icônes Lucide (`mq icons cœur`) ; `size`, `color`, `stroke=1.5`, `fill=currentColor` |
+| `image src=…` | `gen:mountains/3`, `avatar:Nom`, `initials:Nom`, URL, `data:` ; `fit=cover|contain|fill` |
+| `rect` `ellipse` | Formes (`size=` pour un carré / cercle) |
+| `vector d="M…" view="0 0 24 24"` | Chemin SVG (ou enfants `<path d fill stroke/>`) |
+| `input` `textarea` | Champ réellement saisissable en prototype ; `bind=$var`, `placeholder`, `type` |
+| `divider` `line` | Séparateur (s'adapte à la direction du parent) ; `color`, `thick` |
+| `spacer` | Espace extensible (ou `size=12`) |
+| `note` | Post‑it visible uniquement dans l'éditeur (annotations pour l'humain) |
+| `<NomComposant …>` | Instance de composant (majuscule) |
+| `slot` | Dans un composant : emplacement des enfants de l'instance |
+
+Écrans `device=` : `iphone-16`, `iphone-16-pro-max`, `iphone-se`, `iphone-mini`, `pixel-9`, `android`, `ipad`, `ipad-landscape`, `watch`, `desktop` (1440×900), `laptop`, `hd`, `tablet`, `mobile-web`, `square`, `story`, `og`.
+
+## Layout (auto layout = flexbox/grid)
+
+| Attribut | Effet |
+|---|---|
+| `row` / `col` / `grid` / `stack` | Mode de layout (ou `layout=row`) |
+| `gap=12` · `gap=auto` | Espacement · `auto` = space-between |
+| `gapx` `gapy` | Gaps séparés (grid / wrap) |
+| `p=16` `p="12 20"` `px` `py` `pt` `pr` `pb` `pl` | Padding ; `pt=safe` / `pb=safe+8` = zones sûres de l'appareil |
+| `m` `mx` `my` `mt` `mb` `ml` `mr` | Marges (`mx=auto` pour centrer un conteneur avec `maxw`) |
+| `align=start|center|end|stretch|baseline` | Axe secondaire (défaut : `center` en row, `stretch` en col) |
+| `justify=start|center|end|between|around|evenly` | Axe principal |
+| `center` | align + justify au centre |
+| `wrap` `reverse` | Retour à la ligne · ordre inversé |
+| `cols=3` · `cols="240 1fr"` · `rows` · `span=2` · `span=all` | Grilles |
+| `w` / `h` | nombre, `fill` (remplir), `hug` (ajusté), `50%`, `auto` |
+| `minw` `maxw` `minh` `maxh` `aspect=16/9` | Contraintes |
+| `grow` `shrink=0` `self=center` `order` `z` | Enfant flex |
+| `x` `y` `top` `right` `bottom` `left` `inset` | Position absolue (contraintes) ; `x=center` |
+| `place=bottom-right` | Placement dans un `stack`, ou absolu si combiné à `absolute` / `fixed` |
+| `fixed` | Enfant d'écran qui ne défile pas (tab bar, header flottant, FAB) |
+| `scroll=y|x|both` · `snap` + `snap=item` | Défilement · carrousel à aimantation |
+| `clip` | Rogner le contenu |
+
+## Apparence
+
+| Attribut | Valeurs |
+|---|---|
+| `fill` (`bg`) | couleur · `$token` · `linear(90, #a, #b 60, #c)` · `radial(at 30% 20%, …)` · `conic(…)` · `mesh(c1,c2,c3,c4)` · `aurora(…)` (animé) · `noise(.1)` · `dots(color,size,gap)` · `grid(color,size)` · `stripes(color,w,angle)` · `image(src)` — superposer avec ` + ` |
+| `color` | Couleur du texte (hérite) — un dégradé donne un texte dégradé |
+| `stroke` | `"1 $border"`, `"2 #000 outside dashed"` ; `stroke-t|b|l|r` pour un seul côté |
+| `radius` | `12`, `full`, `"16 16 0 0"` |
+| `shadow` | `xs sm md lg xl 2xl inner`, `"0 8 24 rgba(0,0,0,.2)"`, `glow(#f0f, 30)`, `soft(color, 12)` — combiner avec ` + ` |
+| `opacity` `blur` `bgblur` `blend` `grayscale` `brightness` `saturate` `hue` | Effets |
+| `rotate` `scale` `dx` `dy` `rotx` `roty` `perspective` `flipx` `origin` | Transformations |
+| `css="…"` | Échappatoire : CSS brut |
+
+## Typographie (hérite comme en CSS)
+
+`font` (famille ou `$token`, `mono`, `serif`), `size`, `weight` (`400` ou `semibold`…), `lh` (≤4 = multiplicateur), `ls` (px ou `%`), `align` (sur un texte) / `talign`, `upper` `lower` `caps` `italic` `underline` `strike` `tabular` `nowrap` `balance` `truncate` `lines=2`.
+
+## Tokens, modes, styles
+
+```xml
+<project modes="light dark">
+<tokens>
+  bg: #FFFFFF | #0E0E12        // une valeur par mode
+  primary: #5B5BF7
+  link: $primary               // référence
+  radius: 14
+</tokens>
+<styles>
+  .card { fill=$surface radius=20 p=16 col gap=8 }
+  .title { size=22 weight=700 md:size=32 }
+</styles>
+```
+
+- `class="card title"` applique des styles (les attributs de l'élément gagnent).
+- Préfixes conditionnels : `dark:fill=…` (mode), `md:cols=3` (largeur d'écran ≥ sm 640 / md 768 / lg 1024 / xl 1280), `hover:` `press:` `focus:` (états interactifs, avec transition auto).
+- Le kit fournit des tokens par défaut (`primary on-primary primary-soft bg surface surface-2 text muted border danger success warning radius`) ; le projet peut les redéfinir.
+
+## Composants
+
+```xml
+<component name="Tag" props="label='Nouveau' tone=primary" desc="Étiquette. tone: primary|neutral">
+  <row h=24 px=10 radius=full fill={tone == 'primary' ? $primary-soft : $surface}>
+    <text size=12 weight=600>{label}</text>
+  </row>
+</component>
+
+<Tag label="Promo" tone=neutral w=fill on:click="go Promo"/>
+```
+
+- Les props déclarées vont dans le scope du composant ; les autres attributs de l'instance (`w`, `grow`, `x`, `on:click`, `anim`, `name`…) s'appliquent à sa racine.
+- `<slot/>` insère les enfants de l'instance. Un texte seul comme enfant devient `label`.
+- Variantes = expressions sur les props (`fill={kind == 'ghost' ? …}`) ou `class="btn btn-{kind}"`.
+- Kit intégré (`mq kit`) : `Button IconButton Chip Badge Avatar Toggle Checkbox Radio Field SearchBar ListItem Card NavBar TabBar Segmented Progress Slider Skeleton Toast Stat Dots Rating Grabber Sheet Dialog`.
+
+## Données, boucles, conditions
+
+```xml
+<vars>
+  tab: 0
+  panier: []
+  produits: [{"id":1,"nom":"Lampe","prix":49}, {"id":2,"nom":"Vase","prix":29}]
+</vars>
+
+<col each={$produits} as=p gap=4> <text>{p.nom} — {money(p.prix)}</text> </col>
+<frame repeat=5 w=8 h=8 fill={i == $tab ? $primary : $border}/>
+<text if={len($panier) == 0}>Panier vide</text>
+```
+
+Dans une boucle : `item` (ou `as=`), `i`, `first`, `last`.
+Expressions : littéraux, tableaux/objets, `+ - * / %`, comparaisons, `&& || ! ?? ? :`, accès `a.b` / `a[0]`.
+Fonctions : `len min max round floor ceil abs clamp fixed money(n,'€') percent pad upper lower str num replace split trim join includes push without toggleIn sum slice filter find map first last range pick(i, a, b, c) date(offset) now()`.
+
+## Prototype : interactions
+
+```xml
+<Button label="Payer" on:click="if len($panier) > 0 then go Paiement push else play panier shake"/>
+<row on:swipe-left="inc $slide" on:swipe-right="dec $slide"/>
+<screen on:after-2000="go Accueil dissolve 600"> …
+```
+
+**Déclencheurs** : `on:click` `on:dblclick` `on:press` `on:release` `on:longpress` `on:enter` `on:leave` `on:swipe-left|right|up|down` `on:load` `on:after-1500` `on:key-Enter` (n'importe quelle touche) `on:change` (input, `value` dans le scope) `on:submit`.
+
+**Actions** (séparées par `;`) :
+
+| Action | Exemple |
+|---|---|
+| `go Écran [transition] [ms] [easing]` | `go Détail smart 450 spring` |
+| `back [transition]` | retour (transition inverse automatique) |
+| `overlay Nom [center|bottom|top|left|right] [dim=.5] [blur=6] [noclose]` | ouvre un écran **ou un composant** en overlay |
+| `close` · `swap Nom` | fermer / remplacer l'overlay |
+| `set $v = expr [smart ms]` · `toggle $v` · `inc $v [n]` · `dec $v` | variables (re-rendu animé en smart par défaut) |
+| `if expr then action [else action]` | conditionnelle |
+| `scroll clé` · `scroll top` | défilement doux vers un élément nommé |
+| `play clé preset` | jouer une animation (ex. `shake` sur erreur) |
+| `mode dark` · `mode next` | changer de mode de tokens en direct |
+| `wait 300` · `restart` · `url https://…` | divers |
+
+**Transitions** : `instant dissolve smart ios push push-left|right|up|down slide slide-left|right|up|down scale flip`.
+**Easings** : `smooth spring bouncy snappy gentle wobbly stiff expo back anticipate in out in-out linear bounce standard emphasized`, `spring(raideur, amortissement)`, `cubic-bezier(…)`.
+
+**Smart animate** : les éléments de même `name` (ou `key`) entre deux états/écrans sont interpolés (position, taille, couleur, rayon, opacité) ; les autres apparaissent/disparaissent en fondu. Fonctionne aussi sur les changements de variables (`set … smart`), ce que Figma ne sait pas faire.
+
+## Motion
+
+| Attribut | Effet |
+|---|---|
+| `anim="fade-up 500 delay=100 spring"` | Animation d'entrée (à l'apparition de l'écran) |
+| `loop="float 3000"` | Animation en boucle |
+| `stagger="60 fade-up 450"` | Sur un parent : cascade sur ses enfants |
+| `transition=250` | Transition CSS sur tout changement (états, smart) |
+| `<keyframes name="x"> 0 { opacity=0 y=20 } 100 { opacity=1 y=0 } </keyframes>` | Animation custom (`opacity x y scale rotate blur fill color radius w h`) |
+
+Entrées : `fade fade-up fade-down fade-left fade-right scale-in zoom-in pop slide-up slide-down slide-left slide-right blur-in rotate-in flip-in drop reveal reveal-up reveal-down typewriter grow grow-up count` (`count` anime le nombre du texte de 0 à sa valeur).
+Boucles : `pulse breathe spin float bounce shake wiggle heartbeat ping blink sway shimmer orbit`.
+
+## Flows (vidéos)
+
+```xml
+<flow name="demo">
+  start Splash
+  caption "Onboarding"
+  wait 1200
+  click cta            # clé (name/key), texte visible, ou nom de composant
+  type email "ada@orbit.fr"
+  swipe left
+  scroll 400
+  back
+  key Enter
+  shot etape.png
+</flow>
+```
+
+`mq video fichier.mq --flow demo -o demo.mp4` (ou `--gif`). Sans flow : visite automatique des liens `go`.
