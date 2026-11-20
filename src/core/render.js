@@ -653,7 +653,14 @@ export function renderNode(node, scope, parentLayout, ctx, overrides) {
   if (!el) return [];
   decorate(el, node, a, states, events, scope, parentLayout, ctx);
   if (rigs.length) attachRigs(el, rigs, ctx);
-  return [a.clone && a.clone !== true ? wrapClone(el, a.clone) : el];
+  if (a.clone && a.clone !== true) {
+    const wrap = wrapClone(el, a.clone);
+    // every copy plays the same entrance / loop as the original (copies are made after the animation was registered)
+    const mine = ctx.anims.filter((x) => x.el === el);
+    for (const c of wrap.children) if (c !== el) for (const an of mine) ctx.anims.push({ ...an, el: c });
+    return [wrap];
+  }
+  return [el];
 }
 
 // rig:<target>="…" → [{ target, spec, r, bind }] (removed from the attrs so they never reach the CSS)
@@ -888,6 +895,7 @@ function decorate(el, node, a, states, events, scope, parentLayout, ctx) {
   el.dataset.tag = tag;
   const key = tag === 'icon' ? a.key : (a.key || a.name);
   if (key) el.dataset.key = key;
+  if (a['lint-ignore']) el.dataset.lintIgnore = a['lint-ignore'] === true ? '*' : String(a['lint-ignore']); // per-layer opt-out (optical nudge…)
   if (a['aria-label'] != null && a['aria-label'] !== true) el.setAttribute('aria-label', String(a['aria-label']));
   if (a.role) el.setAttribute('role', String(a.role));
   if (Object.keys(states).length) {

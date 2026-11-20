@@ -6,6 +6,14 @@ import { playAnims, resolveEasing, EASINGS, prefersReducedMotion, easeFn } from 
 import { morphBetween, liveBoolean } from './vector.js';
 import { groupRigs, groupPos, groupValues, rigBox, toBox } from './rig.js';
 
+// identity of a keyed layer across re-renders: its key (or the nearest keyed ancestor's), scoped by component instance
+function layerKey(n) {
+  const k = n.dataset && n.dataset.key ? n : n.parentElement && n.parentElement.closest('[data-key]');
+  if (!k) return null;
+  const inst = k.closest('[data-inst]');
+  return (inst ? inst.dataset.inst + '/' : '') + k.dataset.key;
+}
+
 export const TRANSITIONS = ['instant', 'none', 'dissolve', 'fade', 'smart', 'push', 'push-left', 'push-right', 'push-up', 'push-down', 'slide', 'slide-left', 'slide-right', 'slide-up', 'slide-down', 'ios', 'scale', 'zoom', 'flip'];
 const EASE_NAMES = new Set([...Object.keys(EASINGS), 'spring', 'bouncy', 'snappy', 'gentle', 'wobbly', 'stiff', 'bounce']);
 const REVERSE = { 'push-left': 'push-right', 'push-right': 'push-left', 'push-up': 'push-down', 'push-down': 'push-up', push: 'push-right', 'slide-left': 'unslide-right', slide: 'unslide-right', 'slide-right': 'unslide-left', 'slide-up': 'unslide-down', 'slide-down': 'unslide-up', ios: 'ios-back' };
@@ -83,7 +91,7 @@ export class Player {
     this.host.style.width = w + 'px'; this.host.style.height = h + 'px';
   }
 
-  mounted(el, entering) {
+  mounted(el, entering, freshAnims) {
     const info = el._mq;
     if (entering) {
       this.anims = playAnims(info.anims, { project: this.project });
@@ -91,8 +99,8 @@ export class Player {
       this.fireLifecycle(info.events, el);
       el.querySelectorAll('[data-lifecycle]').forEach((n) => this.fireLifecycle(n._mqEvents, n));
     } else {
-      // rerender: only loops keep running, entrance anims are skipped
-      this.anims = playAnims(info.anims.filter((a) => a.kind === 'loop'), { project: this.project });
+      // rerender: loops keep running; entrance anims of layers that just appeared were started by rerender()
+      this.anims = [...playAnims(info.anims.filter((a) => a.kind === 'loop'), { project: this.project }), ...(freshAnims || [])];
     }
   }
 
@@ -189,8 +197,12 @@ export class Player {
   async exec(action, scope, el) {
     const steps = splitActions(action);
     let dirty = null;
+    // the instance's own state (change/inc/dec) as it is NOW: later steps of the chain see their effect
+    const live = () => { let key = null; try { key = scope.lookup('__inst'); } catch (e) { /* not in a component */ } return key && this.inst[key] ? scope.child({ ...this.inst[key] }) : scope; };
     for (const step of steps) {
-      const r = await this.step(step.trim(), scope, el);
+      // "change …; wait 1200; change …": show the pending change (with its transition) before waiting
+      if (dirty && /^(wait|delay)\b/.test(step.trim())) { await this.rerender(dirty); dirty = null; }
+      const r = await this.step(step.trim(), live(), el);
       if (r && r.dirty) dirty = r.transition || dirty || { type: 'smart', duration: 260, easing: 'smooth' };
       if (r && r.navigated) dirty = null;
       if (r && r.stop) break;
@@ -322,19 +334,32 @@ export class Player {
     const oldEl = this.current;
     const scrolls = [...oldEl.querySelectorAll('.mq-screen-body, [data-id]')].filter((n) => n.scrollTop || n.scrollLeft).map((n) => ({ id: n.dataset.id, key: n.dataset.key, body: n.classList.contains('mq-screen-body'), top: n.scrollTop, left: n.scrollLeft }));
     const active = document.activeElement && oldEl.contains(document.activeElement) && document.activeElement.dataset.bind ? { bind: document.activeElement.dataset.bind, s: document.activeElement.selectionStart, e: document.activeElement.selectionEnd } : null;
+    const oldKeys = new Set([...oldEl.querySelectorAll('[data-key]')].map(layerKey));
     const newEl = this.build(name);
+    // layers that were already there and whose one-shot anim keeps its end (a burst that vanished) start at that end,
+    // before smart animate measures them — otherwise they'd pop back and fly around
+    const settled = ((newEl._mq && newEl._mq.anims) || []).filter((a) => a.kind !== 'loop' && a.el && oldKeys.has(layerKey(a.el)));
+    for (const e of playAnims(settled, { project: this.project, holdOnly: true })) { try { e.animation.finish(); } catch (err) {} }
+    // entrance anims of layers that just appeared (if=…, new key=…) start with the transition, not after it:
+    // a burst shown when "liked" turns true, a number re-keyed on each change — the rest of the screen stays put
+    const fresh = ((newEl._mq && newEl._mq.anims) || []).filter((a) => a.kind !== 'loop' && a.el && (() => { const k = layerKey(a.el); return k && !oldKeys.has(k); })());
+    let freshAnims = [];
+    const startFresh = () => { if (fresh.length && !freshAnims.length) freshAnims = playAnims(fresh, { project: this.project }); };
     const restore = () => {
       for (const s of scrolls) {
         const n = s.body ? newEl.querySelector('.mq-screen-body') : newEl.querySelector(`[data-id="${s.id}"]`);
         if (n) { n.scrollTop = s.top; n.scrollLeft = s.left; }
       }
       if (active) { const inp = newEl.querySelector(`[data-bind="${active.bind}"]`); if (inp) { inp.focus(); try { inp.setSelectionRange(active.s, active.e); } catch (e) { /* */ } } }
+      startFresh();
     };
+    // the new screen is current right away: a click during a running transition re-renders from it, not from a stale one
+    this.current = newEl;
     if (t.type === 'smart') await this.smart(oldEl, newEl, t, { same: true, before: restore });
     else if (t.type === 'dissolve') { this.host.insertBefore(newEl, oldEl.nextSibling); restore(); await this.anim(newEl, [{ opacity: 0 }, { opacity: 1 }], t); oldEl.remove(); }
     else { oldEl.replaceWith(newEl); restore(); }
-    this.current = newEl;
-    this.mounted(newEl, false);
+    if (this.current !== newEl) return; // superseded by a newer re-render meanwhile
+    this.mounted(newEl, false, freshAnims);
     for (const o of this.overlays) {
       const fresh = this.buildOverlayContent(o.name, o.scope);
       o.content.replaceWith(fresh); o.content = fresh;
@@ -407,11 +432,12 @@ export class Player {
     const hostR = host.getBoundingClientRect();
     const rect = (el) => { const r = el.getBoundingClientRect(); return { x: (r.left - hostR.left) / sc, y: (r.top - hostR.top) / sc, w: r.width / sc, h: r.height / sc }; };
     const ident = (el, root) => {
-      if (el.dataset.key) return 'k:' + el.dataset.key;
+      // same screen: a key is scoped by its component instance (two LikeButtons both have a "burst")
+      if (el.dataset.key) return 'k:' + (same ? layerKey(el) : el.dataset.key);
       if (!same) return null;
       const parts = []; let n = el;
       while (n && n !== root) {
-        if (n.dataset && n.dataset.key) { parts.unshift('k:' + n.dataset.key); break; }
+        if (n.dataset && n.dataset.key) { parts.unshift('k:' + layerKey(n)); break; }
         const p = n.parentElement; if (!p) break;
         const sameId = n.dataset && n.dataset.id ? [...p.children].filter((c) => c.dataset && c.dataset.id === n.dataset.id) : [...p.children].filter((c) => c.tagName === n.tagName && c.className === n.className);
         parts.unshift((n.dataset && n.dataset.id ? n.dataset.id : n.className) + '#' + sameId.indexOf(n));

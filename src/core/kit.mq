@@ -172,8 +172,8 @@
 </component>
 
 <component name="Segmented" props="items={['Jour','Semaine','Mois']} active=0 var=''" desc="Contrôle segmenté. var=nom de variable à mettre à jour">
-  <row w=fill p=3 radius=12 fill=$surface gap=2>
-    <stack each={items} w=fill h=40 radius=9 center size=14 weight={i == active ? 600 : 500} fill={i == active ? $bg : 'transparent'} shadow={i == active ? 'sm' : 'none'} color={i == active ? $text : $muted} on:click="set ${var} = {i}">
+  <row w=fill p=4 radius=12 fill=$surface-2 gap=4>
+    <stack each={items} w=fill h=40 px=12 radius=8 center size=14 weight={i == active ? 600 : 500} fill={i == active ? $surface : 'transparent'} shadow={i == active ? 'sm' : 'none'} color=$text on:click="set ${var} = {i}">
       <text>{item}</text>
     </stack>
   </row>

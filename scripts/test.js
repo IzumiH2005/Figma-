@@ -291,6 +291,59 @@ export function PillRow({ className, ...props }) { return <div className={cn("fl
   ok(r.bg === 'rgb(15, 118, 110)' && parseFloat(r.radius) > 100 && r.h === 36 && r.sh === '#0F766E', `Kit lié au système (couleur, pilule, densité compacte, alias shadcn) ${JSON.stringify(r)}`);
 }
 
+// prototype: action chains with wait see their own changes; overlapping re-renders never leave a stale screen
+{
+  const r = await page.evaluate(async () => {
+    document.body.innerHTML = '<div id=st style="width:600px;height:400px"></div>';
+    const p = MQ.loadProject(`<project><component name="Dl" props="phase=0"><row name=dl h=48 px=24 on:click="if {phase == 0} change phase=1 smart 200 bouncy; wait 300; if {phase == 1} change phase=2 smart 200 bouncy"><text>{phase == 0 ? 'A' : phase == 1 ? 'B' : 'C'}</text></row></component>
+      <component name="Sw" props="on=false"><row name=sw h=48 w=80 on:click="change on={!on} smart 900 bouncy"><text>{on ? 'on' : 'off'}</text></row></component>
+      <screen name="S" w=400 h=300><col p=24 gap=16><Sw/><Dl/></col></screen></project>`);
+    const m = MQ.mountPrototype(p, document.getElementById('st'), { frame: false }); await new Promise((res) => setTimeout(res, 400));
+    const q = (k) => document.querySelector(`[data-key="${k}"]`);
+    q('sw').click(); await new Promise((res) => setTimeout(res, 120)); q('dl').click();
+    await new Promise((res) => setTimeout(res, 120)); const mid = q('dl').textContent.trim();
+    await new Promise((res) => setTimeout(res, 1400));
+    const out = { mid, end: q('dl').textContent.trim(), sw: q('sw').textContent.trim(), screens: document.querySelectorAll('.mq-screen').length };
+    m.destroy(); return out;
+  });
+  ok(r.mid === 'B' && r.end === 'C' && r.sw === 'on' && r.screens === 1, `Prototype : chaîne change/wait/if et re-rendus superposés ${JSON.stringify(r)}`);
+}
+
+// pixel precision: overlays almost on their target, thumbs with uneven insets, layers escaping their card, off-centre glyphs
+{
+  const r = await page.evaluate(() => {
+    const src = (good) => `<project><screen name="S" w=480 h=420><col p=24 gap=16 fill=#fff>
+      <stack w=300 h=48 p=4 radius=24 fill=#eef>${good ? '<stack w=fill h=40>' : ''}<frame name=ind x=0 y=0 w=33.333% h=40 radius=20 fill=#fff/><row w=fill h=40><stack w=fill h=40 center><text>A</text></stack><stack w=fill h=40 center><text>B</text></stack><stack w=fill h=40 center><text>C</text></stack></row>${good ? '</stack>' : ''}</stack>
+      <stack w=52 h=32 radius=16 fill=#55f ${good ? '' : 'px=4 align=center'}><ellipse name=th w=24 h=24 x=${good ? 4 : 0} y=${good ? 4 : 4} fill=#fff/></stack>
+      <col w=300 p=16 radius=16 fill=#f4f4f8><row w=fill gap=16><text ${good ? 'w=fill' : ''}>Un libellé vraiment très long qui ne tient pas sur une ligne</text><frame w=52 h=32 radius=16 fill=#55f/></row></col>
+      <stack w=44 h=44 radius=22 fill=#eee ${good ? 'center' : 'pt=3 center'}><icon name=x size=16/></stack>
+    </col></screen></project>`;
+    const run = (good) => { const p = MQ.loadProject(src(good)); MQ.ensureStyles(); document.body.innerHTML = ''; const el = MQ.screenElement(p, 'S'); document.body.appendChild(el); return [...new Set(MQ.lintScreen(el, p, p.screen('S')).map((i) => i.code))].filter((c) => ['misaligned', 'inset', 'escape', 'off-center'].includes(c)).sort(); };
+    return { bad: run(false), good: run(true) };
+  });
+  ok(r.bad.join() === 'escape,inset,misaligned,off-center' && !r.good.length, `Précision au pixel : indicateur décalé, curseur à inset inégal, débordement de carte, glyphe décentré ${JSON.stringify(r)}`);
+}
+
+// re-render: a layer that appears (if=…) plays its entrance once, per instance; a vanished burst stays gone afterwards
+{
+  const r = await page.evaluate(async () => {
+    document.body.innerHTML = '<div id=st style="width:600px;height:400px"></div>';
+    const p = MQ.loadProject(`<project><keyframes name="sp">0 { opacity=1 scale=0.5 } 100 { opacity=0 scale=1.4 }</keyframes>
+      <component name="L" props="on=false"><row name=lk h=44 w=120 on:click="change on={!on} smart 200 snappy"><frame if={on} name=bu w=8 h=8 fill=#f80 opacity=0 anim="sp 300 out"/><text>{on ? 'oui' : 'non'}</text></row></component>
+      <component name="T" props="v=false"><row name=tg h=44 w=120 on:click="change v={!v} smart 200 snappy"><text>{v ? 'v' : 'f'}</text></row></component>
+      <screen name="S" w=400 h=300><col p=24 gap=16><L/><L on/><T/></col></screen></project>`);
+    const m = MQ.mountPrototype(p, document.getElementById('st'), { frame: false }); await new Promise((res) => setTimeout(res, 500));
+    const bursts = () => [...document.querySelectorAll('.mq-screen [data-key="bu"]')];
+    document.querySelector('[data-key="lk"]').click(); await new Promise((res) => setTimeout(res, 60));
+    const playing = bursts().map((b) => b.getAnimations().some((a) => a.playState === 'running'));
+    await new Promise((res) => setTimeout(res, 700));
+    document.querySelector('[data-key="tg"]').click(); await new Promise((res) => setTimeout(res, 400));
+    const after = bursts().map((b) => +getComputedStyle(b).opacity);
+    m.destroy(); return { playing, after, n: document.querySelectorAll('.mq-screen').length };
+  });
+  ok(r.playing.join() === 'true,false' && r.after.every((o) => o === 0), `Re-rendu : entrée jouée pour le calque apparu, par instance, éclat qui reste éteint ${JSON.stringify(r)}`);
+}
+
 // editor boots
 const html = await buildEditorHTML({ projects: examples });
 const tmp = path.join(ROOT, 'out', '_test-editor.html');

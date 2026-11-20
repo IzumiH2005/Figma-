@@ -136,6 +136,7 @@ export function parseSpec(spec, kind = 'in') {
     if (p === 'reverse') { out.direction = 'reverse'; continue; }
     if (p === 'anticipate' || p === 'antic') { out.antic = out.antic ?? 0.18; continue; }
     if (p === 'snap') { out.snap = true; continue; }
+    if (p === 'hold' || p === 'forwards') { out.hold = true; continue; }
     if (p === 'overshoot' || p === 'settle') { out.overshoot = out.overshoot ?? 0.1; continue; }
     if (p === 'arc') { out.arc = out.arc ?? 0.22; continue; }
     if (p === 'hard') { out.accent = 'hard'; continue; }
@@ -171,7 +172,7 @@ function customFrames(name, project) {
 
 import { attachMorph } from './vector.js';
 // play entrance/loop anims gathered by the renderer. returns timeline entries
-export function playAnims(list, { project, paused = false, offset = 0, ignoreReduced = false } = {}) {
+export function playAnims(list, { project, paused = false, offset = 0, ignoreReduced = false, holdOnly = false } = {}) {
   const entries = [];
   for (const a of list || []) {
     if (!a.el || !a.el.animate) continue;
@@ -190,10 +191,15 @@ export function playAnims(list, { project, paused = false, offset = 0, ignoreRed
       const shaped = shapeFrames(frames, sp, easing);
       frames = shaped.frames; if (shaped.easing) easing = shaped.easing; duration *= shaped.durMul;
     }
+    // one-shot effects that end invisible (bursts, confetti, toasts that vanish) keep their last frame;
+    // `hold` forces it for any entrance anim
+    const last = frames[frames.length - 1] || {};
+    const hold = a.kind !== 'loop' && (sp.hold || (sp.iterations === 1 && String(last.opacity) === '0'));
+    if (holdOnly && !hold) continue;
     try {
       const anim = a.el.animate(frames, {
         duration, delay, easing,
-        iterations: sp.iterations, direction: sp.direction, fill: a.kind === 'loop' ? 'none' : 'backwards',
+        iterations: sp.iterations, direction: sp.direction, fill: a.kind === 'loop' ? 'none' : hold ? 'both' : 'backwards',
       });
       if (sp.name === 'count') attachCounter(a.el, anim, duration, delay, sp.to);
       if (sp.name === 'morph') attachMorph(a.el, anim, duration, sp.iterations);

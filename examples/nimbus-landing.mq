@@ -67,11 +67,11 @@
         <grid cols=3 md:cols=5 w=fill h=fill gapx=1 fill=$border>
           <col each={['Lun','Mar','Mer','Jeu','Ven']} as=d fill=$surface p=12 gap=8 hidden={i > 2} md:hidden=false stagger="60 fade-up 500">
             <text size=12 weight=600 color=$muted>{d} {17 + i}</text>
-            <col if={i != 2} h={50 + (i * 37) % 70} radius=10 p=12 gap=2 fill={pick(i, '#EEEBFF', '#FFE9DF', '#E3F6EC', '#FFF4D6', '#EEEBFF')} color=$text>
+            <col if={i != 2} minh={50 + (i * 37) % 70} radius=10 p=12 gap=2 fill={pick(i, '#EEEBFF', '#FFE9DF', '#E3F6EC', '#FFF4D6', '#EEEBFF')} color=$text>
               <text size=12 weight=600>{pick(i, 'Focus produit', 'Atelier', '', 'Revue Q4', 'Deep work')}</text>
               <text size=12 opacity=.75>9:00 – 11:00</text>
             </col>
-            <col h={70 + (i * 23) % 50} radius=10 p=12 gap=2 fill={i == 2 ? 'linear(135, #4C3BE6, #7B6BFF)' : $surface-2} color={i == 2 ? '#fff' : $text}>
+            <col minh={70 + (i * 23) % 50} radius=10 p=12 gap=2 fill={i == 2 ? 'linear(135, #4C3BE6, #7B6BFF)' : $surface-2} color={i == 2 ? '#fff' : $text}>
               <text size=12 weight=600>{i == 2 ? '✦ Bloc IA' : 'Réunion'}</text>
               <text size=12 opacity=.7>14:00 – 15:30</text>
             </col>

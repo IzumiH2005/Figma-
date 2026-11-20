@@ -9,7 +9,7 @@ import { parseSpec } from './anim.js';
 export const CATEGORIES = { a11y: 'Accessibilité', spacing: 'Espacement & grille', type: 'Typographie', color: 'Couleur', ux: 'Composants & UX', motion: 'Motion', proto: 'Prototype' };
 const CAT = {
   contrast: 'a11y', 'contrast-ui': 'a11y', 'tap-target': 'a11y', 'tiny-text': 'a11y', 'body-size': 'a11y', 'input-label': 'a11y', 'link-style': 'a11y',
-  'icon-gap': 'spacing', 'button-padding': 'spacing', 'nested-radius': 'spacing', 'icon-size': 'ux', 'no-feedback': 'motion', 'edge-stroke': 'color',
+  'icon-gap': 'spacing', 'button-padding': 'spacing', misaligned: 'spacing', 'off-center': 'spacing', inset: 'spacing', escape: 'spacing', 'nested-radius': 'spacing', 'icon-size': 'ux', 'no-feedback': 'motion', 'edge-stroke': 'color',
   'off-grid': 'spacing', 'edge-margin': 'spacing', crowded: 'spacing', bounds: 'spacing', overflow: 'spacing',
   'type-scale': 'type', 'type-count': 'type', 'line-length': 'type', 'caps-long': 'type',
   hardcoded: 'color', 'pure-color': 'color', 'gradient-muddy': 'color', 'color-count': 'color', 'shadow-light': 'color',
@@ -57,7 +57,8 @@ export function lintScreen(screenEl, project, screenNode) {
   const issues = [];
   const name = screenEl.dataset.screen;
   const ignored = String(screenNode.attrs['lint-ignore'] || '').split(/[\s,]+/).filter(Boolean);
-  const push = (level, code, msg, el, fix) => ignored.includes(code) || ignored.includes(CAT[code]) ? null : issues.push({ level, code, cat: CAT[code] || 'ux', screen: name, msg, id: el && el.dataset ? (el.dataset.id || (ownerNode(el, project) || {}).id) : el && el.id, key: el && el.dataset ? el.dataset.key : undefined, fix });
+  const layerIgnores = (el, code) => { for (let n = el && el.closest ? el.closest('[data-lint-ignore]') : null; n; n = n.parentElement && n.parentElement.closest('[data-lint-ignore]')) { const l = n.dataset.lintIgnore.split(/[\s,]+/); if (l.includes('*') || l.includes(code) || l.includes(CAT[code])) return true; } return false; };
+  const push = (level, code, msg, el, fix) => ignored.includes(code) || ignored.includes(CAT[code]) || layerIgnores(el, code) ? null : issues.push({ level, code, cat: CAT[code] || 'ux', screen: name, msg, id: el && el.dataset ? (el.dataset.id || (ownerNode(el, project) || {}).id) : el && el.id, key: el && el.dataset ? el.dataset.key : undefined, fix });
   const W = screenEl.offsetWidth, H = screenEl.offsetHeight;
   const dev = project.sizeOf(screenNode).device;
   const kind = dev ? dev.kind : 'phone';
@@ -237,6 +238,82 @@ export function lintScreen(screenEl, project, screenNode) {
     if (r > ideal + 4) push('info', 'nested-radius', `Rayons imbriqués : le parent a ${Math.round(R)}px et ${Math.round(P)}px de padding, l'enfant devrait avoir ≈ ${Math.round(ideal)}px (il a ${Math.round(r)}px)`, ch);
   });
 
+  // --- near misses: an overlay (selection indicator, highlight, badge) almost — but not exactly — on the box it tracks.
+  // A 1–6px offset is never intentional: it reads as amateur (typical cause: an absolute layer ignores the parent's padding,
+  // or a % width computed on the padding box). Geometry first; optical nudges (play glyph…) are opted out with lint-ignore.
+  const isOverlay = (el) => { const cs = getComputedStyle(el); return cs.position === 'absolute' || (el.parentElement && el.parentElement.dataset && el.parentElement.dataset.tag === 'stack'); };
+  const filledEl = (el) => (parseColor(getComputedStyle(el).backgroundColor) || [0, 0, 0, 0])[3] > 0.05;
+  screenEl.querySelectorAll('[data-id], [data-tag]').forEach((el) => {
+    if (!visible(el) || !filledEl(el) || !isOverlay(el) || el.closest('.mq-statusbar, .mq-clone')) return;
+    const host = el.parentElement; if (!host) return;
+    const a = rel(el, screenEl); if (a.w < 8 || a.h < 8) return;
+    let best = null;
+    host.querySelectorAll('[data-id], [data-tag]').forEach((c) => {
+      if (c === el || el.contains(c) || c.contains(el) || !visible(c)) return;
+      const b = rel(c, screenEl); if (b.w < 8 || b.h < 8) return;
+      const ix = Math.max(0, Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x)), iy = Math.max(0, Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y));
+      const inter = ix * iy, iou = inter / (a.w * a.h + b.w * b.h - inter);
+      if (iou > 0.55 && (!best || iou > best.iou)) best = { c, b, iou };
+    });
+    if (!best) return;
+    const { b } = best;
+    const d = { x: a.x - b.x, y: a.y - b.y, r: a.x + a.w - (b.x + b.w), btm: a.y + a.h - (b.y + b.h) };
+    const worst = Math.max(...Object.values(d).map(Math.abs));
+    if (worst < 0.75 || worst > 6) return;
+    // an even ring around the target (all four sides offset alike) is a halo / focus ring, not a miss
+    if (Math.abs(d.x + d.r) < 0.75 && Math.abs(d.y + d.btm) < 0.75 && Math.abs(Math.abs(d.x) - Math.abs(d.y)) < 0.75) return;
+    const f = (v) => (v > 0 ? '+' : '') + Math.round(v * 10) / 10;
+    const pcs = getComputedStyle(host); const pad = Math.max(px(pcs.paddingTop), px(pcs.paddingLeft));
+    const hint = getComputedStyle(el).position === 'absolute' && pad > 0 ? ` — un calque absolu se place sur la boîte du parent, padding (${Math.round(pad)}px) ignoré : place-le dans un conteneur interne ou ajoute l'inset` : '';
+    push('warn', 'misaligned', `« ${label(el)} » est presque calé sur « ${label(best.c)} » mais décalé (gauche ${f(d.x)}, haut ${f(d.y)}, droite ${f(d.r)}, bas ${f(d.btm)} px)${hint}`, el);
+  });
+  // knob / thumb / handle hugging one side of its track: the inset along the track must equal the inset across it
+  // (a switch thumb 4px from the top must sit 4px from the end too — absolute layers ignore the track's padding)
+  screenEl.querySelectorAll('[data-id], [data-tag]').forEach((el) => {
+    if (!visible(el) || !filledEl(el) || getComputedStyle(el).position !== 'absolute' || el.closest('.mq-clone')) return;
+    const host = el.offsetParent || el.parentElement; if (!host || !host.dataset || !filledEl(host)) return;
+    const a = rel(el, screenEl), h = rel(host, screenEl);
+    if (a.w > h.w * 0.75 && a.h > h.h * 0.75) return;
+    const t = a.y - h.y, b = h.y + h.h - (a.y + a.h), l = a.x - h.x, r = h.x + h.w - (a.x + a.w);
+    if (Math.min(t, b, l, r) < -0.5) return; // badges / bursts deliberately overflow
+    const f = (v) => Math.round(v * 10) / 10;
+    // centred across the track (equal insets) → expect the same inset at the nearer end
+    for (const [across1, across2, along1, along2, axis] of [[t, b, l, r, 'horizontal'], [l, r, t, b, 'vertical']]) {
+      if (Math.abs(across1 - across2) > 0.75 || across1 < 1) continue;
+      const near = Math.min(along1, along2);
+      if (near > (axis === 'horizontal' ? a.w : a.h)) continue; // not hugging an end
+      const diff = near - across1;
+      if (Math.abs(diff) >= 0.75 && Math.abs(diff) <= 10) push('warn', 'inset', `« ${label(el)} » : ${f(across1)}px de marge sur un axe mais ${f(near)}px côté ${axis === 'horizontal' ? (l < r ? 'gauche' : 'droit') : (t < b ? 'haut' : 'bas')} dans « ${label(host)} » — un curseur garde le même inset partout (calque absolu : le padding du parent ne s'applique pas)`, el);
+      break;
+    }
+  });
+  // a layer that sticks out of the card / surface holding it (a long label pushing a switch out of its card…)
+  const surfaceOf = (el) => { let n = el.parentElement; while (n && n !== screenEl) { const cs = getComputedStyle(n); if (/auto|scroll/.test(cs.overflowX + cs.overflowY) || n.classList.contains('mq-screen-body')) return null; if (filledEl(n) || cs.overflow !== 'visible') return n; n = n.parentElement; } return null; };
+  const escapes = new Set();
+  screenEl.querySelectorAll('[data-id], [data-tag]').forEach((el) => {
+    if (!visible(el) || el.closest('.mq-statusbar, .mq-clone') || insideHScroll(el, screenEl)) return;
+    const cs = getComputedStyle(el); if (cs.position === 'absolute' || cs.position === 'fixed') return;
+    const host = surfaceOf(el); if (!host || host === screenEl) return;
+    const a = rel(el, screenEl), h = rel(host, screenEl);
+    const out = Math.max(h.x - a.x, a.x + a.w - (h.x + h.w), h.y - a.y, a.y + a.h - (h.y + h.h));
+    if (out <= 1.5) return;
+    for (let n = el.parentElement; n && n !== host; n = n.parentElement) if (escapes.has(n)) { escapes.add(el); return; } // report the outermost only
+    escapes.add(el);
+    push('warn', 'escape', `« ${short(label(el) === 'text' ? el.textContent : label(el), 28)} » sort de « ${label(host)} » de ${Math.round(out)}px : un texte en ligne doit pouvoir passer à la ligne (w=fill) et l'élément fixe garder sa taille`, el);
+  });
+  // single glyph / child almost centred in a small control (icon button, avatar, badge): 1–4px off reads as a bug
+  screenEl.querySelectorAll('[data-id], [data-tag], [data-comp]').forEach((el) => {
+    if (!visible(el) || el.closest('.mq-statusbar')) return;
+    const a = rel(el, screenEl); if (a.w > 96 || a.h > 96 || a.w < 16 || a.h < 16) return;
+    const kids = [...el.children].filter((c) => c.dataset && (c.dataset.id || c.dataset.tag) && visible(c) && getComputedStyle(c).position !== 'absolute');
+    if (kids.length !== 1) return;
+    const b = rel(kids[0], screenEl); if (b.w > a.w - 4 || b.h > a.h - 4) return;
+    const ox = b.x + b.w / 2 - (a.x + a.w / 2), oy = b.y + b.h / 2 - (a.y + a.h / 2);
+    const off = Math.max(Math.abs(ox), Math.abs(oy));
+    if (off < 0.75 || off > 4) return;
+    push('info', 'off-center', `« ${short(label(kids[0]), 20)} » est décentré de ${Math.round(ox * 10) / 10}, ${Math.round(oy * 10) / 10} px dans « ${label(el)} » (${Math.round(a.w)}×${Math.round(a.h)}) : centre-le (center) ou, si c'est une correction optique voulue, ignore la règle`, kids[0]);
+  });
+
   // --- decorative hairlines: a border doubled by a shadow, or a light border on a surface whose fill already separates it
   // (Refactoring UI: use fewer borders — background contrast, shadow or space separate better; avoid double edges)
   const redundant = [];
@@ -285,14 +362,20 @@ export function lintScreen(screenEl, project, screenNode) {
   for (const e of entr) {
     const nm = label(e.x.el);
     if (e.sp.easing === 'linear' && MOVING.has(e.sp.name)) push('warn', 'motion-linear', `« ${e.sp.name} » en linéaire sur ${nm} : mouvement mécanique, utilise un slow in/out (smooth, expo, cushion)`, e.x.el, srcFix(e.x, (s) => s.replace(/\blinear\b/, 'smooth')));
-    if (e.dur > 900 && e.sp.name !== 'count' && e.sp.name !== 'typewriter') push('warn', 'motion-duration', `Entrée de ${Math.round(e.dur)} ms sur ${nm} : en interface, vise 200–600 ms (le contenu doit se poser vite)`, e.x.el, srcFix(e.x, (s) => s.replace(/(^\S+\s+)(\d+)/, (m, a) => a + '600')));
+    if (e.dur > 900 && e.sp.name !== 'count' && e.sp.name !== 'typewriter' && !(e.sp.name === 'reveal' && e.sp.easing === 'linear') /* a linear wipe tracks time: a progress bar, not an entrance */) push('warn', 'motion-duration', `Entrée de ${Math.round(e.dur)} ms sur ${nm} : en interface, vise 200–600 ms (le contenu doit se poser vite)`, e.x.el, srcFix(e.x, (s) => s.replace(/(^\S+\s+)(\d+)/, (m, a) => a + '600')));
     else if (e.dur < 120) push('info', 'motion-duration', `Entrée de ${Math.round(e.dur)} ms sur ${nm} : trop courte pour être lue (≥ 150 ms)`, e.x.el);
   }
   if (entr.length) {
     const end = Math.max(...entr.map((e) => e.start + e.dur));
     if (end > 1600) push('warn', 'motion-settle', `L'écran met ${Math.round(end)} ms à se poser : l'utilisateur attend. Réduis les délais ou le pas de cascade (vise < 1 200 ms)`);
     const groups = new Map();
-    for (const e of entr) { const k = `${e.sp.name}|${Math.round(e.start)}|${Math.round(e.dur)}`; groups.set(k, (groups.get(k) || 0) + 1); }
+    // copies of one clone (radial burst, repeated pattern) are one gesture: they count once
+    const seenClone = new Set();
+    for (const e of entr) {
+      const wrap = e.x.el && e.x.el.parentElement && e.x.el.parentElement.classList.contains('mq-clone') ? e.x.el.parentElement : null;
+      if (wrap) { if (seenClone.has(wrap)) continue; seenClone.add(wrap); }
+      const k = `${e.sp.name}|${Math.round(e.start)}|${Math.round(e.dur)}`; groups.set(k, (groups.get(k) || 0) + 1);
+    }
     const maxSame = Math.max(...groups.values());
     if (maxSame >= 5) push('info', 'motion-sync', `${maxSame} éléments partent exactement en même temps avec la même animation : décale-les (overlapping action, stagger) pour une entrée vivante`);
     const durs = new Set(entr.filter((e) => MOVING.has(e.sp.name)).map((e) => Math.round(e.dur / 50)));

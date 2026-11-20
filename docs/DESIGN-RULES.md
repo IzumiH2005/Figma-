@@ -105,3 +105,22 @@ En mode sombre, l'élévation vient de surfaces plus claires, pas de liserés. U
 - Padding horizontal d'un bouton ≥ 12–16 px, environ deux fois le padding vertical (`button-padding`).
 - Rayons imbriqués : rayon intérieur = rayon extérieur − padding (`nested-radius`).
 - Toute surface cliquable réagit au survol ou à l'appui (`no-feedback`, sinon `motion=press`).
+
+## Précision au pixel
+
+Un décalage de 1 à 6 px n'est jamais voulu : c'est ce qui fait « amateur ». Quatre règles le traquent sur la géométrie rendue (`spacing`) :
+
+- `misaligned` : une surcouche (indicateur de segmenté, surbrillance, pastille) recouvre presque sa cible sans la recouvrir exactement. Cause typique : un calque absolu se place sur la boîte du parent, **padding ignoré**, et ses `%` se calculent sur cette boîte. Remède : mettre l'indicateur dans un conteneur interne de la taille de la piste (`stack p=4 > stack w=fill h=40 > [indicateur, rangée]`).
+- `inset` : un curseur (interrupteur, slider, poignée) centré sur un axe doit garder le même inset à l'extrémité : rail 52×32, curseur 24 → `x={on ? 24 : 4} y=4`.
+- `escape` : un calque sort de la carte ou de la surface qui le contient. Un libellé dans une rangée avec un élément fixe prend `w=fill` pour passer à la ligne ; un bloc à contenu variable prend `minh=` plutôt que `h=`.
+- `off-center` : un glyphe seul dans un petit contrôle (bouton icône, avatar, badge) décentré de 1 à 4 px. Une correction optique voulue (triangle « lecture ») s'assume sur le calque : `<icon name=play lint-ignore=off-center …/>` (`lint-ignore` accepte aussi une catégorie, ou rien pour tout ignorer sous ce calque).
+
+Méthode pour chaque composant :
+
+1. `mq inspect f.mq -s Écran --depth 12` : lire les boîtes et vérifier les insets.
+2. Vérifier chaque état (valeurs extrêmes, libellé long, 0 et max), pas seulement l'état par défaut, sur un écran de test.
+3. Rendre au ×2 et regarder.
+
+Valeurs sur la grille de 4 : rail 48 = padding 4 + piste 40 ; anneau 12, écart 8. Rayons imbriqués exacts : 12 → 8 avec 4 de padding.
+
+Repères : la copie non officielle des HIG d'Apple donne pour le segmenté un padding de rail constant (2 pt), des rayons imbriqués 8 → 6 et des segments d'au moins 44 pt.

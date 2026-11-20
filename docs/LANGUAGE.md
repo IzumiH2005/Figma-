@@ -445,7 +445,7 @@ Fonctions : `len min max round floor ceil abs clamp fixed money(n,'€') percent
 | `loop="float 3000"` | Animation en boucle |
 | `stagger="60 fade-up 450"` | Sur un parent : cascade sur ses enfants |
 | `transition=250` | Transition CSS sur tout changement (états, smart) |
-| `<keyframes name="x"> 0 { opacity=0 y=20 } 100 { opacity=1 y=0 } </keyframes>` | Animation custom (`opacity x y scale rotate blur fill color radius w h`) |
+| `<keyframes name="x"> 0 { opacity=0 y=20 } 100 { opacity=1 y=0 } </keyframes>` | Animation custom (`opacity x y scale rotate blur fill color radius w h`). Une animation unique qui finit à `opacity=0` (éclat, confettis) garde sa dernière image ; `hold` force ce comportement (`anim="spark 640 hold"`) |
 
 Entrées : `fade fade-up fade-down fade-left fade-right scale-in zoom-in pop land stretch-in slide-up slide-down slide-left slide-right blur-in rotate-in flip-in drop reveal reveal-up reveal-down typewriter grow grow-up count` (`count` anime le nombre du texte de 0 à sa valeur ; `land` = chute, contact, écrasement à volume constant, rebond).
 Boucles : `moving-hold pulse breathe spin float bounce shake wiggle heartbeat ping blink sway shimmer orbit`. Accents (avec `play clé …`) : `squish jelly rubber shake wiggle`.
