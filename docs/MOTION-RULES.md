@@ -66,3 +66,7 @@ Pour ignorer volontairement une règle sur un écran (page de démonstration) : 
 ## Auto-keyframe (éditeur)
 
 Timeline › **Auto-keyframe** (bouton rouge, comme dans Figma Motion) : place la tête de lecture, puis déplace, tourne, estompe ou redimensionne l'élément sélectionné. Chaque modification devient une image clé au temps courant, dans un bloc `<keyframes name="<nom>-motion">`, et l'élément reçoit `anim="<nom>-motion <durée>"`. La valeur de base n'est pas modifiée. x/y sont enregistrés en décalages ; rotate, opacity et scale en valeurs absolues. Si tu enregistres au-delà de la durée, elle s'allonge et les images clés existantes sont recalées. Recliquer arrête l'enregistrement.
+
+## Booléens animés (smart animate)
+
+Quand un `<boolean>` garde la même structure d'un état à l'autre, mais qu'un de ses opérandes s'est déplacé (par exemple l'encoche d'une barre d'onglets, `x={84 + $tab * 96}`), le smart animate interpole la position des opérandes et recalcule l'opération à chaque image. L'encoche glisse donc le long de la barre au lieu d'être déformée point par point. Pendant le mouvement, le remplissage est dessiné en SVG direct, sans masque CSS à re-décoder, donc sans clignotement. L'exemple `examples/notch-menu.mq` reproduit un menu à encoche : encoche et pastille synchronisées, icônes fixes en fondu de couleur, `smart 320 gentle`.

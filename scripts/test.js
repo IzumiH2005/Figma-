@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { buildRuntime, buildEditorHTML, readExamples } from './build.js';
 import { convertRegistryItem } from '../src/core/shadcn-import.js';
 import { twToAttrs } from '../src/core/tailwind.js';
+import { drive } from '../cli/drive.js';
 
 const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -127,6 +128,19 @@ export function PillRow({ className, ...props }) { return <div className={cn("fl
     return { n: pills.length, errs: el._mq.errors, bg: cs.map((c) => c.backgroundColor), radius: cs[0] && cs[0].borderTopLeftRadius, text: el.textContent.replace(/\s+/g, ' ').trim() };
   }, r.mq);
   ok(out.n === 2 && !out.errs.length && out.bg[0] === 'rgb(245, 245, 245)' && out.bg[1] === 'rgb(23, 23, 23)' && out.radius === '9999px' && out.text.replace(/ /g, '') === 'AFait', `Composants importés rendus (variantes, slot, texte) ${JSON.stringify(out)}`);
+}
+
+// agent pointer: a continuous drag on a boolean operand's anchor edits the path (live boolean)
+{
+  const tmpMq = path.join(ROOT, 'out', '_drive.mq');
+  fs.writeFileSync(tmpMq, examples.find((e) => e.file === 'notch-menu.mq').source);
+  const before = /name=notch[^>]*d="([^"]+)"/.exec(fs.readFileSync(tmpMq, 'utf8'))[1];
+  const log = console.log; console.log = () => {};
+  await drive({ file: tmpMq, script: 'zoom tabbar; edit notch; drag anchor 4 by 0 -6 ms=300; key Escape', write: true, buildEditorHTML, chromium });
+  console.log = log;
+  const after = /name=notch[^>]*d="([^"]+)"/.exec(fs.readFileSync(tmpMq, 'utf8'))[1];
+  ok(before !== after && /62 50/.test(after), `mq drive : glisser une ancre d'opérande de booléen modifie le tracé (${after.slice(0, 60)}…)`);
+  fs.rmSync(tmpMq);
 }
 
 // editor boots

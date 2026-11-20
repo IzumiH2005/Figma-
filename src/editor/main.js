@@ -101,6 +101,7 @@ function boot() {
     exportSelectionSVG: () => exportSelectionSVG(),
   };
   canvas = new Canvas(app, canvasEl, hooks);
+  window.__canvas = canvas; // used by `mq drive` (agent pointer)
   left = new LeftPanel(app, leftEl, hooks);
   right = new RightPanel(app, rightEl, hooks);
   code = new CodeDrawer(app, codeEl);

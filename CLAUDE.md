@@ -19,6 +19,12 @@ Playwright et Chromium sont préinstallés dans l'environnement ; ffmpeg sert po
 3. **Auditer et corriger** : `node cli/mq.js audit f.mq` donne un score d'hygiène par catégorie. `node cli/mq.js lint f.mq --fix` applique les corrections sûres par patch chirurgical du source (grille 4/8, échelle typo, tokens, `kind=danger`…). `--only contrast,spacing` filtre par règle ou par catégorie. Règles détaillées : `docs/DESIGN-RULES.md`. **Ne livre rien sous 95/100 ou avec une erreur.**
 4. **Regarder** : `node cli/mq.js render f.mq -s Écran --frame -o out` (PNG avec cadre d'appareil), ou `board` pour tout le canvas. Lis le PNG avec l'outil Read.
 5. **Animer** : `node cli/mq.js motion f.mq -s Écran` lit la motion en texte (timing, spacing en points, transitions) ; `node cli/mq.js video f.mq --flow demo -o out/demo.mp4` (`--gif`, `--slowmo 0.25` pour vérifier anticipation et arcs) ; `anim -s Écran` pour les entrées seules. Principes et syntaxe : `docs/MOTION-RULES.md`.
+5 bis. **Sculpter à la souris** (formes, encoches, courbes organiques) : `node cli/mq.js drive f.mq gestes.txt --write [--video s.mp4] [--shots dossier]`, ou en une ligne `-e "zoom barre; edit encoche; anchors"`. Ce pilote envoie à l'éditeur réel des gestes continus, comme une main : vitesse à profil « minimum-jerk », petits arcs, 60 i/s. On peut éditer les points des opérandes d'un booléen, le résultat étant recalculé en direct.
+   - `anchors` liste les points en coordonnées locales.
+   - `drag anchor 3 to local 96 22`, `drag handle 2.out by -5 0`, `drag rig 0 by 10 0` déplacent les points, les poignées et les rigs.
+   - `pen 10,20 60,0>80,0 …` trace à la plume, `pencil x,y x,y … ms=1200` à main levée.
+   - `shot f.png calque` fait une capture.
+   Méthode : se fixer des repères (centre, rayon, tangentes), glisser chaque point et chaque poignée vers sa cible, puis regarder la capture et faire une passe de plus. Ne pas taper des `d=` à la main pour une forme organique.
 6. **Livrer** : `node cli/mq.js build f.mq -o out/maquette.html`, puis publie ce fichier en artifact ; envoie PNG et MP4 avec SendUserFile.
 
 ## Règles de conception utiles

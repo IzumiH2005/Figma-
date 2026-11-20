@@ -1,0 +1,56 @@
+<project name="Notch Menu — barre d'onglets à encoche" typescale=ui fonts=Inter:400;500;600;700>
+  <tokens>
+    ink: #0B0B0C
+    paper: #F4F3EF
+    surface: #FFFFFF
+    accent: #FFB020
+    on-ink: #FFFFFF
+    text: #0B0B0C
+    muted: #6B6A66
+    primary: #0B0B0C
+  </tokens>
+  <vars>
+    tab: 0
+    tabs: [{icon:'ph-fill:house', label:'Accueil'}, {icon:'ph-fill:fire', label:'Tendances'}, {icon:'ph-fill:gear-six', label:'Réglages'}]
+  </vars>
+  <screen name=Menu device=iphone-16 statusbar=dark homebar fill=$paper pt=safe start>
+    <col w=fill h=fill px=24 pt=24 gap=16>
+      <text class=t-caption color=$muted upper ls=8%>Maquette · motion</text>
+      <text class=t-h1 weight=700 lh=1.1>{$tabs[$tab].label}</text>
+      <text color=$muted lh=1.5>Touche un onglet : l'encoche et la pastille glissent ensemble, l'icône active passe à l'ambre.</text>
+      <col w=fill gap=12 mt=8>
+        <frame name=card-a w=fill h=120 radius=20 fill={$tab == 0 ? $ink : $surface} stroke="1 rgba(0,0,0,.06)"/>
+        <row w=fill gap=12>
+          <frame name=card-b w=fill h=88 radius=20 fill={$tab == 1 ? $ink : $surface} stroke="1 rgba(0,0,0,.06)"/>
+          <frame name=card-c w=fill h=88 radius=20 fill={$tab == 2 ? $ink : $surface} stroke="1 rgba(0,0,0,.06)"/>
+        </row>
+      </col>
+    </col>
+    <stack fixed place=bottom w=fill h=132 pb=safe center>
+      <stack w=360 h=96 name=tabbar>
+        <boolean name=bar op=subtract x=0 y=24 w=360 h=72 fill=$ink>
+          <rect x=0 y=0 w=360 h=72 radius=24/>
+          <vector name=notch x={round(96 + $tab * 84 - 62)} y=-8 w=124 h=60 d="M0 0L124 0L122.01 8C103 8 98.41 20.66 93.9 33.6C89.1 47.4 76.3 56 62 56C47.7 56 35.33 47.24 30.11 33.6C25.2 20.8 21 8 2.01 8Z"/>
+        </boolean>
+        <ellipse name=puck x={round(96 + $tab * 84 - 26)} y=12 w=52 h=52 fill=$ink/>
+        <row x=0 y=24 w=360 h=72 px=54>
+          <stack each={$tabs} as=t name=tab w=fill h=fill center cursor=pointer on:click="set $tab = {i} smart 320 gentle" aria-label={t.label}>
+            <icon name={t.icon} size=26 color={i == $tab ? $accent : $on-ink} mt={i == $tab ? -44 : 0}/>
+          </stack>
+        </row>
+      </stack>
+    </stack>
+  </screen>
+  <flow name=demo>
+    start Menu
+    wait 900
+    click tab#1
+    wait 1100
+    click tab#2
+    wait 1100
+    click tab#0
+    wait 1100
+    click tab#2
+    wait 1200
+  </flow>
+</project>

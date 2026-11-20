@@ -23,6 +23,24 @@ export const EASINGS = {
   'ease-in': 'cubic-bezier(.4,0,1,1)', 'ease-out': 'cubic-bezier(0,0,.2,1)', 'ease-in-out': 'cubic-bezier(.4,0,.2,1)', standard: 'cubic-bezier(.2,0,0,1)', emphasized: 'cubic-bezier(.05,.7,.1,1)',
 };
 
+// CSS easing string → JS function (linear() lists incl. springs, cubic-bezier, keywords) for rAF-driven effects
+export function easeFn(css) {
+  css = String(css || 'linear').trim();
+  if (EASINGS[css]) css = EASINGS[css];
+  let m = /^linear\((.*)\)$/.exec(css);
+  if (m) {
+    const raw = m[1].split(',').map((s) => s.trim().split(/\s+/)); const pts = [];
+    raw.forEach(([v, pct], i) => pts.push([pct ? parseFloat(pct) / 100 : null, parseFloat(v)]));
+    pts[0][0] = pts[0][0] ?? 0; pts[pts.length - 1][0] = pts[pts.length - 1][0] ?? 1;
+    for (let i = 1; i < pts.length - 1; i++) if (pts[i][0] == null) { let j = i; while (pts[j][0] == null) j++; const a = pts[i - 1][0], b = pts[j][0]; for (let k = i; k < j; k++) pts[k][0] = a + ((b - a) * (k - i + 1)) / (j - i + 1); }
+    return (t) => { if (t <= 0) return pts[0][1]; if (t >= 1) return pts[pts.length - 1][1]; let i = 1; while (pts[i][0] < t) i++; const [x0, y0] = pts[i - 1], [x1, y1] = pts[i]; return y0 + ((y1 - y0) * (t - x0)) / (x1 - x0 || 1); };
+  }
+  m = /^cubic-bezier\(([^)]*)\)$/.exec(css);
+  const [x1, y1, x2, y2] = m ? m[1].split(',').map(Number) : css === 'linear' ? [0, 0, 1, 1] : [0.25, 0.1, 0.25, 1];
+  const bez = (a, b, t) => 3 * a * t * (1 - t) ** 2 + 3 * b * t * t * (1 - t) + t ** 3;
+  return (x) => { if (x <= 0) return 0; if (x >= 1) return 1; let lo = 0, hi = 1, t = x; for (let i = 0; i < 24; i++) { t = (lo + hi) / 2; if (bez(x1, x2, t) < x) lo = t; else hi = t; } return bez(y1, y2, t); };
+}
+
 export function resolveEasing(name, fallbackDur) {
   if (!name) return { easing: EASINGS.smooth, duration: fallbackDur };
   const m = /^spring\((\d+)\s*,\s*(\d+)\)$/.exec(name);

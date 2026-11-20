@@ -8,6 +8,7 @@ import { createRequire } from 'node:module';
 import { buildRuntime, buildEditorHTML, readExamples, iconSubset } from '../scripts/build.js';
 import { importShadcnTheme } from '../src/core/themes.js';
 import { importShadcn, SHADCN_REGISTRY } from '../src/core/shadcn-import.js';
+import { drive } from './drive.js';
 
 const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -26,6 +27,7 @@ const HELP = `Maquette CLI
   mq export  <file.mq> [-o proto.html]                               prototype HTML autonome (lecture seule)
   mq fmt     <file.mq> [--write]                                     reformate le source
   mq kit     [préfixe]                                               liste les composants du kit + props (mq kit ui. : pack shadcn)
+  mq drive   <file.mq> <gestes.txt> [--write] [--video s.mp4]       pilote souris : gestes continus dans l'éditeur (points, plume, crayon…)
   mq shadcn  add <noms…|all> [--into f.mq] [--theme neutral|zinc|slate|stone|gray]   importe les composants du registre shadcn/ui (ui.*)
   mq shadcn  list | theme <globals.css> [--into f.mq]                  liste le registre · importe un thème (:root/.dark) en tokens sh-*
   mq icons   [recherche]                                             cherche des noms d'icônes (lucide)
@@ -305,12 +307,14 @@ window.__stage = function(name, frame, caption) {
   cap.textContent = caption || '';
   if (frame) { const f = MQ.deviceFrame(size.device, host, size); col.appendChild(f); } else { host.style.borderRadius='12px'; host.style.boxShadow='0 30px 80px rgba(0,0,0,.5)'; col.appendChild(host); }
   if (caption !== null) col.appendChild(cap);
+  // HiDPI video: the viewport is scale× larger and the stage is zoomed (Playwright records at viewport size)
+  col.style.zoom = window.__zoom || 1;
   document.body.appendChild(col);
   const player = new MQ.Player(p, host, { mode: window.__mode, headless: true });
   window.__player = player;
   player.start(s.attrs.name);
   const cur = document.createElement('div'); cur.id = 'cursor';
-  cur.style.cssText = 'position:fixed;left:0;top:0;width:34px;height:34px;margin:-17px 0 0 -17px;border-radius:50%;background:rgba(255,255,255,.35);border:2px solid rgba(255,255,255,.9);box-shadow:0 4px 14px rgba(0,0,0,.35);pointer-events:none;z-index:99999;opacity:0;transition:opacity .25s;backdrop-filter:blur(2px)';
+  const Z = window.__zoom || 1; cur.style.cssText = 'position:fixed;left:0;top:0;width:' + 34 * Z + 'px;height:' + 34 * Z + 'px;margin:' + (-17 * Z) + 'px 0 0 ' + (-17 * Z) + 'px;' + 'border-radius:50%;background:rgba(255,255,255,.35);border:2px solid rgba(255,255,255,.9);box-shadow:0 4px 14px rgba(0,0,0,.35);pointer-events:none;z-index:99999;opacity:0;transition:opacity .25s;backdrop-filter:blur(2px)';
   document.body.appendChild(cur);
   return true;
 };
@@ -373,9 +377,10 @@ async function cmdVideo(o, animOnly = false) {
   const hasCaption = steps.some((s) => s.cmd === 'caption');
   const vw = Math.ceil((dims.w + 140) / 2) * 2, vh = Math.ceil((dims.h + (hasCaption ? 150 : 100)) / 2) * 2;
   const tmpDir = fs.mkdtempSync(path.join(process.env.TMPDIR || '/tmp', 'mqvid-'));
-  const { browser, context, page } = await browserPage({ scale, viewport: { width: vw, height: vh }, video: { dir: tmpDir, size: { width: vw * scale, height: vh * scale } } });
+  const { browser, context, page } = await browserPage({ scale: 1, viewport: { width: vw * scale, height: vh * scale }, video: { dir: tmpDir, size: { width: vw * scale, height: vh * scale } } });
   await loadInPage(page, src, o.mode);
   await page.addScriptTag({ content: STAGE_JS });
+  await page.evaluate((z) => { window.__zoom = z; }, +scale);
   if (o.slowmo) await page.evaluate((k) => MQ.setTimeScale(+k), o.slowmo);
   const t0 = Date.now();
   let started = false;
@@ -496,6 +501,15 @@ async function cmdKit(o) {
   await browser.close();
 }
 
+// agent pointer: drive the real editor with continuous mouse gestures (see cli/drive.js)
+async function cmdDrive(o) {
+  const file = o._[1]; if (!file) throw new Error('usage : mq drive projet.mq gestes.txt [--write] [--video s.mp4] [--shots dossier]  |  -e "select x; edit; anchors"');
+  const script = o.e ? String(o.e) : fs.readFileSync(o._[2], 'utf8');
+  const { chromium } = require('playwright');
+  const r = await drive({ file, script, write: !!o.write, video: o.video, shots: o.shots, scale: o.scale || 1, buildEditorHTML, chromium });
+  if (o.video && r.video) { execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-i', r.video, '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', o.video]); console.log(`✓ vidéo de la session : ${o.video}`); }
+}
+
 // merge sh-* token lines into a project's <tokens> block (created if missing)
 function mergeTokens(src, lines) {
   const m = /<tokens>([\s\S]*?)<\/tokens>/.exec(src);
@@ -562,6 +576,6 @@ async function cmdScenes() {
 
 const o = args(process.argv.slice(2));
 const cmd = o._[0];
-const table = { motion: cmdMotion, render: cmdRender, board: cmdBoard, inspect: cmdInspect, lint: (x) => cmdLint(x), audit: (x) => cmdLint(x, true), video: (x) => cmdVideo(x), anim: (x) => cmdVideo(x, true), build: cmdBuild, export: cmdExport, fmt: cmdFmt, kit: cmdKit, 'shadcn-theme': cmdShadcnTheme, shadcn: cmdShadcn, icons: cmdIcons, scenes: cmdScenes };
+const table = { motion: cmdMotion, render: cmdRender, board: cmdBoard, inspect: cmdInspect, lint: (x) => cmdLint(x), audit: (x) => cmdLint(x, true), video: (x) => cmdVideo(x), anim: (x) => cmdVideo(x, true), build: cmdBuild, export: cmdExport, fmt: cmdFmt, kit: cmdKit, 'shadcn-theme': cmdShadcnTheme, shadcn: cmdShadcn, drive: cmdDrive, icons: cmdIcons, scenes: cmdScenes };
 if (!cmd || !table[cmd]) { console.log(HELP); process.exit(cmd ? 1 : 0); }
 try { await table[cmd](o); } catch (e) { console.error('✖ ' + (e && e.message || e)); process.exit(1); }

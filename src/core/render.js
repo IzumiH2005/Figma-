@@ -5,7 +5,7 @@ import { twToAttrs } from './tailwind.js';
 import { patternFill, wrapClone, applyEffects, applyMaskGroup } from './effects.js';
 import { resolveColorFns, shade as shadeC, parseColor as parseC, toCss as toCssC } from './color.js';
 const shadeColor = (c, p) => { const v = parseC(c); if (!v) throw new Error('not a colour'); return toCssC(shadeC(v, p / 100)); };
-import { VECTOR_TAGS, nodePath, boxOf, booleanSubs, buildVector, buildTextPath, gooFilterSvg, maskCss, threeD, parseShapeSpec } from './vector.js';
+import { VECTOR_TAGS, nodePath, boxOf, booleanSubs, booleanParts, buildVector, buildTextPath, gooFilterSvg, maskCss, threeD, parseShapeSpec } from './vector.js';
 import { shapePath, serializePath } from './pathkit.js';
 import { textOf } from './parse.js';
 import { ICONS } from './icons.js';
@@ -705,7 +705,7 @@ function createElementFor(node, a, scope, parentLayout, ctx) {
       const box = boxOf(a, tag === 'textpath' ? 200 : 100);
       const attrsOf = (c) => resolveAttrs(c, scope, ctx).a;
       let subs;
-      if (tag === 'boolean') subs = booleanSubs(node, attrsOf, a.op || 'union');
+      if (tag === 'boolean') { subs = booleanSubs(node, attrsOf, a.op || 'union'); el._bool = { op: a.op || 'union', parts: booleanParts(node, attrsOf) }; }
       else if (tag === 'textpath') { const sp = parseShapeSpec(a.shape || 'ellipse'); subs = a.d ? nodePath({ tag: 'vector', children: [] }, a, box) : shapePath(sp.kind, box.w, box.h, sp.params); }
       else subs = nodePath(node, a, box);
       if (tag === 'textpath') buildTextPath(el, a, String(safeInterp(textOf(node), scope, ctx) ?? '').trim(), subs, box);

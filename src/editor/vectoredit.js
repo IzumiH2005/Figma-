@@ -34,6 +34,12 @@ export class VectorEditor {
 
   // geometry helpers: local (path) coords <-> canvas-overlay coords
   frame() {
+    if (this.op) { // operand of a <boolean>: placed inside the parent's box at its x/y
+      const pel = this.canvas.elOf(this.op.parentId); if (!pel) return null;
+      const pr = this.canvas.local(pel.getBoundingClientRect()); const pvw = +pel.dataset.vw || pr.w, pvh = +pel.dataset.vh || pr.h;
+      const sx = pr.w / pvw, sy = pr.h / pvh; const part = this.op.part();
+      return { el: pel, r: { x: pr.x + part.x * sx, y: pr.y + part.y * sy, w: (part.w || 1) * sx, h: (part.h || 1) * sy }, sx, sy, vw: part.w, vh: part.h };
+    }
     const el = this.canvas.elOf(this.id); if (!el) return null;
     const r = this.canvas.local(el.getBoundingClientRect());
     const vw = +el.dataset.vw || r.w, vh = +el.dataset.vh || r.h;
@@ -47,6 +53,16 @@ export class VectorEditor {
     const app = this.app; let n = app.node(id); if (!n) return;
     const el = this.canvas.elOf(id);
     if (!['vector', 'shape', 'rect', 'ellipse', 'boolean', 'svg', 'path'].includes(n.tag)) return;
+    // Figma: you can edit the points of a shape inside a boolean group; the result updates live
+    const parent = app.parent(id);
+    if (parent && parent.tag === 'boolean' && n.tag === 'vector' && n.attrs.d) {
+      const pel = this.canvas.elOf(parent.id); if (!pel || !pel._bool) { toast('Booléen non rendu'); return; }
+      const index = parent.children.filter((c) => c.tag !== '#text').indexOf(n);
+      this.op = { parentId: parent.id, index, part: () => { const q = (this.canvas.elOf(parent.id)?._bool || pel._bool).parts[index]; return { x: q.x, y: q.y, w: +n.attrs.w || P().bbox(q.local).w, h: +n.attrs.h || P().bbox(q.local).h }; } };
+      this.id = id; this.sel.clear(); this.subs = P().parsePath(n.attrs.d);
+      this.canvas.root.classList.add('vedit'); this.canvas.drawOverlay(); return;
+    }
+    this.op = null;
     if (n.tag !== 'vector' || !el || !el._path) {
       if (!el || !el._path) { toast('Sélectionne une forme rendue pour éditer ses points'); return; }
       // convert to an editable vector (Figma does the same when you edit a shape's points)
@@ -59,7 +75,7 @@ export class VectorEditor {
     this.canvas.root.classList.add('vedit');
     this.canvas.drawOverlay();
   }
-  exit() { if (!this.id) return; this.id = null; this.sel.clear(); this.canvas.root.classList.remove('vedit'); this.canvas.drawOverlay(); }
+  exit() { if (!this.id) return; this.id = null; this.op = null; this.sel.clear(); this.canvas.root.classList.remove('vedit'); this.canvas.drawOverlay(); }
 
   toVector(n, el) {
     const box = el._box || { w: el.offsetWidth, h: el.offsetHeight };
@@ -71,6 +87,7 @@ export class VectorEditor {
 
   commit() {
     const app = this.app; const n = app.node(this.id); if (!n) return;
+    if (this.op) { app.change(() => { n.attrs.d = P().serializePath(this.subs); }); return; } // operand: keep its box & position (x may be an expression)
     // normalize: keep the path inside its own box (Figma recomputes the vector bounds)
     const bb = P().bbox(this.subs);
     let subs = this.subs;
@@ -238,7 +255,14 @@ export class VectorEditor {
     return false;
   }
 
-  preview() { const F = this.frame(); if (F) MQ.Vector.setVectorD(F.el, P().serializePath(this.subs)); this.canvas.drawOverlay(); }
+  preview() {
+    const F = this.frame(); if (!F) return;
+    if (this.op) { // recompute the boolean with the edited operand → live result, like Figma
+      const b = F.el._bool; const parts = b.parts.map((q, i) => P().translatePath(i === this.op.index ? this.subs : q.local, q.x, q.y));
+      MQ.Vector.setVectorD(F.el, P().serializePath(P().booleanPaths(parts, b.op)));
+    } else MQ.Vector.setVectorD(F.el, P().serializePath(this.subs));
+    this.canvas.drawOverlay();
+  }
 
   // ------------------------------------------------------------ pen
   container(e) {

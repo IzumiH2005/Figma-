@@ -47,6 +47,34 @@ export function nodePath(node, a, box) {
 }
 
 // children of <boolean>: each child positioned by its x/y (and rotate) inside the boolean's box
+// boolean recipe: each operand's local geometry + position (kept on the element for live re-evaluation)
+export function booleanParts(node, attrsOf) {
+  const parts = [];
+  for (const c of node.children || []) {
+    if (c.tag === '#text') continue;
+    const ca = attrsOf(c); const b = boxOf(ca, 100);
+    let local = c.tag === 'boolean' ? booleanSubs(c, attrsOf, ca.op || 'union') : nodePath(c, ca, b);
+    if (ca.rotate) local = rotatePath(local, num(ca.rotate), b.w / 2, b.h / 2);
+    parts.push({ local, x: num(ca.x), y: num(ca.y), sig: serializePath(local) });
+  }
+  return parts;
+}
+// Smart animate of a boolean whose operands moved: interpolate operand positions and recompute the operation
+// every frame (a notch slides along a bar instead of being morphed point by point).
+export function liveBoolean(el, from, to, duration, ease, delay = 0) {
+  if (!from || !to || from.op !== to.op || from.parts.length !== to.parts.length || from.parts.some((p, i) => p.sig !== to.parts[i].sig)) return false;
+  const lerp = (a, b, t) => a + (b - a) * t;
+  const frame = (k) => serializePath(booleanPaths(to.parts.map((q, i) => translatePath(q.local, lerp(from.parts[i].x, q.x, k), lerp(from.parts[i].y, q.y, k))), to.op));
+  const finalD = el.dataset.d; let t0 = null;
+  const tick = (now) => {
+    if (t0 === null) t0 = now + delay;
+    const p = Math.max(0, Math.min(1, (now - t0) / duration));
+    if (p >= 1 || !el.isConnected) { endLive(el, finalD); return; }
+    setVectorD(el, frame(ease(p))); requestAnimationFrame(tick);
+  };
+  beginLive(el); setVectorD(el, frame(0)); requestAnimationFrame(tick);
+  return true;
+}
 export function booleanSubs(node, attrsOf, op) {
   const list = [];
   for (const c of node.children || []) {
@@ -199,7 +227,9 @@ export function threeD(a, s) {
 export function setVectorD(el, d) {
   const w = +el.dataset.vw, h = +el.dataset.vh;
   const fl = el.querySelector(':scope > .mq-vec-fill');
-  if (fl) { const m = maskImageFor(d, w, h, false); fl.style.webkitMaskImage = m; fl.style.maskImage = m; }
+  const live = el._live;
+  if (live) live.path.setAttribute('d', d); // during a live animation: plain SVG path, no per-frame mask decoding (no flicker)
+  else if (fl) { const m = maskImageFor(d, w, h, false); fl.style.webkitMaskImage = m; fl.style.maskImage = m; }
   const p = el.querySelector(':scope > .mq-vec-stroke path'); if (p) p.setAttribute('d', d);
   el.dataset.d = d;
 }
@@ -225,9 +255,29 @@ export function attachMorph(el, anim, duration, iterations) {
   };
   requestAnimationFrame(tick);
 }
+// live mode: a solid fill is drawn as an inline SVG path while the shape animates (CSS mask images decode
+// asynchronously, swapping them every frame makes the shape blink); the mask comes back once the motion ends
+function beginLive(el) {
+  const fl = el.querySelector(':scope > .mq-vec-fill'); if (!fl || el._live) return;
+  const cs = getComputedStyle(fl); if (cs.backgroundImage && cs.backgroundImage !== 'none') return;
+  const NS = 'http://www.w3.org/2000/svg'; const svg = document.createElementNS(NS, 'svg');
+  svg.setAttribute('viewBox', `0 0 ${el.dataset.vw} ${el.dataset.vh}`); svg.setAttribute('preserveAspectRatio', 'none'); svg.setAttribute('class', 'mq-vec-live');
+  svg.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none';
+  const path = document.createElementNS(NS, 'path'); path.setAttribute('fill', cs.backgroundColor); path.setAttribute('fill-rule', 'evenodd'); svg.appendChild(path);
+  fl.style.visibility = 'hidden'; fl.after(svg); el._live = { svg, path, fl };
+}
+function endLive(el, finalD) {
+  const L = el._live; if (!L) { setVectorD(el, finalD); return; }
+  el._live = null; setVectorD(el, finalD);
+  const m = maskImageFor(finalD, +el.dataset.vw, +el.dataset.vh, false);
+  const img = new Image(); const done = () => { L.fl.style.visibility = ''; L.svg.remove(); };
+  img.onload = () => requestAnimationFrame(() => requestAnimationFrame(done)); img.onerror = done; img.src = m.slice(5, -2).replace(/^"|"$/g, '');
+  setTimeout(done, 400);
+}
 export function morphBetween(el, fromD, toD, duration, easeFn) {
   const fn = morpher(fromD, toD); const t0 = performance.now();
-  const tick = (now) => { const p = Math.min(1, (now - t0) / duration); setVectorD(el, fn(easeFn ? easeFn(p) : p)); if (p < 1 && el.isConnected) requestAnimationFrame(tick); else setVectorD(el, toD); };
+  beginLive(el);
+  const tick = (now) => { const p = Math.min(1, (now - t0) / duration); if (p < 1 && el.isConnected) { setVectorD(el, fn(easeFn ? easeFn(p) : p)); requestAnimationFrame(tick); } else endLive(el, toD); };
   setVectorD(el, fromD); requestAnimationFrame(tick);
 }
 
