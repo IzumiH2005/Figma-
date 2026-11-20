@@ -56,6 +56,8 @@ function boot() {
   const locals = store('localfiles') || [];
   for (const name of locals) { const d = store('draft:' + name); if (d && !app.files.some((f) => f.file === name)) app.files.push({ file: name, source: d.source, baseHash: d.base, local: true }); }
   if (!app.files.length) app.files.push({ file: 'nouveau.mq', source: NEW_PROJECT, baseHash: hashStr(NEW_PROJECT), local: true });
+  // library files (<project … library>) are registered by name: projects link them with <use lib="…"/>
+  for (const f of app.files) { const n = MQ.libraryName(f.source); if (n) MQ.registerLibrary(n, f.source); }
 
   // ---------------- layout
   const topbar = h('div.topbar');
@@ -78,6 +80,7 @@ function boot() {
     onFocus: (id) => requestAnimationFrame(() => canvas.zoomToFit([id])),
     onHover: () => canvas.drawOverlay(),
     onContext: (x, y) => contextMenu(x, y),
+    openFile: (i) => openFile(i),
     onEditComponent: (name) => editComponent(name),
     openStudio: (name) => studio.open(name),
     onEditCode: () => { right.tab = 'code'; right.render(); },
@@ -284,7 +287,7 @@ function boot() {
       n ? { label: 'Contenu réaliste', icon: 'sparkles', submenu: true, run: (ev) => { const r = canvasEl.getBoundingClientRect(); menu(r.left + 260, r.top + 120, [['name', 'Nom'], ['first', 'Prénom'], ['email', 'E-mail'], ['phone', 'Téléphone'], ['job', 'Métier'], ['company', 'Entreprise'], ['city', 'Ville'], ['address', 'Adresse'], ['price', 'Prix'], ['amount', 'Montant'], ['date', 'Date'], ['ago', 'Il y a…'], ['title', 'Titre'], ['sentence', 'Phrase'], ['paragraph', 'Paragraphe'], ['tag', 'Étiquette'], ['rating', 'Note']].map(([k, l]) => ({ label: l, run: () => fillContent(k) }))); } } : null,
       { label: 'Créer un composant', key: 'Ctrl+Alt+K', icon: 'component', disabled: !n || n.tag === 'screen' || isComp, run: () => makeComponent() },
       isComp ? { label: `Ouvrir ${n.tag} dans le Studio`, icon: 'component', run: () => studio.open(n.tag) } : null,
-      isComp && !isComp.fromKit ? { label: `Éditer ${n.tag}`, icon: 'pencil', run: () => editComponent(n.tag) } : null,
+      isComp && !isComp.fromKit && !isComp.fromLib ? { label: `Éditer ${n.tag}`, icon: 'pencil', run: () => editComponent(n.tag) } : null,
       isComp ? { label: 'Détacher l\'instance', icon: 'unlink', run: () => detach() } : null,
       '-',
       { label: 'Premier plan', key: 'Ctrl+]', icon: 'bring-to-front', disabled: !n, run: () => reorder(1) },
@@ -486,6 +489,7 @@ function boot() {
   function editComponent(name) {
     const c = app.project.components[name];
     if (!c) return;
+    if (c.fromLib) { toast(`${name} vient de la bibliothèque ${c.fromLib} : modifie-la là-bas (Assets → Bibliothèques → ouvrir), ou détache-le (clic droit dans les Assets).`); return; }
     if (c.fromKit) { toast(`${name} vient du kit : copie sa définition dans ton projet pour le personnaliser (mq kit).`); return; }
     app.select(c.node.id);
     right.tab = 'code'; right.render();

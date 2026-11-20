@@ -314,6 +314,41 @@ Ligne de commande :
 
 Éditeur : panneau **Tokens › Design system** (marque, accent, neutres, formes, densité, élévation, motion, échelle, polices ; contrôles AA en direct ; **Page de style** ; exports).
 
+## Bibliothèques (`library`, `<use lib>`)
+
+Une bibliothèque est un fichier `.mq` marqué `library`. Elle regroupe :
+- des composants, rangés en dossiers avec `group=` ;
+- un design system (`<system>`) et des tokens ;
+- des keyframes et des styles.
+
+Elle peut avoir ses propres écrans, par exemple une page « Catalogue » de contrôle. Ces écrans ne sont pas importés dans les projets qui l'utilisent.
+
+```
+<project name="Vitrine UI" library>          <!-- examples/vitrine-ui.mq -->
+  <system brand=#6D5AE6 radius=round …/>
+  <component name=Switch group=Contrôles …>…</component>
+</project>
+
+<project name="Mon app">
+  <use lib="Vitrine UI"/>                    <!-- composants, système, tokens, keyframes disponibles -->
+  <screen …><Switch/></screen>
+</project>
+```
+
+- **Lié, pas copié.** Modifier la bibliothèque met à jour tous les projets qui l'utilisent.
+- **Priorités.** Un composant ou un token défini dans le projet l'emporte sur celui de la bibliothèque (c'est le « détacher »). Un projet sans `<system>` hérite de celui de sa bibliothèque. Une bibliothèque peut elle-même en utiliser une autre.
+- **Éditeur** (Assets) :
+  - clic droit sur un composant → **Ranger dans un dossier…**, **Publier dans 📚 …** ou **dans une nouvelle bibliothèque…**. Le composant part avec ses sous-composants, ses keyframes et ses tokens propres, puis le projet est lié ;
+  - section **Bibliothèques** : créer, lier ou délier, ouvrir, envoyer le design system (**Système → …**) ;
+  - les composants liés apparaissent sous « 📚 Nom · dossier » ; clic droit → **Détacher** (copie locale modifiable).
+- **CLI** :
+  - `mq lib new "Nom" -o libs/nom.mq [--from f.mq --system]` ;
+  - `mq lib publish f.mq A,B --to libs/nom.mq [--group Dossier] [--system] [--no-link]` ;
+  - `mq lib link f.mq libs/nom.mq`, `mq lib unlink f.mq "Nom"` ;
+  - `mq lib list libs/nom.mq`, `mq lib deps f.mq Comp`.
+
+  Les commandes (`render`, `audit`, `video`, `build`, `drive`…) cherchent les bibliothèques dans le dossier du fichier, dans `./libs` et dans `../libs`, par nom de fichier ou par nom de bibliothèque. `build` et `drive` les embarquent dans l'éditeur.
+
 ## Composants
 
 ```xml

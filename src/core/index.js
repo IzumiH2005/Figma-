@@ -1,6 +1,6 @@
 // Public runtime API (exposed as window.MQ)
 import { parse, serialize, serializeNode, saveSource, clone, textOf, newId, bumpIds, ParseError, fmtAttr, TEXT_TAGS, patchSource, patchStyle } from './parse.js';
-import { Project, DEVICES, parseAttrString, parseColor, withAlpha, splitTop, TYPESCALES, SPACING } from './project.js';
+import { Project, DEVICES, parseAttrString, parseColor, withAlpha, splitTop, TYPESCALES, SPACING, registerLibrary, registerLibraries, libraries, librarySource, libraryName } from './project.js';
 import * as Color from './color.js';
 import * as Path from './pathkit.js';
 import * as Vector from './vector.js';
@@ -103,10 +103,11 @@ export function toStaticHTML(el) {
 }
 
 import * as Images from './imagetools.js';
+import * as Library from './library.js';
 export {
-  Images, parse, serialize, serializeNode, clone, textOf, newId, bumpIds, ParseError, fmtAttr, TEXT_TAGS,
+  Images, Library, parse, serialize, serializeNode, clone, textOf, newId, bumpIds, ParseError, fmtAttr, TEXT_TAGS,
   Path, Vector, PathOps, Guides, fake, fakeList, smoothShadow, specOverlay, System, styleGuideSource, Rig, Fx, Shader,
-  Project, DEVICES, parseAttrString, parseColor, withAlpha, splitTop, TYPESCALES, SPACING, Color,
+  Project, DEVICES, registerLibrary, registerLibraries, libraries, librarySource, libraryName, parseAttrString, parseColor, withAlpha, splitTop, TYPESCALES, SPACING, Color,
   makeCtx, renderScreen, renderStandalone, renderNode, BASE_CSS, fontsHref, layoutOf, cssFor, resolveAttrs, imageSrc, fillToCss,
   Player, TRANSITIONS, parseTransition,
   playAnims, PRESETS, ENTRANCE, LOOPS, ACCENTS, MODIFIERS, EASINGS, parseSpec, totalDuration, springEasing, resolveEasing, shapeFrames, setTimeScale, getTimeScale, prefersReducedMotion,

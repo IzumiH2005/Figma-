@@ -25,6 +25,8 @@ page.on('pageerror', (e) => errors.push(e.message));
 await page.setContent('<html><body></body></html>');
 await page.addScriptTag({ content: runtime });
 
+// library files among the examples are registered first: projects link them with <use lib="…"/>
+await page.evaluate((list) => { for (const s of list) { const n = MQ.libraryName(s); if (n) MQ.registerLibrary(n, s); } }, examples.map((e) => e.source));
 for (const ex of examples) {
   const r = await page.evaluate((src) => {
     const a = MQ.serialize(MQ.parse(src));
@@ -357,6 +359,42 @@ export function PillRow({ className, ...props }) { return <div className={cn("fl
     return { format: out.format, w: out.w, h: out.h, smaller: out.bytes < MQ.Images.dataBytes(png), a: srcOf('a').includes('image/webp'), b: srcOf('b').includes('image/webp'), name: MQ.Images.assetName('Photo Équipe 02.JPG', { 'photo-equipe-02': 1 }), back: MQ.parse(MQ.serialize(MQ.parse(`<assets>\n  x: data:image/webp;base64,AAAA\n</assets>`))).length };
   });
   ok(r.format === 'webp' && r.w === 2048 && r.h === 1024 && r.smaller && r.a && r.b && r.name === 'photo-equipe-02-2', `Images : <assets>, import WebP redimensionné, noms uniques ${JSON.stringify(r)}`);
+}
+
+// libraries: publish a component with its dependencies, link, render from the library, edits propagate, system inherited
+{
+  const r = await page.evaluate(() => {
+    const proj = `<project name="App">
+  <system brand=#0F766E radius=round/>
+  <tokens>
+    glow: $accent-soft
+    pill-pad: 12
+  </tokens>
+  <keyframes name="wob">0 { rotate=-4 } 100 { rotate=0 }</keyframes>
+  <component name="Dot" props="c=$primary"><frame w=8 h=8 radius=full fill={c}/></component>
+  <component name="Tag" props="label='Nouveau'"><row h=32 px=$pill-pad gap=8 radius=full fill=$glow anim="wob 300"><Dot/><text>{label}</text></row></component>
+  <screen name="S" w=300 h=200><Tag label="Lib"/></screen>
+</project>`;
+    let lib = MQ.Library.newLibrarySource('UI Test');
+    const pub = MQ.Library.publishToLibrary(lib, proj, ['Tag'], { system: true, group: 'Badges', kit: MQ.KIT });
+    lib = pub.source;
+    MQ.registerLibrary(MQ.libraryName(lib), lib);
+    const linked = MQ.Library.linkLibrary(proj, 'UI Test', pub.published, { kit: MQ.KIT, removeSystem: true });
+    const p = MQ.loadProject(linked);
+    MQ.ensureStyles(); document.body.innerHTML = ''; const el = MQ.screenElement(p, 'S'); document.body.appendChild(el);
+    const tag = el.querySelector('[data-comp="Tag"]');
+    const out = { name: MQ.libraryName(lib), published: pub.published, deps: pub.deps, fromLib: p.components.Tag.fromLib, group: p.components.Tag.group, local: /component name="Tag"/.test(linked), use: /<use lib="UI Test"\/>/.test(linked), sys: !!p.system, pad: getComputedStyle(tag).paddingLeft, txt: tag.textContent.trim(), dot: !!tag.querySelector('[data-comp="Dot"]') };
+    // edit the library → the project follows
+    MQ.registerLibrary('UI Test', lib.replace('px=$pill-pad', 'px=20'));
+    const p2 = MQ.loadProject(linked); document.body.innerHTML = ''; const el2 = MQ.screenElement(p2, 'S'); document.body.appendChild(el2);
+    out.pad2 = getComputedStyle(el2.querySelector('[data-comp="Tag"]')).paddingLeft;
+    out.detached = MQ.loadProject(MQ.Library.detachComponent(linked, 'Tag', { kit: MQ.KIT })).components.Tag.fromLib;
+    MQ.registerLibrary('UI Test', null);
+    out.missing = MQ.loadProject(linked).libMissing;
+    return out;
+  });
+  ok(r.name === 'UI Test' && r.published.join() === 'Dot,Tag' && r.deps.keyframes.join() === 'wob' && r.deps.tokens.sort().join() === 'glow,pill-pad' && r.fromLib === 'UI Test' && r.group === 'Badges' && !r.local && r.use && r.sys && r.pad === '12px' && r.txt === 'Lib' && r.dot && r.pad2 === '20px' && r.detached === null && r.missing.join() === 'UI Test',
+    `Bibliothèques : publier avec dépendances, lier, rendre, propager, détacher, système hérité ${JSON.stringify(r)}`);
 }
 
 // editor boots

@@ -1,5 +1,5 @@
 // Left panel: pages, layers tree, assets (components / icons / images / devices), tokens & variables
-import { MQ, h, icon, clear, debounce, menu, ask, toast, modal, download } from './dom.js';
+import { MQ, h, icon, clear, debounce, menu, ask, toast, modal, download, store } from './dom.js';
 import { importShadcn } from '../core/shadcn-import.js';
 import { isContainer, uniqueName } from './state.js';
 
@@ -118,8 +118,8 @@ export class LeftPanel {
     // components
     const comps = Object.values(p.components);
     const isUi = (c) => c.name.startsWith('ui.');
-    const own = comps.filter((c) => !c.fromKit && !isUi(c)), kit = comps.filter((c) => c.fromKit);
-    const ui = comps.filter((c) => !c.fromKit && isUi(c));
+    const own = comps.filter((c) => !c.fromKit && !c.fromLib && !isUi(c)), kit = comps.filter((c) => c.fromKit);
+    const ui = comps.filter((c) => !c.fromKit && !c.fromLib && isUi(c));
     const grid = (list, title) => {
       if (!list.length) return null;
       const g = h('div.agrid');
@@ -142,7 +142,7 @@ export class LeftPanel {
       requestAnimationFrame(() => requestAnimationFrame(measure));
       if (document.fonts) document.fonts.ready.then(() => requestAnimationFrame(measure));
       for (const c of list) {
-        const card = h('div.acard', { title: c.desc || c.name, onclick: () => this.insertNode({ id: MQ.newId(), tag: c.name, attrs: {}, children: [] }), draggable: 'true', ondragstart: (e) => e.dataTransfer.setData('text/mq-insert', c.name) });
+        const card = h('div.acard', { title: c.desc || c.name, onclick: () => this.insertNode({ id: MQ.newId(), tag: c.name, attrs: {}, children: [] }), oncontextmenu: (e) => { e.preventDefault(); this.componentMenu(c, e.clientX, e.clientY); }, draggable: 'true', ondragstart: (e) => e.dataTransfer.setData('text/mq-insert', c.name) });
         const prev = h('div.aprev', { style: { background: p.token('bg', app.mode) || '#fff' } });
         try {
           const ctx = MQ.makeCtx(p, { mode: app.mode, editor: true });
@@ -162,7 +162,11 @@ export class LeftPanel {
       }
       return [h('div.phead', null, h('span', null, title)), g];
     };
-    wrap.append(...[].concat(grid(own, 'Composants du projet') || []));
+    // own components, ranged in folders (group=…), then the linked libraries' components, then the library manager
+    const byGroup = (list) => { const m = new Map(); for (const c of list) { const g = c.group || ''; if (!m.has(g)) m.set(g, []); m.get(g).push(c); } return [...m.entries()].sort((a, b) => (a[0] === '') - (b[0] === '') || a[0].localeCompare(b[0])); };
+    for (const [g, list] of byGroup(own)) wrap.append(...[].concat(grid(list, g ? `Composants · ${g}` : 'Composants du projet') || []));
+    for (const lib of p.libs || []) for (const [g, list] of byGroup(comps.filter((c) => c.fromLib === lib))) wrap.append(...[].concat(grid(list, `📚 ${lib}${g ? ' · ' + g : ''}`) || []));
+    wrap.append(...this.librarySection());
     // shadcn/ui: imported from the official registry, grouped by registry item
     wrap.appendChild(h('div.phead', null, h('span', null, `shadcn/ui (${ui.length})`), h('button.mini', { title: 'Importer des composants shadcn/ui', onclick: () => this.shadcnDialog() }, icon('download', 14))));
     if (!ui.length) wrap.appendChild(h('div.empty', null, 'Aucun composant shadcn importé. ', h('a', { onclick: () => this.shadcnDialog() }, 'Importer depuis le registre…')));
@@ -338,6 +342,95 @@ export class LeftPanel {
       }
       tok.raw = '\n' + lines.map((l) => l.trim()).join('\n') + '\n';
     });
+  }
+
+  // ------------------------------------------------------------ libraries
+  libFiles() {
+    const app = this.app;
+    return app.files.map((f, i) => ({ f, i, name: MQ.libraryName(i === app.fileIndex ? app.source : f.source) })).filter((x) => x.name);
+  }
+
+  // write another file's source (library or project) and keep drafts / registry / the open project in sync
+  writeFile(i, src) {
+    const app = this.app; const f = app.files[i];
+    if (i === app.fileIndex) { app.setSource(src); return; }
+    f.source = src; f.draft = true;
+    store('draft:' + f.file, { base: f.baseHash, source: src, t: Date.now() });
+    const n = MQ.libraryName(src); if (n) MQ.registerLibrary(n, src);
+  }
+
+  newLibrary(name, opts = {}) {
+    const app = this.app;
+    const src = MQ.Library.newLibrarySource(name, opts);
+    let file = MQ.Images.assetName(name, Object.fromEntries(app.files.map((f) => [f.file.replace(/\.mq$/, ''), 1]))) + '.mq';
+    app.files.push({ file, source: src, baseHash: '', local: true });
+    store('draft:' + file, { base: '', source: src, t: Date.now() });
+    store('localfiles', app.files.filter((x) => x.local).map((x) => x.file));
+    MQ.registerLibrary(name, src);
+    return app.files.length - 1;
+  }
+
+  // publish components (+ their sub-components, keyframes, tokens) into a library, then link it here
+  async publish(names, target = null, { system = false } = {}) {
+    const app = this.app;
+    let idx = target;
+    if (idx === null) {
+      const name = await ask('Nouvelle bibliothèque', app.project.name.replace(/ ?(UI|kit)$/i, '') + ' UI', 'Nom de la bibliothèque (partagée entre tes projets)');
+      if (!name) return;
+      idx = this.newLibrary(name);
+    }
+    const lib = this.libFiles().find((x) => x.i === idx); if (!lib) return;
+    let group = null;
+    if (names.length) { group = await ask('Dossier', (app.project.components[names[0]] || {}).group || '', 'Dossier dans la bibliothèque (vide = racine), ex. Boutons, Formulaires…'); if (group === null) return; group = group.trim() || null; }
+    const r = MQ.Library.publishToLibrary(app.files[idx].source, app.source, names, { system, group, kit: MQ.KIT });
+    this.writeFile(idx, r.source);
+    app.setSource(MQ.Library.linkLibrary(app.source, lib.name, r.published, { kit: MQ.KIT, removeSystem: system }));
+    const extra = r.published.length - names.length;
+    toast(`${names.length ? names.join(', ') : 'Design system'} → 📚 ${lib.name}${extra > 0 ? ` (+ ${extra} dépendance${extra > 1 ? 's' : ''})` : ''}${system ? ', design system compris' : ''} · lié à ce projet`);
+    this.render();
+  }
+
+  componentMenu(c, x, y) {
+    const app = this.app;
+    const libs = this.libFiles().filter((l) => l.i !== app.fileIndex);
+    const items = [{ label: 'Insérer', icon: 'plus', run: () => this.insertNode({ id: MQ.newId(), tag: c.name, attrs: {}, children: [] }) }];
+    if (c.fromLib) {
+      const l = libs.find((x) => x.name === c.fromLib);
+      items.push('-', { label: 'Détacher (copie locale modifiable)', icon: 'unlink', run: () => { app.setSource(MQ.Library.detachComponent(app.source, c.name, { kit: MQ.KIT })); toast(`${c.name} copié dans le projet : il ne suit plus ${c.fromLib}`); } });
+      if (l) items.push({ label: `Ouvrir ${c.fromLib}`, icon: 'book-open', run: () => this.hooks.openFile(l.i) });
+    } else if (!c.fromKit) {
+      items.push('-', { label: 'Ranger dans un dossier…', icon: 'folder', run: async () => { const g = await ask('Dossier', c.group || '', 'Nom du dossier (vide = racine) : les composants sont regroupés dans les Assets'); if (g === null) return; app.change(() => { if (g.trim()) c.node.attrs.group = g.trim(); else delete c.node.attrs.group; }); } });
+      if (!MQ.libraryName(app.source)) {
+        for (const l of libs) items.push({ label: `Publier dans 📚 ${l.name}`, icon: 'book-up', run: () => this.publish([c.name], l.i) });
+        items.push({ label: 'Publier dans une nouvelle bibliothèque…', icon: 'book-plus', run: () => this.publish([c.name], null) });
+      }
+    }
+    menu(x, y, items);
+  }
+
+  librarySection() {
+    const app = this.app; const p = app.project;
+    const here = MQ.libraryName(app.source);
+    const libs = this.libFiles().filter((l) => l.i !== app.fileIndex);
+    const out = [h('div.phead', null, h('span', null, 'Bibliothèques'), here ? null : h('button.ibtn', { title: 'Nouvelle bibliothèque (vide, ou avec le design system de ce projet)', onclick: async () => { const name = await ask('Nouvelle bibliothèque', 'Mon design system', 'Nom de la bibliothèque'); if (!name) return; this.newLibrary(name); toast(`📚 ${name} créée : publie-y des composants (clic droit) ou le design system`); this.render(); } }, icon('plus', 14)))];
+    const box = h('div', { style: { padding: '0 12px 12px', display: 'grid', gap: '6px', fontSize: '12px' } });
+    if (here) box.appendChild(h('div.hint', null, `Ce fichier est la bibliothèque « ${here} ». Ses composants, son design system et ses tokens sont disponibles dans tout projet qui la lie ; chaque modification s'y propage.`));
+    else if (!libs.length) box.appendChild(h('div.hint', null, 'Range tes composants et ton design system dans une bibliothèque pour les réutiliser dans tous tes projets : clic droit sur un composant → Publier.'));
+    for (const l of libs) {
+      const used = (p.libs || []).includes(l.name);
+      let n = 0; try { n = (l.f.source.match(/<component\b/g) || []).length; } catch (e) { /* */ }
+      const sys = /<system\b/.test(l.f.source);
+      box.appendChild(h('div', { style: { display: 'flex', alignItems: 'center', gap: '8px' } },
+        icon('library', 14), h('b', { style: { flex: 1, fontWeight: 600 } }, l.name), h('span', { style: { opacity: 0.6 } }, `${n} comp.${sys ? ' · système' : ''}`),
+        here ? null : h('button.chip' + (used ? '.on' : ''), { title: used ? 'Ne plus utiliser cette bibliothèque dans ce projet' : 'Utiliser cette bibliothèque dans ce projet', onclick: () => { app.setSource(used ? MQ.Library.unlinkLibrary(app.source, l.name, { kit: MQ.KIT }) : MQ.Library.linkLibrary(app.source, l.name, [], { kit: MQ.KIT })); this.render(); } }, used ? 'Liée' : 'Lier'),
+        h('button.ibtn', { title: 'Ouvrir', onclick: () => this.hooks.openFile(l.i) }, icon('arrow-up-right', 14))));
+    }
+    if (!here && p.systemNode && (p.rootNode ? p.rootNode.children : p.nodes).includes(p.systemNode)) {
+      box.appendChild(h('div.chips', null, ...libs.map((l) => h('button.chip', { title: 'Copie le <system> et les tokens du projet dans la bibliothèque, puis la lie : le projet hérite du système', onclick: () => this.publish([], l.i, { system: true }) }, `Système → ${l.name}`)), h('button.chip', { onclick: () => this.publish([], null, { system: true }) }, 'Système → nouvelle bibliothèque…')));
+    }
+    if ((p.libMissing || []).length) box.appendChild(h('div.hint', { style: { color: 'var(--danger, #d33)' } }, `Bibliothèque introuvable : ${p.libMissing.join(', ')} (ouvre ou importe son fichier .mq)`));
+    out.push(box);
+    return out;
   }
 
   // merge `name: value` lines into the project's <assets> block, kept at the end of the file (base64 is long); null removes

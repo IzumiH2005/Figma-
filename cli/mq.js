@@ -11,6 +11,8 @@ import { importShadcn, SHADCN_REGISTRY } from '../src/core/shadcn-import.js';
 import { drive, send as driveSend } from './drive.js';
 import { generateSystem, toDTCG, toCSS, toTailwind, fromDTCG, tokenLines } from '../src/core/system.js';
 import { styleGuideSource } from '../src/core/styleguide.js';
+import { libraryName } from '../src/core/project.js';
+import { newLibrarySource, publishToLibrary, linkLibrary, unlinkLibrary, componentDeps } from '../src/core/library.js';
 
 const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -29,6 +31,7 @@ const HELP = `Maquette CLI
   mq export  <file.mq> [-o proto.html]                               prototype HTML autonome (lecture seule)
   mq fmt     <file.mq> [--write]                                     reformate le source
   mq kit     [préfixe]                                               liste les composants du kit + props (mq kit ui. : pack shadcn)
+  mq lib     new "Nom" -o lib.mq · publish f.mq A,B --to lib.mq [--group G] [--system] · link · unlink · list · deps   bibliothèques
   mq image   add <file.mq> img.jpg [--name n] [--max 2048] [--quality 0.86] · list · rm   images intégrées (WebP)
   mq ds      <file.mq> [--init "brand=#hex"] [--export dtcg|css|tailwind] [--import t.json] [--guide -o g.png]   design system
   mq spec    <file.mq> <Composant> [--props "k=v"] [-o spec.png]   fiche technique : paddings, écarts, tailles, typo, tokens
@@ -71,13 +74,36 @@ async function browserPage({ scale = 1, viewport = { width: 1400, height: 1000 }
   return { browser, context, page };
 }
 
+// libraries: <use lib="Nom"/> is resolved next to the file (its folder, ./libs, ../libs), by file name or by the
+// library's <project name="…" library>; resolved sources are registered in the page before the project loads
+let LIBS_CTX = {};
+function findLib(dir, name) {
+  const dirs = [dir, path.join(dir, 'libs'), path.join(dir, '..', 'libs'), path.join(ROOT, 'examples')];
+  for (const d of dirs) for (const c of [name, name + '.mq', slug(name) + '.mq']) { const f = path.isAbsolute(c) ? c : path.join(d, c); if (fs.existsSync(f) && fs.statSync(f).isFile()) return { file: f, source: fs.readFileSync(f, 'utf8') }; }
+  for (const d of dirs) { if (!fs.existsSync(d)) continue; for (const f of fs.readdirSync(d).filter((x) => x.endsWith('.mq'))) { const src = fs.readFileSync(path.join(d, f), 'utf8'); if (libraryName(src) === name) return { file: path.join(d, f), source: src }; } }
+  return null;
+}
+function resolveLibs(file, src, acc = {}) {
+  const dir = path.dirname(path.resolve(file));
+  for (const m of src.matchAll(/<use\s+lib=(?:"([^"]+)"|'([^']+)'|([^\s/>]+))/g)) {
+    const name = m[1] ?? m[2] ?? m[3]; if (acc[name] !== undefined) continue;
+    const found = findLib(dir, name);
+    if (!found) { console.error(`  ⚠ bibliothèque introuvable : « ${name} » (cherchée dans ${path.relative(process.cwd(), dir) || '.'}, ./libs, ../libs)`); continue; }
+    acc[libraryName(found.source) || name] = found.source; acc[name] = found.source; resolveLibs(found.file, found.source, acc);
+  }
+  return acc;
+}
+
 function readProject(file) {
   if (!file) { console.error('Fichier .mq requis'); process.exit(1); }
-  return fs.readFileSync(file, 'utf8');
+  const src = fs.readFileSync(file, 'utf8');
+  LIBS_CTX = resolveLibs(file, src);
+  return src;
 }
 
 async function loadInPage(page, source, mode) {
-  await page.evaluate((packs) => MQ.registerPacks(packs), iconSubset([source]));
+  await page.evaluate((packs) => MQ.registerPacks(packs), iconSubset([source, ...Object.values(LIBS_CTX)]));
+  await page.evaluate((libs) => MQ.registerLibraries(libs), LIBS_CTX);
   return page.evaluate(async ({ source, mode }) => {
     const p = MQ.loadProject(source);
     window.__p = p;
@@ -460,6 +486,8 @@ async function cmdVideo(o, animOnly = false) {
 async function cmdBuild(o) {
   const files = o._.slice(1);
   const projects = files.length ? files.map((f) => ({ file: path.basename(f), source: fs.readFileSync(f, 'utf8') })) : readExamples();
+  // linked libraries travel with the projects (the editor registers every library file it holds)
+  for (const f of files) for (const [name, src] of Object.entries(resolveLibs(f, fs.readFileSync(f, 'utf8')))) if (!projects.some((x) => x.source === src)) projects.push({ file: slug(name) + '.mq', source: src });
   const html = await buildEditorHTML({ projects, open: projects[0] && projects[0].file, title: o.title || 'Maquette Studio', artifact: !!o.artifact });
   const out = o.o || 'dist/maquette.html';
   fs.mkdirSync(path.dirname(out), { recursive: true });
@@ -646,6 +674,50 @@ async function cmdImage(o) {
   } finally { await browser.close(); }
 }
 
+// libraries: mq lib new "Nom" -o lib.mq [--from f.mq --system] · mq lib publish f.mq A,B --to lib.mq [--group G] [--system]
+//            mq lib link f.mq lib.mq · mq lib unlink f.mq "Nom" · mq lib list lib.mq · mq lib deps f.mq Comp
+async function cmdLib(o) {
+  const [, sub, a1, a2] = o._;
+  const kit = fs.readFileSync(path.join(ROOT, 'src/core/kit.mq'), 'utf8');
+  const usage = 'usage : mq lib new "Nom" -o lib.mq [--from f.mq --system] · publish f.mq A,B --to lib.mq [--group G] [--system] [--no-link] · link f.mq lib.mq · unlink f.mq "Nom" · list lib.mq · deps f.mq Comp';
+  if (!sub) throw new Error(usage);
+  if (sub === 'new') {
+    const name = a1; if (!name) throw new Error(usage);
+    let opts = {};
+    if (o.from && o.system) { const src = fs.readFileSync(o.from, 'utf8'); const m = /<system\b[^>]*\/>/.exec(src.replace(/<!--[\s\S]*?-->/g, '')); if (m) opts.system = m[0]; }
+    const out = o.o || slug(name) + '.mq';
+    if (fs.existsSync(out)) throw new Error(`${out} existe déjà`);
+    fs.writeFileSync(out, newLibrarySource(name, opts)); console.log(`✓ 📚 ${name} → ${out}${opts.system ? ' (avec le design system de ' + o.from + ')' : ''}`); return;
+  }
+  if (sub === 'publish') {
+    const file = a1, names = String(a2 || '').split(',').map((x) => x.trim()).filter(Boolean);
+    if (!file || !o.to) throw new Error(usage);
+    const libSrc = fs.readFileSync(o.to, 'utf8'); const libName = libraryName(libSrc);
+    if (!libName) throw new Error(`${o.to} n'est pas une bibliothèque (<project name="…" library>)`);
+    const src = fs.readFileSync(file, 'utf8');
+    const r = publishToLibrary(libSrc, src, names, { system: !!o.system, group: o.group || null, kit });
+    fs.writeFileSync(o.to, r.source);
+    console.log(`✓ ${r.published.join(', ') || '—'}${o.system ? ' + design system' : ''} → 📚 ${libName} (${o.to})`);
+    if (r.deps.keyframes.length || r.deps.tokens.length) console.log(`    dépendances : ${[...r.deps.keyframes.map((k) => 'keyframes ' + k), ...r.deps.tokens.map((t) => '$' + t)].join(', ')}`);
+    if (o.link !== false && !o['no-link']) { fs.writeFileSync(file, linkLibrary(src, libName, r.published, { kit, removeSystem: !!o.system })); console.log(`✓ ${file} : <use lib="${libName}"/>, définitions locales retirées (elles viennent de la bibliothèque)`); }
+    return;
+  }
+  if (sub === 'link') { const libName = libraryName(fs.readFileSync(a2, 'utf8')); if (!libName) throw new Error(`${a2} n'est pas une bibliothèque`); fs.writeFileSync(a1, linkLibrary(fs.readFileSync(a1, 'utf8'), libName, [], { kit })); console.log(`✓ ${a1} utilise 📚 ${libName}`); return; }
+  if (sub === 'unlink') { fs.writeFileSync(a1, unlinkLibrary(fs.readFileSync(a1, 'utf8'), a2, { kit })); console.log(`✓ ${a1} n'utilise plus ${a2}`); return; }
+  if (sub === 'deps') { const { Project } = await import('../src/core/project.js'); const p = new Project(fs.readFileSync(a1, 'utf8'), { kit }); const d = componentDeps(p, String(a2).split(',')); console.log(`composants : ${d.components.join(', ')}\nkeyframes : ${d.keyframes.join(', ') || '—'}\ntokens : ${d.tokens.map((t) => '$' + t).join(', ') || '—'}`); return; }
+  if (sub === 'list') {
+    const src = fs.readFileSync(a1, 'utf8'); const name = libraryName(src);
+    const { Project } = await import('../src/core/project.js'); const p = new Project(src, { kit });
+    console.log(`📚 ${name || '(pas une bibliothèque)'}${p.systemNode ? ' · design system ' + Object.entries(p.systemNode.attrs).map(([k, v]) => `${k}=${v}`).join(' ') : ''}`);
+    const own = Object.values(p.components).filter((c) => !c.fromKit && !c.fromLib);
+    const groups = new Map(); for (const c of own) { const g = c.group || '—'; if (!groups.has(g)) groups.set(g, []); groups.get(g).push(c); }
+    for (const [g, list] of groups) { console.log(`  ${g}`); for (const c of list) console.log(`    ${c.name.padEnd(18)} ${c.desc || ''}`); }
+    const toks = Object.entries(p.tokens).filter(([, v]) => !v._kit && !v._sys).length; if (toks) console.log(`  tokens propres : ${toks}`);
+    return;
+  }
+  throw new Error(usage);
+}
+
 // agent pointer: drive the real editor with continuous mouse gestures (see cli/drive.js)
 async function cmdDrive(o) {
   if (o._[1] === 'send') { // client of a persistent session (mq drive f.mq --serve)
@@ -656,7 +728,8 @@ async function cmdDrive(o) {
   const script = o.e ? String(o.e) : o._[2] ? fs.readFileSync(o._[2], 'utf8') : '';
   if (!script && !o.serve) throw new Error('mq drive : donne un fichier de gestes, -e "…" ou --serve');
   const { chromium } = require('playwright');
-  const r = await drive({ file, script, write: !!o.write, video: o.video, shots: o.shots, scale: o.scale || 1, speed: o.speed || 1, serve: o.serve ? (o.serve === true ? 7788 : +o.serve) : 0, buildEditorHTML, chromium });
+  const libs = resolveLibs(file, fs.readFileSync(file, 'utf8'));
+  const r = await drive({ file, libs, script, write: !!o.write, video: o.video, shots: o.shots, scale: o.scale || 1, speed: o.speed || 1, serve: o.serve ? (o.serve === true ? 7788 : +o.serve) : 0, buildEditorHTML, chromium });
   if (o.video && r.video) { execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-i', r.video, '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', o.video]); console.log(`✓ vidéo de la session : ${o.video}`); }
   if (r.failures) process.exitCode = 1;
 }
@@ -727,6 +800,6 @@ async function cmdScenes() {
 
 const o = args(process.argv.slice(2));
 const cmd = o._[0];
-const table = { motion: cmdMotion, render: cmdRender, board: cmdBoard, inspect: cmdInspect, lint: (x) => cmdLint(x), audit: (x) => cmdLint(x, true), video: (x) => cmdVideo(x), anim: (x) => cmdVideo(x, true), build: cmdBuild, export: cmdExport, fmt: cmdFmt, kit: cmdKit, 'shadcn-theme': cmdShadcnTheme, shadcn: cmdShadcn, drive: cmdDrive, spec: cmdSpec, ds: cmdDs, image: cmdImage, icons: cmdIcons, scenes: cmdScenes };
+const table = { motion: cmdMotion, render: cmdRender, board: cmdBoard, inspect: cmdInspect, lint: (x) => cmdLint(x), audit: (x) => cmdLint(x, true), video: (x) => cmdVideo(x), anim: (x) => cmdVideo(x, true), build: cmdBuild, export: cmdExport, fmt: cmdFmt, kit: cmdKit, 'shadcn-theme': cmdShadcnTheme, shadcn: cmdShadcn, drive: cmdDrive, spec: cmdSpec, ds: cmdDs, image: cmdImage, lib: cmdLib, icons: cmdIcons, scenes: cmdScenes };
 if (!cmd || !table[cmd]) { console.log(HELP); process.exit(cmd ? 1 : 0); }
 try { await table[cmd](o); } catch (e) { console.error('✖ ' + (e && e.message || e)); process.exit(1); }

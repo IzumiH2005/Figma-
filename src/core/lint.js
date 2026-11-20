@@ -426,7 +426,7 @@ export function lintProject(project) {
     if (/^(\w+\.)?[A-Z]/.test(n.tag)) used.add(n.tag);
     (n.children || []).forEach((c) => collect(c, out, used, owner));
   };
-  for (const c of Object.values(project.components)) { if (c.fromKit) continue; const out = new Set(), used = new Set(); collect(c.node, out, used, '◆ ' + c.name); compLinks.set(c.name, { out, used }); }
+  for (const c of Object.values(project.components)) { if (c.fromKit || c.fromLib) continue; const out = new Set(), used = new Set(); collect(c.node, out, used, '◆ ' + c.name); compLinks.set(c.name, { out, used }); }
   const graph = new Map();
   for (const s of project.screens()) {
     const out = new Set(), used = new Set(); collect(s, out, used, s.attrs.name); const seen = new Set();
@@ -454,7 +454,7 @@ export function lintProject(project) {
     (n.children || []).forEach((c) => tVisit(c, owner));
   };
   for (const s of project.screens()) tVisit(s, s.attrs.name);
-  Object.values(project.components).filter((c) => !c.fromKit).forEach((c) => tVisit(c.node, '◆ ' + c.name));
+  Object.values(project.components).filter((c) => !c.fromKit && !c.fromLib).forEach((c) => tVisit(c.node, '◆ ' + c.name));
 
   // smart animate without shared layer names
   const keysOf = (n, acc = new Set()) => { if (n.attrs && (n.attrs.name || n.attrs.key) && n.tag !== 'screen' && n.tag !== 'icon') acc.add(String(n.attrs.name || n.attrs.key)); if (/^(\w+\.)?[A-Z]/.test(n.tag) && project.components[n.tag] && project.components[n.tag].root) keysOf(project.components[n.tag].root, acc); (n.children || []).forEach((c) => keysOf(c, acc)); return acc; };
@@ -550,7 +550,7 @@ export function lintProject(project) {
       if (Math.abs(nearest - s) <= 2) push('info', 'type-scale', `.${name} { size=${s} } hors échelle « ${project.typescale} » → ${nearest}`, { fix: { style: name, attrs: { size: String(nearest) } } });
     }
   }
-  Object.values(project.components).filter((c) => !c.fromKit).forEach((c) => visit(c.node, true));
+  Object.values(project.components).filter((c) => !c.fromKit && !c.fromLib).forEach((c) => visit(c.node, true));
   return issues;
 }
 

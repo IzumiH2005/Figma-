@@ -50,6 +50,7 @@ Playwright et Chromium sont préinstallés dans l'environnement ; ffmpeg sert po
 - Composants : écart icône/libellé ≈ ½ taille du texte, padding horizontal ≥ 12–16, rayons imbriqués = R − padding, et `motion="press appear"` pour qu'ils réagissent et apparaissent proprement. Vérifie avec `mq spec f.mq Composant` et l'audit du Studio.
 - Pour lire un texte sur une couleur arbitraire : `color={onColor($fond)}`. Pour les variations : `shade($primary, 10)` au survol, `alpha($primary, 12)` pour un fond doux.
 
+- **Bibliothèques** : range les composants réutilisables et le design system dans une bibliothèque (`mq lib publish f.mq A,B --to libs/ui.mq --group Dossier --system`) que les projets lient avec `<use lib="Nom"/>`. Elle reste liée : la modifier met tous ses projets à jour. Modèle : `examples/vitrine-ui.mq` + `component-showcase.mq`.
 - Composants : props en `{expr}`, variantes en enum (`desc="kind: a|b"`), échange d'instance (`lead: swap(A|B)` + `<instance of={lead}/>`), slots nommés (`<slot name=footer>défaut</slot>` + `slot=footer`), état d'instance (`change on={!on}`), rigs (`rig:value="angle 0..1 in=face"`). Mets-les au point dans le Component Studio (`drive … -e "studio Nom"`). Modèle : `examples/component-lab.mq`.
 - Nomme (`name=`) les éléments qui doivent se transformer entre deux écrans ou deux états : c'est la clé du smart animate.
 - Un écran mobile : `device=iphone-16 statusbar homebar pt=safe` ; un `NavBar` du kit gère déjà `pt=safe`.

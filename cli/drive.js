@@ -198,9 +198,10 @@ function diffSnap(a, b) {
   return out;
 }
 
-export async function drive({ file, script, write, video, shots, scale = 1, speed = 1, serve, buildEditorHTML, chromium }) {
+export async function drive({ file, libs = {}, script, write, video, shots, scale = 1, speed = 1, serve, buildEditorHTML, chromium }) {
   const src = fs.readFileSync(file, 'utf8');
-  const html = await buildEditorHTML({ projects: [{ file: path.basename(file), source: src }] });
+  const extra = [...new Set(Object.values(libs))].map((source, i) => ({ file: `lib-${i + 1}.mq`, source }));
+  const html = await buildEditorHTML({ projects: [{ file: path.basename(file), source: src }, ...extra], open: path.basename(file) });
   const tmp = path.join(process.env.TMPDIR || '/tmp', `mq-drive-${process.pid}.html`); fs.writeFileSync(tmp, html);
   const vw = 1440, vh = 900;
   const browser = await chromium.launch();

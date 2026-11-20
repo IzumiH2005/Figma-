@@ -140,6 +140,7 @@ export class App {
     if (!f) return;
     f.source = this.project.toSource();
     store('draft:' + f.file, { base: f.baseHash, source: f.source, t: Date.now() });
+    const lib = MQ.libraryName(f.source); if (lib) MQ.registerLibrary(lib, f.source); // edits to a library reach its projects
   }
 
   // ---- tree ops

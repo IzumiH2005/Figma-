@@ -406,7 +406,7 @@ export class Studio {
     const c = this.comp; const app = this.app; const p = app.project;
     if (!c) return h('div.st-side');
     const side = h('div.st-side');
-    const ro = c.fromKit;
+    const ro = c.fromKit || !!c.fromLib;
     const live = () => app.node(c.node.id);
     if (ro) side.appendChild(sec2('Composant du kit', h('div.hint', null, 'Composant intégré, en lecture seule. « Copier dans le projet » pour le personnaliser.'), h('button.btn', { onclick: () => this.copyToProject() }, icon('copy', 13), 'Copier dans le projet')));
     // identity

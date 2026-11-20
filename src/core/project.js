@@ -67,6 +67,18 @@ function parseBlocks(raw) {
   return out;
 }
 
+// ------------------------------------------------------------------ libraries
+// A library is a .mq project marked `library` (<project name="UI Céleste" library>) holding components, a <system>,
+// tokens, keyframes and styles. A project links it with <use lib="UI Céleste"/>: its parts are then available and stay
+// linked (edit the library → every project using it follows). Sources are registered by name (editor: its library
+// files; CLI: resolved next to the .mq file).
+const LIBS = new Map();
+export function registerLibrary(name, source) { if (source == null) LIBS.delete(name); else LIBS.set(String(name), String(source)); }
+export function registerLibraries(map) { for (const [k, v] of Object.entries(map || {})) registerLibrary(k, v); }
+export function libraries() { return [...LIBS.keys()]; }
+export function librarySource(name) { return LIBS.get(name); }
+export function libraryName(source) { const m = /<project\b([^>]*)>/.exec(String(source || '')); if (!m || !/\blibrary\b/.test(m[1])) return null; const n = /\bname=("([^"]*)"|'([^']*)'|(\S+))/.exec(m[1]); return n ? (n[2] ?? n[3] ?? n[4]) : null; }
+
 export class Project {
   constructor(source, opts = {}) {
     this.opts = opts;
@@ -104,9 +116,25 @@ export class Project {
     this.fonts = fonts;
 
     if (this.kitSource) this._ingest(parse(this.kitSource), true);
+    // linked libraries (<use lib="…"/>), recursively, each once
+    this.libs = []; this.libMissing = []; let libSys = null;
+    const seen = new Set();
+    const useLib = (name) => {
+      if (!name || seen.has(name)) return; seen.add(name);
+      const src = LIBS.get(name);
+      if (src == null) { this.libMissing.push(name); return; }
+      let nodes; try { nodes = parse(src); } catch (e) { this.libMissing.push(name + ' (' + e.message + ')'); return; }
+      const ltop = nodes.length === 1 && nodes[0].tag === 'project' ? nodes[0].children || [] : nodes;
+      for (const u of ltop) if (u.tag === 'use') useLib(u.attrs.lib);
+      this._ingest(ltop, false, name);
+      const sn = ltop.find((n) => n.tag === 'system'); if (sn && !libSys) libSys = sn;
+      this.libs.push(name);
+    };
+    for (const u of top) if (u.tag === 'use') useLib(u.attrs.lib);
     this._ingest(top, false);
-    // <system …/> : generated design-system tokens override the kit, never the project's own <tokens>
-    const sysNode = top.find((n) => n.tag === 'system');
+    // <system …/> : generated design-system tokens override the kit, never the project's own <tokens>.
+    // A project without its own system inherits the one of its (first) library.
+    const sysNode = top.find((n) => n.tag === 'system') || libSys;
     if (sysNode) {
       try {
         this.system = generateSystem(sysNode.attrs); this.systemNode = sysNode;
@@ -146,7 +174,7 @@ export class Project {
     }
   }
 
-  _ingest(top, fromKit) {
+  _ingest(top, fromKit, fromLib = null) {
     const loosePage = { id: 'page-default', tag: 'page', attrs: { name: 'Page 1' }, children: [], virtual: true };
     for (const n of top) {
       switch (n.tag) {
@@ -156,14 +184,14 @@ export class Project {
             // named modes: `light: #fff | dark: #0a0a0a` (independent of the order of the project's modes)
             const named = arr.length > 1 && arr.every((x) => /^[a-z][\w-]*\s*:\s*\S/.test(x) && !/^(url|data|linear|radial|conic)\s*:/.test(x));
             if (named) { const map = {}; for (const x of arr) { const i = x.indexOf(':'); map[x.slice(0, i).trim()] = unq(x.slice(i + 1).trim()); } arr = Object.values(map); arr._named = map; }
-            if (fromKit) arr._kit = true; this.tokens[k] = arr;
+            if (fromKit) arr._kit = true; if (fromLib) arr._lib = fromLib; this.tokens[k] = arr;
           }
           break;
         case 'vars':
           for (const [k, v] of parseKeyLines(n.raw || '')) this.vars[k] = v;
           break;
         case 'styles':
-          for (const [k, a] of parseBlocks(n.raw || '')) { this.styles[k.replace(/^\./, '')] = a; this.styleOrigin[k.replace(/^\./, '')] = fromKit ? 'kit' : 'project'; }
+          for (const [k, a] of parseBlocks(n.raw || '')) { this.styles[k.replace(/^\./, '')] = a; this.styleOrigin[k.replace(/^\./, '')] = fromKit ? 'kit' : fromLib ? 'lib:' + fromLib : 'project'; }
           break;
         case 'keyframes': {
           const frames = parseBlocks(n.raw || '').map(([off, a]) => ({ offset: parseFloat(off) / 100, attrs: a }));
@@ -179,12 +207,12 @@ export class Project {
           const name = n.attrs.name;
           if (!name) break;
           const root = (n.children || []).find((c) => c.tag !== '#text') || null;
-          this.components[name] = { name, node: n, root, props: parseProps(n.attrs.props || ''), fromKit, desc: n.attrs.desc || '' };
+          this.components[name] = { name, node: n, root, props: parseProps(n.attrs.props || ''), fromKit, fromLib, group: n.attrs.group || '', desc: n.attrs.desc || '' };
           break;
         }
-        case 'page': if (!fromKit) this.pages.push(n); break;
+        case 'page': if (!fromKit && !fromLib) this.pages.push(n); break;
         case 'screen': case 'note': case 'frame': case 'row': case 'col': case 'stack': case 'grid':
-          if (!fromKit) loosePage.children.push(n); break;
+          if (!fromKit && !fromLib) loosePage.children.push(n); break;
         default: break;
       }
     }
