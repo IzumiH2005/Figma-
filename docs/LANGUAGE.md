@@ -23,7 +23,7 @@ C'est la source de vérité : l'éditeur visuel le lit et le réécrit, la CLI l
 - Les valeurs nues acceptent les parenthèses : `fill=linear(90, #f0f, #0ff)`.
 - `$nom` → token (ou variable). `$nom/40` → même couleur à 40 % d'opacité.
 - `{expr}` → expression (dans un attribut ou dans du texte : `Bonjour {$prenom}`).
-- Commentaires : `<!-- … -->` et `// …` entre les éléments.
+- Commentaires : `<!-- … -->` et `// …` entre les éléments. Ils sont conservés à l'enregistrement (éditeur, `drive --write`), comme les lignes vides, les balises sur plusieurs lignes et les rangées écrites sur une ligne : seules les parties modifiées du source sont réécrites.
 - Du texte posé directement dans un conteneur devient un `<text>` implicite.
 
 ## Éléments

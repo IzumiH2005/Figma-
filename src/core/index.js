@@ -1,5 +1,5 @@
 // Public runtime API (exposed as window.MQ)
-import { parse, serialize, serializeNode, clone, textOf, newId, bumpIds, ParseError, fmtAttr, TEXT_TAGS, patchSource, patchStyle } from './parse.js';
+import { parse, serialize, serializeNode, saveSource, clone, textOf, newId, bumpIds, ParseError, fmtAttr, TEXT_TAGS, patchSource, patchStyle } from './parse.js';
 import { Project, DEVICES, parseAttrString, parseColor, withAlpha, splitTop, TYPESCALES, SPACING } from './project.js';
 import * as Color from './color.js';
 import * as Path from './pathkit.js';
@@ -103,7 +103,7 @@ export {
   makeCtx, renderScreen, renderStandalone, renderNode, BASE_CSS, fontsHref, layoutOf, cssFor, resolveAttrs, imageSrc, fillToCss,
   Player, TRANSITIONS, parseTransition,
   playAnims, PRESETS, ENTRANCE, LOOPS, ACCENTS, MODIFIERS, EASINGS, parseSpec, totalDuration, springEasing, resolveEasing, shapeFrames, setTimeScale, getTimeScale, prefersReducedMotion,
-  inspectScreen, lintScreen, lintProject, formatIssues, contrast, scoreIssues, applyFixes, fixSource, CATEGORIES, patchSource, patchStyle,
+  inspectScreen, lintScreen, lintProject, formatIssues, contrast, scoreIssues, applyFixes, fixSource, CATEGORIES, patchSource, patchStyle, saveSource,
   importShadcnTheme,
   genImage, SCENE_NAMES, ICONS, deviceFrame, evaluate, interp, Scope, KIT,
   PACKS, registerPack, registerPacks, loadPack, ensureIconPacks, iconsUsed, getIcon, iconSvg, packIcons, packLoaded, setIconBase,

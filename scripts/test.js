@@ -144,6 +144,44 @@ export function PillRow({ className, ...props }) { return <div className={cn("fl
   fs.rmSync(tmpMq);
 }
 
+// saving keeps the author's source: comments, blank lines, multi-line tags and one-line rows
+// survive; only what changed is rewritten (attribute patch, insertion, deletion, move)
+{
+  const sv = await page.evaluate((srcs) => {
+    const src = `<!-- tête -->
+<project name="T">
+  <screen name=A device=iphone-16>
+    <!-- en-tête -->
+    <row gap=8><text>Un</text><text>Deux</text></row> <!-- fin de ligne -->
+
+    <col gap=12 p=16
+         fill=$bg>
+      <text>Bonjour <!-- inline --> monde</text>
+      <rect name=a w=10 h=10/>
+      <rect name=b w=10 h=10/>
+    </col>
+    <!-- avant fermeture -->
+  </screen>
+</project>
+<!-- fin -->
+`;
+    const a = MQ.serialize(MQ.parse(src)); const stable = a === MQ.serialize(MQ.parse(a));
+    const keepsAll = ['<!-- tête -->', '<!-- en-tête -->', '<!-- fin de ligne -->', '<!-- inline -->', '<!-- avant fermeture -->', '<!-- fin -->'].every((c) => a.includes(c));
+    const p = MQ.loadProject(src); const same = p.toSource() === src;
+    const all = []; const walk = (n) => { all.push(n); (n.children || []).forEach(walk); }; p.nodes.forEach(walk);
+    const col = all.find((n) => n.tag === 'col'); col.attrs.gap = 16;
+    const b = col.children.find((n) => n.attrs && n.attrs.name === 'b'); col.children.splice(col.children.indexOf(b), 1);
+    col.children.splice(1, 0, { id: 'new', tag: 'ellipse', attrs: { size: 8 }, children: [] });
+    const out = p.toSource();
+    const exp = src.replace('<col gap=12', '<col gap=16').replace('      <rect name=b w=10 h=10/>\n', '').replace('monde</text>\n', 'monde</text>\n      <ellipse size=8/>\n');
+    const ex = srcs.map((s) => MQ.loadProject(s).toSource() === s);
+    return { stable, keepsAll, same, minimal: out === exp, out, ex };
+  }, examples.map((e) => e.source));
+  ok(sv.stable && sv.keepsAll, 'commentaires <!-- --> conservés par parse/serialize (tête, ligne, inline, fermeture, fin)');
+  ok(sv.same && sv.ex.every(Boolean), 'enregistrement sans modification = source identique (tous les exemples)');
+  ok(sv.minimal, 'enregistrement chirurgical : attribut, insertion et suppression sans toucher au reste\n' + (sv.minimal ? '' : sv.out));
+}
+
 // metaball booleans: radius rounds the result's corners (a square becomes a circle), operands driven by expressions
 // become literals where the hand drops them, the inspector presets write radius
 {

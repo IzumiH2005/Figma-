@@ -1,5 +1,5 @@
 // Project model: indexes a parsed .mq tree (tokens, vars, styles, keyframes, components, pages, screens)
-import { parse, serialize, newId, textOf } from './parse.js';
+import { parse, serialize, saveSource, newId, textOf } from './parse.js';
 import { evaluate, Scope } from './expr.js';
 import { parseColor, ramp, neutrals, resolveColorFns, toHex } from './color.js';
 
@@ -76,12 +76,13 @@ export class Project {
   setSource(source) {
     this.source = source;
     this.nodes = parse(source);
+    this.gen = this.nodes.length ? this.nodes[0].pg : undefined;
     this.reindex();
   }
 
   setTree(nodes) { this.nodes = nodes; this.reindex(); }
 
-  toSource() { return serialize(this.nodes) + '\n'; }
+  toSource() { return saveSource(this.source, this.nodes, this.gen); }
 
   get rootNode() {
     return this.nodes.find((n) => n.tag === 'project') || null;
