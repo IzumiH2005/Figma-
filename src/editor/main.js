@@ -68,6 +68,7 @@ function boot() {
   document.body.append(topbar, main);
 
   const play = new PlayMode(app);
+  let tidyFn = null;
   let canvas, left, right, code, timeline;
   const hooks = {
     elOf: (id) => canvas.elOf(id),
@@ -94,6 +95,7 @@ function boot() {
     outlineStroke: (id) => outlineStroke(id),
     bakeMods: (id) => bakeMods(id),
     shapeBuilder: () => canvas.sbuild.start(app.selection),
+    registerTidy: (fn) => { tidyFn = fn; },
   };
   canvas = new Canvas(app, canvasEl, hooks);
   left = new LeftPanel(app, leftEl, hooks);
@@ -424,6 +426,7 @@ function boot() {
     if (e.shiftKey && k === 'p') { app.tool = 'pencil'; app.emit('tool'); return; }
     if (e.shiftKey && k === 'm' && !mod) { canvas.sbuild.start(app.selection); return; }
     if (mod && e.altKey && k === 'm') { e.preventDefault(); useAsMask(); return; }
+    if (mod && e.altKey && k === 't') { e.preventDefault(); if (tidyFn && app.selection.length > 1) tidyFn(); return; }
     if (mod && e.altKey && k === 'o') { e.preventDefault(); const n = app.selNodes[0]; if (n) outlineStroke(n.id); return; }
     if (e.shiftKey && k === 'e') { app.protoView = !app.protoView; app.emit('proto'); return; }
     if (e.shiftKey && k === 'g') { toggleGrid(); return; }

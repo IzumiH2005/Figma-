@@ -70,6 +70,21 @@ C'est la source de vérité : l'éditeur visuel le lit et le réécrit, la CLI l
 | `scroll=y|x|both` · `snap` + `snap=item` | Défilement · carrousel à aimantation |
 | `clip` | Rogner le contenu |
 
+## Guides, contraintes, rangement
+
+- **Layout guides** sur un écran ou une frame : `guides="cols 12 margin=32 gutter=24 | rows 8 top size=48 gutter=16 offset=24 | grid 8"`.
+  - Pour `cols`, l'alignement est `stretch` (par défaut, avec marge et gouttière), `left`, `center` ou `right` (taille fixe `size=` et décalage `offset=`). Pour `rows`, c'est `top`, `center` ou `bottom`.
+  - `grid N` affiche une grille uniforme.
+  - Dans l'éditeur, Maj+G affiche les guides et les objets déplacés s'y accrochent. `mq render --guides` les dessine sur le PNG.
+- **Contraintes** (enfant positionné dans une stack) :
+  - Gauche : `x=24` ;
+  - Droite : `right=24` ;
+  - Gauche et droite : `left=24 right=24`, sans `w` ;
+  - Centre : `x="center 20"` (distance au centre) ;
+  - Échelle : `x=25% w=50%`.
+  Même chose en vertical avec `y`, `bottom`, `top`+`bottom`, `y="center 0"` et les pourcentages. L'éditeur règle tout ça depuis le panneau Aligner › Contraintes.
+- **Tidy up** (Ctrl+Alt+T, ou le bouton grille d'Aligner) : détecte les rangées et range la sélection avec un espacement régulier (la médiane des écarts actuels, arrondie à 4). Le champ « Espacement » impose un écart précis.
+
 ## Apparence
 
 | Attribut | Valeurs |

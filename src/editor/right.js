@@ -42,7 +42,7 @@ export class RightPanel {
     b.appendChild(sec('Projet', h('div.kv', null, h('span', null, 'Nom'), h('b', null, p.name)), h('div.kv', null, h('span', null, 'Écrans'), h('b', null, p.screens().length)), h('div.kv', null, h('span', null, 'Composants'), h('b', null, Object.values(p.components).filter((c) => !c.fromKit).length + ' (+ kit)')), h('div.kv', null, h('span', null, 'Modes'), h('b', null, p.modes.join(' · ')))));
     b.appendChild(sec('Raccourcis', ...[
       ['V / H', 'Déplacer / Main'], ['F R O T', 'Frame, Rect, Ellipse, Texte'], ['I N', 'Image, Note'], ['Ctrl+G', 'Grouper (stack)'], ['Maj+A', 'Auto layout (col)'], ['Ctrl+Alt+K', 'Créer un composant'],
-      ['Ctrl+D', 'Dupliquer'], ['Alt+glisser', 'Dupliquer en déplaçant'], ['Alt+survol', 'Mesurer les distances'], ['Entrée / Maj+Entrée', 'Enfant / parent'], ['Maj+1 / Maj+2', 'Tout voir / sélection'], ['Maj+E', 'Mode prototype'], ['P / Maj+P', 'Plume / crayon'], ['S', 'Formes'], ['Entrée', 'Éditer les points'], ['Ctrl+E', 'Aplatir'], ['Maj+M', 'Shape Builder'], ['Ctrl+Alt+M', 'Utiliser comme masque'], ['Ctrl+Alt+O', 'Vectoriser le contour'], ['Ctrl+Entrée', 'Présenter'], ['Ctrl+/', 'Code complet'],
+      ['Ctrl+D', 'Dupliquer'], ['Alt+glisser', 'Dupliquer en déplaçant'], ['Alt+survol', 'Mesurer les distances'], ['Entrée / Maj+Entrée', 'Enfant / parent'], ['Maj+1 / Maj+2', 'Tout voir / sélection'], ['Maj+E', 'Mode prototype'], ['P / Maj+P', 'Plume / crayon'], ['S', 'Formes'], ['Entrée', 'Éditer les points'], ['Ctrl+E', 'Aplatir'], ['Maj+M', 'Shape Builder'], ['Ctrl+Alt+M', 'Utiliser comme masque'], ['Ctrl+Alt+T', 'Tidy up'], ['Maj+G', 'Layout guides'], ['Ctrl+Alt+O', 'Vectoriser le contour'], ['Ctrl+Entrée', 'Présenter'], ['Ctrl+/', 'Code complet'],
     ].map(([k, v]) => h('div.kv', null, h('kbd', null, k), h('span', null, v)))));
   }
 
@@ -239,10 +239,21 @@ export class RightPanel {
       let cur = axis === 'x' ? minX : minY; const pos = new Map(); for (const i of s) { pos.set(i, cur); cur += i[size] + gap; }
       apply((i) => (axis === 'x' ? { x: pos.get(i) } : { y: pos.get(i) }));
     };
-    const tidy = () => {
-      const s = [...items].sort((a, b) => a.y - b.y || a.x - b.x); const cols = Math.ceil(Math.sqrt(s.length)); const gap = 24; const cw = Math.max(...s.map((i) => i.w)), ch = Math.max(...s.map((i) => i.h));
-      const pos = new Map(); s.forEach((i, k) => pos.set(i, { x: minX + (k % cols) * (cw + gap), y: minY + Math.floor(k / cols) * (ch + gap) })); apply((i) => pos.get(i));
+    // Tidy up (Figma): rows detected by vertical overlap, columns by order; uniform spacing = median of current gaps
+    const tidy = (gapOverride) => {
+      const s = [...items].sort((a, b) => a.y - b.y || a.x - b.x); const rows = [];
+      for (const it of s) { const r = rows.find((row) => it.y < row.top + row.h * 0.6 && it.y + it.h * 0.4 > row.top); if (r) { r.items.push(it); r.h = Math.max(r.h, it.y + it.h - r.top); } else rows.push({ top: it.y, h: it.h, items: [it] }); }
+      rows.forEach((r) => r.items.sort((a, b) => a.x - b.x));
+      const gaps = []; rows.forEach((r) => r.items.slice(1).forEach((it, k) => gaps.push(it.x - (r.items[k].x + r.items[k].w))));
+      rows.slice(1).forEach((r, k) => gaps.push(r.top - (rows[k].top + rows[k].h)));
+      const pos = gaps.filter((g) => g > 0).sort((a, b) => a - b); const med = pos.length ? pos[Math.floor(pos.length / 2)] : 16;
+      const gap = gapOverride ?? Math.max(4, Math.round(med / 4) * 4);
+      const ncol = Math.max(...rows.map((r) => r.items.length)); const colW = Array.from({ length: ncol }, (_, c) => Math.max(...rows.map((r) => (r.items[c] ? r.items[c].w : 0))));
+      const map = new Map(); let y = minY;
+      for (const r of rows) { let x = minX; const rh = Math.max(...r.items.map((i) => i.h)); r.items.forEach((it, c) => { map.set(it, { x: rows.length > 1 ? x : x, y }); x += (rows.length > 1 ? colW[c] : it.w) + gap; }); y += rh + gap; }
+      apply((i) => map.get(i));
     };
+    if (this.hooks.registerTidy) this.hooks.registerTidy(tidy);
     return sec(single ? 'Aligner dans le parent' : `Aligner ${items.length} éléments`, h('div.alignbar', null,
       btn('align-start-vertical', 'Aligner à gauche', () => apply(() => ({ x: minX }))),
       btn('align-center-vertical', 'Centrer horizontalement', () => apply((i) => ({ x: (minX + maxX) / 2 - i.w / 2 }))),
@@ -252,7 +263,38 @@ export class RightPanel {
       btn('align-end-horizontal', 'Aligner en bas', () => apply((i) => ({ y: maxY - i.h }))),
       !single ? btn('align-horizontal-distribute-center', 'Répartir horizontalement', () => distribute('x')) : null,
       !single ? btn('align-vertical-distribute-center', 'Répartir verticalement', () => distribute('y')) : null,
-      !single ? btn('layout-grid', 'Ranger en grille (tidy up)', tidy) : null));
+      !single ? btn('layout-grid', 'Tidy up : ranger avec un espacement régulier (Ctrl+Alt+T)', () => tidy()) : null),
+      !single ? h('div.grid2', { style: { marginTop: '8px' } }, num('Espacement', '', (v) => tidy(+v || 0)), h('div.hint', null, 'tape un écart pour tout ré-espacer')) : null,
+      single && !items[0].top ? this.constraintsRows(items[0]) : null);
+  }
+
+  // Constraints (Figma): how an absolutely placed layer follows its parent when the parent resizes
+  constraintsRows(it) {
+    const app = this.app; const a = it.n.attrs;
+    const hNow = a.left !== undefined && a.right !== undefined ? 'stretch' : a.right !== undefined ? 'right' : /^center/.test(String(a.x || '')) ? 'center' : /%$/.test(String(a.x || '')) ? 'scale' : 'left';
+    const vNow = a.top !== undefined && a.bottom !== undefined ? 'stretch' : a.bottom !== undefined ? 'bottom' : /^center/.test(String(a.y || '')) ? 'center' : /%$/.test(String(a.y || '')) ? 'scale' : 'top';
+    const r1 = (v) => Math.round(v * 10) / 10;
+    const setH = (v) => app.change(() => {
+      const n = it.n.attrs; for (const k of ['x', 'left', 'right']) delete n[k];
+      if (v === 'left') n.x = String(r1(it.x));
+      if (v === 'right') n.right = String(r1(it.pw - it.x - it.w));
+      if (v === 'stretch') { n.left = String(r1(it.x)); n.right = String(r1(it.pw - it.x - it.w)); delete n.w; }
+      if (v === 'center') n.x = `center ${r1(it.x + it.w / 2 - it.pw / 2)}`;
+      if (v === 'scale') { n.x = `${r1((it.x / it.pw) * 100)}%`; n.w = `${r1((it.w / it.pw) * 100)}%`; }
+      if (v !== 'stretch' && v !== 'scale' && (n.w === undefined || /%$/.test(n.w))) n.w = String(r1(it.w));
+    });
+    const setV = (v) => app.change(() => {
+      const n = it.n.attrs; for (const k of ['y', 'top', 'bottom']) delete n[k];
+      if (v === 'top') n.y = String(r1(it.y));
+      if (v === 'bottom') n.bottom = String(r1(it.ph - it.y - it.h));
+      if (v === 'stretch') { n.top = String(r1(it.y)); n.bottom = String(r1(it.ph - it.y - it.h)); delete n.h; }
+      if (v === 'center') n.y = `center ${r1(it.y + it.h / 2 - it.ph / 2)}`;
+      if (v === 'scale') { n.y = `${r1((it.y / it.ph) * 100)}%`; n.h = `${r1((it.h / it.ph) * 100)}%`; }
+      if (v !== 'stretch' && v !== 'scale' && (n.h === undefined || /%$/.test(n.h))) n.h = String(r1(it.h));
+    });
+    return h('div', { style: { marginTop: '10px' } }, h('div.sectitle', null, 'Contraintes'),
+      h('div.prow', null, h('label', null, 'Horizontal'), select([['left', 'Gauche'], ['right', 'Droite'], ['stretch', 'Gauche et droite'], ['center', 'Centre'], ['scale', 'Échelle']], hNow, setH)),
+      h('div.prow', null, h('label', null, 'Vertical'), select([['top', 'Haut'], ['bottom', 'Bas'], ['stretch', 'Haut et bas'], ['center', 'Centre'], ['scale', 'Échelle']], vNow, setV)));
   }
 
   // ------------------------------------------------------------ selection colors (Figma « Selection colors » + tokens)

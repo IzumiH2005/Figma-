@@ -52,6 +52,7 @@ export class Canvas {
         else { el = MQ.renderStandalone(n, ctx); el.dataset.id = n.id; el.dataset.tag = n.tag; }
       } catch (e) { el = h('div.cv-error', null, 'Erreur de rendu : ' + e.message); el.dataset.id = n.id; }
       if (n.tag === 'screen' && app.showGrid) el.appendChild(gridOverlay(n, p));
+      if (app.showGrid) for (const fr of el.querySelectorAll('[data-id]')) { const fn = app.node(fr.dataset.id); if (fn && fn.attrs && fn.attrs.guides && fn.tag !== 'screen') { fr.style.position = fr.style.position || 'relative'; fr.appendChild(MQ.Guides.guidesOverlay(MQ.Guides.parseGuides(fn.attrs.guides, fr.offsetWidth || +fn.attrs.w || 0, fr.offsetHeight || +fn.attrs.h || 0))); } }
       const wrap = h('div.cv-item', { style: { left: x + 'px', top: y + 'px' } }, el);
       wrap.dataset.item = n.id;
       this.world.appendChild(wrap);
@@ -411,6 +412,9 @@ export class Canvas {
     } else {
       const el = d.els[0]; const par = el.offsetParent; if (!par) return null;
       xs.push(0, par.clientWidth / 2, par.clientWidth); ys.push(0, par.clientHeight / 2, par.clientHeight);
+      // layout guides of the parent frame (or of the screen) are snapping targets too
+      { const host = par.closest('[data-id]'); const hn = host && app.node(host.dataset.id); const spec = hn && (hn.attrs.guides || hn.attrs.grid || (hn.tag === 'screen' && app.showGrid ? MQ.Guides.autoGuides(host.offsetWidth) : null));
+        if (spec && spec !== 'none') { const off = host === par ? { x: 0, y: 0 } : { x: host.getBoundingClientRect().left - par.getBoundingClientRect().left, y: host.getBoundingClientRect().top - par.getBoundingClientRect().top }; const z = app.zoom; const L = MQ.Guides.guideLines(MQ.Guides.parseGuides(spec, host.offsetWidth, host.offsetHeight)); xs.push(...L.xs.map((x) => x + off.x / z)); ys.push(...L.ys.map((y) => y + off.y / z)); } }
       for (const s of par.children) { if (d.els.includes(s) || !s.dataset || !s.dataset.id) continue; xs.push(s.offsetLeft, s.offsetLeft + s.offsetWidth / 2, s.offsetLeft + s.offsetWidth); ys.push(s.offsetTop, s.offsetTop + s.offsetHeight / 2, s.offsetTop + s.offsetHeight); }
     }
     return { xs, ys };
@@ -680,17 +684,17 @@ export class Canvas {
 
 // Figma-like layout grid: grid="cols margin gutter" (or default by device), baseline="8"
 export function gridOverlay(screen, project) {
-  const { w, device } = project.sizeOf(screen);
-  let spec = screen.attrs.grid;
-  if (spec === 'none') return h('span');
-  if (!spec || spec === true || spec === 'auto') spec = w >= 1024 ? (w >= 1440 ? '12 100 20' : '12 40 20') : w >= 700 ? '8 32 16' : '4 16 8';
-  const [cols, margin, gutter] = String(spec).split(/\s+/).map(Number);
-  const g = h('div.cv-grid', { style: { padding: `0 ${margin || 0}px`, gap: `${gutter || 0}px` } });
-  for (let i = 0; i < (cols || 4); i++) g.appendChild(h('i'));
+  const { w, h } = project.sizeOf(screen);
+  let spec = screen.attrs.guides || screen.attrs.grid;
+  if (spec === 'none') return h0('span');
+  if (!spec || spec === true || spec === 'auto') spec = MQ.Guides.autoGuides(w);
+  const g = MQ.Guides.guidesOverlay(MQ.Guides.parseGuides(spec, w, h));
+  g.classList.add('cv-grid');
   const base = screen.attrs.baseline ? +screen.attrs.baseline : 0;
   if (base) g.style.backgroundImage = `repeating-linear-gradient(to bottom, rgba(255,40,90,.10) 0 1px, transparent 1px ${base}px)`;
   return g;
 }
+const h0 = (t) => document.createElement(t);
 
 function box(r) { return { left: r.x + 'px', top: r.y + 'px', width: r.w + 'px', height: r.h + 'px' }; }
 

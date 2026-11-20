@@ -390,8 +390,10 @@ export function cssFor(tag, a, parentLayout, ctx, isText) {
       if (pp.h === 'start') s.left = '0px'; else if (pp.h === 'end') s.right = '0px'; else { s.left = '50%'; tf.push('translateX(-50%)'); }
       if (pp.v === 'start') s.top = '0px'; else if (pp.v === 'end') s.bottom = '0px'; else { s.top = '50%'; tf.push('translateY(-50%)'); }
     }
-    if (a.x !== undefined) { if (a.x === 'center') { s.left = '50%'; tf.push('translateX(-50%)'); } else s.left = px(a.x); }
-    if (a.y !== undefined) { if (a.y === 'center') { s.top = '50%'; tf.push('translateY(-50%)'); } else s.top = px(a.y); }
+    // constraints: x=center [offset] keeps the distance to the centre; percentages scale with the parent
+    const cen = (v) => { const m = /^center(?:\s+(-?[\d.]+))?$/.exec(String(v)); return m ? (m[1] ? `calc(50% + ${m[1]}px)` : '50%') : null; };
+    if (a.x !== undefined) { const c = cen(a.x); if (c) { s.left = c; tf.push('translateX(-50%)'); } else s.left = px(a.x); }
+    if (a.y !== undefined) { const c = cen(a.y); if (c) { s.top = c; tf.push('translateY(-50%)'); } else s.top = px(a.y); }
     for (const k of ['top', 'left', 'right', 'bottom']) if (a[k] !== undefined) s[k] = px(a[k]);
   } else if (pl === 'stack' && tag !== 'screen') {
     s.gridArea = '1 / 1';

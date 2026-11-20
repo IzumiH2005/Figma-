@@ -14,7 +14,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 const HELP = `Maquette CLI
 
-  mq render  <file.mq> [-s Écran,Écran] [-o dossier] [--scale 2] [--mode dark] [--frame] [--full]
+  mq render  <file.mq> [-s Écran,Écran] [-o dossier] [--scale 2] [--mode dark] [--frame] [--full] [--guides]
   mq board   <file.mq> [-o board.png] [--page 0] [--scale 1]        vue d'ensemble du canvas
   mq inspect <file.mq> [-s Écran] [--depth 4]                        arbre de layout calculé (texte)
   mq lint    <file.mq> [--fix] [--only code,cat] [--min-score 90]    hygiène UI : contraste, cibles, grille 4/8, échelle typo, tokens, CTA…
@@ -104,7 +104,7 @@ async function cmdRender(o) {
   const wanted = o.s ? String(o.s).split(',') : info.screens;
   const files = [];
   for (const name of wanted) {
-    const ok = await page.evaluate(({ name, frame, full }) => {
+    const ok = await page.evaluate(({ name, frame, full, guides }) => {
       document.body.innerHTML = '';
       const p = window.__p;
       const el = MQ.screenElement(p, name, { mode: window.__mode });
@@ -115,8 +115,9 @@ async function cmdRender(o) {
       if (frame) holder.appendChild(MQ.deviceFrame(p.sizeOf(s).device, el, p.sizeOf(s))); else holder.appendChild(el);
       document.body.appendChild(holder);
       if (full) { const b = el.querySelector('.mq-screen-body'); const H = Math.max(el.offsetHeight, b.scrollHeight); el.style.height = H + 'px'; }
+      if (guides) { const z = p.sizeOf(s); const spec = s.attrs.guides || s.attrs.grid || MQ.Guides.autoGuides(z.w); el.appendChild(MQ.Guides.guidesOverlay(MQ.Guides.parseGuides(spec, z.w, el.offsetHeight || z.h))); }
       return true;
-    }, { name, frame: !!o.frame, full: !!o.full });
+    }, { name, frame: !!o.frame, full: !!o.full, guides: !!o.guides });
     if (!ok) { console.error(`✖ écran introuvable: ${name}`); continue; }
     await waitFonts(page);
     const file = path.join(outDir, `${slug(name)}.png`);
