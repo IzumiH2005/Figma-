@@ -772,11 +772,7 @@ body[data-view="contrast-low"] .cv-world, body[data-view="contrast-low"] .play-h
   </flow>
 </project>
 </script>
-<script type="text/x-maquette" data-file="notch-menu.mq"><project name="Notch Menu — barre d'onglets à encoche" typescale=ui fonts="Inter:400;500;600;700">
-  <!-- Reproduction d'une animation de menu Figma : une barre noire dont on SOUSTRAIT une encoche
-       (forme aux épaules adoucies, comme les points retravaillés dans la vidéo), une pastille qui loge
-       dans le creux, trois icônes. Au clic, encoche + pastille glissent ensemble (smart animate « gentle » :
-       le booléen est recalculé à chaque image), l'ancienne icône repasse au blanc, la nouvelle s'allume. -->
+<script type="text/x-maquette" data-file="notch-menu.mq"><project name="Notch Menu — barre d'onglets à encoche" typescale=ui fonts=Inter:400;500;600;700>
   <tokens>
     ink: #0B0B0C
     paper: #F4F3EF
@@ -787,33 +783,11 @@ body[data-view="contrast-low"] .cv-world, body[data-view="contrast-low"] .play-h
     muted: #6B6A66
     primary: #0B0B0C
   </tokens>
-
   <vars>
     tab: 0
     tabs: [{icon:'ph-fill:house', label:'Accueil'}, {icon:'ph-fill:fire', label:'Tendances'}, {icon:'ph-fill:gear-six', label:'Réglages'}]
   </vars>
-
-  <!-- Barre d'onglets : W = 360, marges 16, 3 colonnes de 109,3 px ; centre de l'onglet i = 70,7 + i × 109,3 -->
-  <component name="NotchBar" props="active=0" desc="Barre d'onglets à encoche (booléen soustraction) — active: 0|1|2">
-    <stack w=360 h=96 name=tabbar>
-      <!-- la barre = rectangle arrondi MOINS l'encoche (opération booléenne non destructive) -->
-      <boolean name=bar op=subtract x=0 y=24 w=360 h=72 fill=$ink>
-        <rect x=0 y=0 w=360 h=72 radius=24/>
-        <vector name=notch x={round(70.7 + active * 109.3 - 62)} y=-8 w=124 h=60
-          d="M0 0L124 0L124 8C106 8 100 12 94 26C86 44 78 56 62 56C46 56 38 44 30 26C24 12 18 8 0 8Z"/>
-      </boolean>
-      <!-- la pastille logée dans le creux -->
-      <ellipse name=puck x={round(70.7 + active * 109.3 - 26)} y=12 w=52 h=52 fill=$ink/>
-      <!-- icônes : fixes ; l'active se colore, les autres restent blanches -->
-      <row x=0 y=24 w=360 h=72 px=16>
-        <stack each={$tabs} as=t name=tab w=fill h=fill center cursor=pointer on:click="set $tab = {i} smart 320 gentle" aria-label={t.label}>
-          <icon name={t.icon} size=26 color={i == active ? $accent : $on-ink} mt={i == active ? -44 : 0}/>
-        </stack>
-      </row>
-    </stack>
-  </component>
-
-  <screen name="Menu" device=iphone-16 statusbar=dark homebar fill=$paper pt=safe start>
+  <screen name=Menu device=iphone-16 statusbar=dark homebar fill=$paper pt=safe start>
     <col w=fill h=fill px=24 pt=24 gap=16>
       <text class=t-caption color=$muted upper ls=8%>Maquette · motion</text>
       <text class=t-h1 weight=700 lh=1.1>{$tabs[$tab].label}</text>
@@ -827,11 +801,21 @@ body[data-view="contrast-low"] .cv-world, body[data-view="contrast-low"] .play-h
       </col>
     </col>
     <stack fixed place=bottom w=fill h=132 pb=safe center>
-      <NotchBar active={$tab}/>
+      <stack w=360 h=96 name=tabbar>
+        <boolean name=bar op=subtract x=0 y=24 w=360 h=72 fill=$ink>
+          <rect x=0 y=0 w=360 h=72 radius=24/>
+          <vector name=notch x={round(96 + $tab * 84 - 62)} y=-8 w=124 h=60 d="M0 0L124 0L122.01 8C103 8 98.41 20.66 93.9 33.6C89.1 47.4 76.3 56 62 56C47.7 56 35.33 47.24 30.11 33.6C25.2 20.8 21 8 2.01 8Z"/>
+        </boolean>
+        <ellipse name=puck x={round(96 + $tab * 84 - 26)} y=12 w=52 h=52 fill=$ink/>
+        <row x=0 y=24 w=360 h=72 px=54>
+          <stack each={$tabs} as=t name=tab w=fill h=fill center cursor=pointer on:click="set $tab = {i} smart 320 gentle" aria-label={t.label}>
+            <icon name={t.icon} size=26 color={i == $tab ? $accent : $on-ink} mt={i == $tab ? -44 : 0}/>
+          </stack>
+        </row>
+      </stack>
     </stack>
   </screen>
-
-  <flow name="demo">
+  <flow name=demo>
     start Menu
     wait 900
     click tab#1
