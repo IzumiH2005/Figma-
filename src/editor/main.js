@@ -38,6 +38,7 @@ function ensureVisionFilters() {
 
 function boot() {
   MQ.ensureStyles();
+  try { const ic = document.getElementById('mq-icons'); if (ic) MQ.registerPacks(JSON.parse(ic.textContent.replace(/<\\\/script/gi, '</script'))); } catch (e) { /* */ }
   const app = new App();
   window.app = app;
   app.showGrid = !!store('grid'); app.view = 'normal';

@@ -36,7 +36,7 @@ export class Canvas {
     const app = this.app; const p = app.project;
     clear(this.world); this.items.clear(); this.links = [];
     const page = app.page; if (!page) { this.drawOverlay(); return; }
-    this.errors = [];
+    this.errors = []; const missing = new Set();
     for (const n of page.children) {
       if (n.tag === '#text') continue;
       const x = n.attrs.x !== undefined && /^-?\d/.test(n.attrs.x) ? +n.attrs.x : (n._autoX || 0);
@@ -53,7 +53,10 @@ export class Canvas {
       this.world.appendChild(wrap);
       this.items.set(n.id, wrap);
       if (el._mq) { this.links.push(...(el._mq.links || []).map((l) => ({ ...l, screen: n.id }))); this.errors.push(...el._mq.errors); }
+      if (ctx.missingPacks) ctx.missingPacks.forEach((pk) => missing.add(pk));
     }
+    // icon packs referenced but not loaded yet: fetch then re-render once
+    for (const pk of missing) MQ.loadPack(pk).then((ok) => { if (ok) { clearTimeout(this._packTimer); this._packTimer = setTimeout(() => this.render(), 30); } });
     this.applyTransform();
     requestAnimationFrame(() => this.drawOverlay());
   }

@@ -4,6 +4,7 @@ import { DEVICES, splitTop, withAlpha, parseColor, coerce } from './project.js';
 import { resolveColorFns } from './color.js';
 import { textOf } from './parse.js';
 import { ICONS } from './icons.js';
+import { iconSvg, splitIconName, packLoaded } from './iconpacks.js';
 import { genImage } from './gen.js';
 import { makeStatusBar, makeHomeBar } from './chrome.js';
 
@@ -616,11 +617,16 @@ function createElementFor(node, a, scope, parentLayout, ctx) {
       el = document.createElement('div'); el.className = 'mq-icon';
       const name = String(a.name || a.icon || 'circle');
       const size = num(a.size, 20);
-      const inner = ICONS[name] || ICONS['circle-help'] || '';
-      if (!ICONS[name]) ctx.errors.push(`Icône inconnue: ${name}`);
-      const sw = a.stroke !== undefined && /^\d/.test(String(a.stroke)) ? num(a.stroke) : a.sw !== undefined ? num(a.sw) : 2;
-      const fill = a.fill && a.fill !== true ? a.fill : 'none';
-      el.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24" fill="${fill}" stroke="currentColor" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round">${inner}</svg>`;
+      const sw = a.stroke !== undefined && /^\d/.test(String(a.stroke)) ? num(a.stroke) : a.sw !== undefined ? num(a.sw) : undefined;
+      const fill = a.fill && a.fill !== true ? a.fill : undefined;
+      let svg = iconSvg(name, { size, sw, fill });
+      if (!svg) {
+        const [pack] = splitIconName(name);
+        if (pack !== 'lucide' && !packLoaded(pack)) { (ctx.missingPacks = ctx.missingPacks || new Set()).add(pack); el.dataset.pendingIcon = name; }
+        else ctx.errors.push(`Icône inconnue: ${name}`);
+        svg = iconSvg('circle-dashed', { size, sw }) || '';
+      }
+      el.innerHTML = svg;
       el.style.width = el.style.height = size + 'px'; el.style.flexShrink = '0';
       el.style.display = 'grid'; el.style.placeItems = 'center';
       if (a.color) el.style.color = a.color;

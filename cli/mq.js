@@ -5,7 +5,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
-import { buildRuntime, buildEditorHTML, readExamples } from '../scripts/build.js';
+import { buildRuntime, buildEditorHTML, readExamples, iconSubset } from '../scripts/build.js';
 
 const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -65,6 +65,7 @@ function readProject(file) {
 }
 
 async function loadInPage(page, source, mode) {
+  await page.evaluate((packs) => MQ.registerPacks(packs), iconSubset([source]));
   return page.evaluate(async ({ source, mode }) => {
     const p = MQ.loadProject(source);
     window.__p = p;

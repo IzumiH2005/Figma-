@@ -8,6 +8,7 @@ import { playAnims, PRESETS, ENTRANCE, LOOPS, ACCENTS, MODIFIERS, EASINGS, parse
 import { inspectScreen, lintScreen, lintProject, formatIssues, contrast, scoreIssues, applyFixes, fixSource, CATEGORIES } from './inspect.js';
 import { genImage, SCENE_NAMES } from './gen.js';
 import { ICONS } from './icons.js';
+import { PACKS, registerPack, registerPacks, loadPack, ensureIconPacks, iconsUsed, getIcon, iconSvg, packIcons, packLoaded, setIconBase } from './iconpacks.js';
 import { deviceFrame } from './chrome.js';
 import { evaluate, interp, Scope } from './expr.js';
 import KIT from './kit.mq';
@@ -71,12 +72,13 @@ export function mountPrototype(project, stage, opts = {}) {
     if (k !== key) { frame = opts.frame === false ? host : deviceFrame(z.device, host, z); if (opts.frame === false) { host.style.width = z.w + 'px'; host.style.height = z.h + 'px'; } fit.replaceChildren(frame); key = k; }
     resize();
   };
+  const iconsReady = ensureIconPacks(project);
   const player = new Player(project, host, { ...opts, onEvent: (t, d) => { if (t === 'prenavigate' || t === 'navigate') refit(d.name); if (opts.onEvent) opts.onEvent(t, d); } });
   const onResize = () => resize();
   addEventListener('resize', onResize);
   const ro = window.ResizeObserver ? new ResizeObserver(onResize) : null;
   if (ro) ro.observe(stage);
-  player.start(opts.start);
+  iconsReady.then(() => player.start(opts.start));
   if (document.fonts) document.fonts.ready.then(resize);
   return { player, resize, get frame() { return frame; }, destroy() { removeEventListener('resize', onResize); if (ro) ro.disconnect(); player.destroy(); fit.remove(); } };
 }
@@ -96,4 +98,5 @@ export {
   playAnims, PRESETS, ENTRANCE, LOOPS, ACCENTS, MODIFIERS, EASINGS, parseSpec, totalDuration, springEasing, resolveEasing, shapeFrames, setTimeScale, getTimeScale, prefersReducedMotion,
   inspectScreen, lintScreen, lintProject, formatIssues, contrast, scoreIssues, applyFixes, fixSource, CATEGORIES, patchSource, patchStyle,
   genImage, SCENE_NAMES, ICONS, deviceFrame, evaluate, interp, Scope, KIT,
+  PACKS, registerPack, registerPacks, loadPack, ensureIconPacks, iconsUsed, getIcon, iconSvg, packIcons, packLoaded, setIconBase,
 };
