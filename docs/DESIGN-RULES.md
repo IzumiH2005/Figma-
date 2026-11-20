@@ -48,6 +48,7 @@ Dans l'éditeur : onglet **Lint**, avec score, barres par catégorie, marqueurs 
 | Boutons et champs se distinguent de leur fond (≥ 3:1, sinon contour ou ombre) | `[contrast-ui]` |
 | Cibles tactiles 44 × 44 (iOS), 48 × 48 (Android) | `[tap-target]` selon l'appareil |
 | Champs avec label visible (pas de placeholder seul) | `[input-label]` ; `Field label=…` |
+| Tout geste (drag, balayage, pincer, panoramique) a une alternative au simple appui : bouton, points, appui long (WCAG 2.5.1 / 2.5.7) | `[gesture-alt]` |
 | Navigation clavier et focus visibles | Runtime : tout élément cliquable est focusable (Tab, Entrée, Espace) avec anneau de focus |
 
 ## 5. Composants et UX
@@ -126,3 +127,18 @@ Valeurs sur la grille de 4 : rail 48 = padding 4 + piste 40 ; anneau 12, écart 
 Repères, pour s'inspirer et non pour recopier :
 - **Ce qui ne change pas d'un système à l'autre** : marge constante entre le rail et l'indicateur, rayons imbriqués, cible tactile minimale (44 pt chez Apple, 48 dp chez Material), grille de 4/8.
 - **Ce qui appartient à ton système** : les valeurs exactes (hauteur, rayon, épaisseur, densité), au service du caractère du produit. Les règles de lint vérifient des relations (inset égal, R − p, contraste, grille), jamais une taille imposée.
+
+## Gestes et manipulation directe
+
+Le contenu suit le doigt, puis se pose de lui-même. Les principes viennent de la conférence WWDC 2018 « Designing Fluid Interfaces » et des guides de gestes de Material et de Compose.
+
+- **Réponse immédiate, 1:1** : sous le doigt, l'élément bouge exactement comme lui, sans délai ni courbe. Les animations n'interviennent qu'au lâcher.
+- **Interruptible et redirigeable** : on rattrape un élément en vol. Le ressort repart de la position et de la vitesse courantes.
+- **Intention = projection** : la destination dépend d'où le geste *irait* (position + élan), pas de l'endroit où le doigt s'arrête. Un petit flick rapide suffit pour changer de page ou fermer un tiroir.
+- **Élasticité aux bords** : au-delà d'une limite, résistance progressive plutôt qu'un mur. On sent la limite sans être bloqué.
+- **Seuil et verrouillage d'axe** : 6 px avant de décider. Un drag horizontal n'empêche pas le défilement vertical de la page.
+- **Liaison continue** : un tiroir pilote le fond assombri (`drag-progress=$sheet` + `opacity={$sheet * 0.4}`) ; tout ce qui en dépend suit le doigt.
+- **Découvrable et accessible** : un indice visuel (poignée, chevron, page suivante qui dépasse, points) et une alternative au simple appui, toujours.
+- **Cibles** : la zone saisissable fait au moins 44 px, même si le visuel est fin (piste de slider de 6 px dans une zone de 44).
+
+Choisir le geste : `on:scrub` pour une valeur (curseur, timeline), `drag` + `snap` pour des états discrets (tiroir, ligne, carrousel), `drag` + `bounds` pour un objet libre, `on:hold` pour l'incrément répété, `on:pinch` / `on:rotate` pour le zoom et la rotation, `on:swipe-*` pour une navigation sans suivi visuel.

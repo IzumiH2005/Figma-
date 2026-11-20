@@ -469,7 +469,41 @@ Fonctions : `len min max round floor ceil abs clamp fixed money(n,'€') percent
 <screen on:after-2000="go Accueil dissolve 600"> …
 ```
 
-**Déclencheurs** : `on:click` `on:dblclick` `on:press` `on:release` `on:longpress` `on:enter` `on:leave` `on:swipe-left|right|up|down` `on:load` `on:after-1500` `on:key-Enter` (n'importe quelle touche) `on:change` (input, `value` dans le scope) `on:submit`.
+**Déclencheurs** : `on:click` `on:dblclick` / `on:doubletap` `on:press` `on:release` `on:longpress` `on:enter` `on:leave` `on:swipe-left|right|up|down` `on:load` `on:after-1500` `on:key-Enter` (n'importe quelle touche) `on:change` (input, `value` dans le scope) `on:submit`, plus les gestes continus ci-dessous.
+
+### Gestes (doigt et souris)
+
+Tout se manipule au doigt **et** à la souris (Pointer Events), avec un seuil de 6 px et un verrouillage d'axe : un drag horizontal laisse défiler la page verticalement.
+
+```xml
+<!-- manipulation directe : l'élément suit le doigt, puis se pose sur un aimant -->
+<row drag=x bounds="-104..0" snap="0, -104" drag-index=open>…</row>              <!-- ligne balayable -->
+<col drag=y snap="0, -360" drag-progress=$sheet>…</col>                           <!-- tiroir lié à une variable -->
+<row w={count * 100 + '%'} drag=x snap=page drag-index=page><slot/></row>         <!-- carrousel -->
+<frame drag=xy bounds=parent elastic=0.5 release="spring(400, 28)"/>             <!-- objet libre -->
+
+<!-- gestes qui pilotent une valeur -->
+<stack on:scrub="change value={px}">…</stack>          <!-- curseur : px, py ∈ 0..1 sous le doigt, dès l'appui -->
+<stack on:hold="inc $qty">…</stack>                    <!-- maintien : répète (400 ms, puis de plus en plus vite) -->
+<frame on:pan="set $x = {$x + dx}"/>                   <!-- dx, dy depuis le dernier évènement ; vx, vy en px/ms -->
+<image on:pinch="set $zoom = {$zoom * scale}" on:rotate="set $a = {$a + angle}"/>   <!-- deux doigts ; ctrl/⌘ + molette, maj + molette -->
+<frame on:wheel="set $y = {$y + dy}"/>
+```
+
+| Attribut | Rôle |
+|---|---|
+| `drag=x\|y\|xy` | Rend l'élément manipulable (translation, sans relayout). |
+| `bounds="lo..hi"` · `bounds="x=-50..50 y=0..200"` · `bounds=parent` | Limites. Au-delà, résistance élastique (`elastic=0.35` par défaut, `0` = mur). |
+| `snap="0, -104"` · `snap=page` · `snap="x=0,100 y=0"` | Aimants. À la fin du geste, la position est **projetée** selon la vitesse (`momentum=0.99`, `momentum=false` pour couper), puis va à l'aimant le plus proche. Un « flick » franc atteint toujours l'aimant voisin. `page` = multiples de la largeur (hauteur) du parent. |
+| `release="spring(320, 30)"` | Ressort de pose (raideur, amortissement). Il part de la vitesse du doigt, sans à-coup. |
+| `drag-index=prop` · `drag-index=$var` | Écrit le n° de l'aimant atteint, et inversement : changer la prop ou la variable (`change page=2`, `set $tab = 1`) y anime l'élément. |
+| `drag-progress=$var` | Liaison continue 0..1 entre le premier et le dernier aimant (ou les limites). Tout ce qui dépend de `$var` suit le doigt en direct (fond assombri, échelle, opacité). |
+
+**Évènements de drag** : `on:drag-start`, `on:drag` (continu), `on:drag-end`, `on:drag-rest`. Ils reçoivent `x y dx dy vx vy progress index`.
+**Évènements de geste** : `on:swipe-*` (≥ 40 px, ou ≥ 12 px à ≥ 0,3 px/ms), `on:pan-start` / `on:pan` / `on:pan-end`, `on:scrub` / `on:scrub-end`, `on:hold`, `on:pinch` / `on:rotate` / `on:pinch-end` (`scale`, `angle`), `on:wheel` (`dx`, `dy`).
+**Kit** : `Slider` (scrub), `SwipeRow` (balayer pour révéler une action, ou appui long), `Carousel` (paginé, points cliquables).
+**Accessibilité** : chaque geste doit avoir une alternative au simple appui (bouton, points, appui long) : WCAG 2.5.1 et 2.5.7, lint `gesture-alt`.
+**Flows** : `drag "clé" by dx dy [ms]` rejoue un geste continu (lâché en mouvement, donc avec élan).
 
 **Actions** (séparées par `;`) :
 
@@ -520,6 +554,7 @@ Boucles : `moving-hold pulse breathe spin float bounce shake wiggle heartbeat pi
   click cta            # clé (name/key), texte visible, ou nom de composant
   type email "ada@orbit.fr"
   swipe left
+  drag promo by -240 0 200   # geste continu (ms = durée)
   scroll 400
   back
   key Enter

@@ -6,7 +6,7 @@ import { highlight } from './code.js';
 
 const FONTS = ['Inter', 'Manrope', 'DM Sans', 'Plus Jakarta Sans', 'Space Grotesk', 'Sora', 'Outfit', 'Poppins', 'Figtree', 'Geist', 'Instrument Serif', 'Playfair Display', 'Fraunces', 'JetBrains Mono', 'Bricolage Grotesque', 'Unbounded'];
 const WEIGHTS = [['300', 'Light'], ['400', 'Regular'], ['500', 'Medium'], ['600', 'Semibold'], ['700', 'Bold'], ['800', 'Extrabold'], ['900', 'Black']];
-const TRIGGERS = [['on:click', 'Au clic'], ['on:enter', 'Survol (entrée)'], ['on:leave', 'Survol (sortie)'], ['on:press', 'Appui'], ['on:longpress', 'Appui long'], ['on:swipe-left', 'Swipe ←'], ['on:swipe-right', 'Swipe →'], ['on:swipe-up', 'Swipe ↑'], ['on:swipe-down', 'Swipe ↓'], ['on:load', 'Au chargement'], ['on:after-2000', 'Après délai'], ['on:key-Enter', 'Touche clavier'], ['on:change', 'Saisie (input)']];
+const TRIGGERS = [['on:click', 'Au clic'], ['on:enter', 'Survol (entrée)'], ['on:leave', 'Survol (sortie)'], ['on:press', 'Appui'], ['on:longpress', 'Appui long'], ['on:swipe-left', 'Swipe ←'], ['on:swipe-right', 'Swipe →'], ['on:swipe-up', 'Swipe ↑'], ['on:swipe-down', 'Swipe ↓'], ['on:doubletap', 'Double appui'], ['on:hold', 'Maintien (répète)'], ['on:scrub', 'Glisser une valeur (px 0..1)'], ['on:scrub-end', 'Fin du glisser'], ['on:pan', 'Panoramique (dx, dy)'], ['on:pan-start', 'Début du panoramique'], ['on:pan-end', 'Fin du panoramique (vx, vy)'], ['on:pinch', 'Pincer (scale)'], ['on:rotate', 'Rotation (angle)'], ['on:pinch-end', 'Fin du pincer'], ['on:wheel', 'Molette (dx, dy)'], ['on:drag-start', 'Drag : début'], ['on:drag', 'Drag : en cours'], ['on:drag-end', 'Drag : relâché (index)'], ['on:drag-rest', 'Drag : posé'], ['on:load', 'Au chargement'], ['on:after-2000', 'Après délai'], ['on:key-Enter', 'Touche clavier'], ['on:change', 'Saisie (input)']];
 const TRANS = ['instant', 'dissolve', 'smart', 'ios', 'push', 'push-right', 'push-up', 'push-down', 'slide-up', 'slide-down', 'slide-left', 'slide-right', 'scale', 'flip'];
 const EASES = ['smooth', 'expo', 'cushion', 'snap', 'spring', 'bouncy', 'snappy', 'gentle', 'back', 'in-out', 'out', 'in', 'linear', 'bounce'];
 
@@ -446,6 +446,7 @@ export class RightPanel {
     const rows = evs.map(([k, v]) => this.interactionRow(n, k, String(v), screens, comps));
     b.appendChild(sec('Interactions', ...rows, h('button.btn', { onclick: () => app.change(() => { const free = TRIGGERS.find(([t]) => !n.attrs[t]); n.attrs[free ? free[0] : 'on:click'] = screens[0] ? `go ${q(screens.find((s) => s !== (app.project.screenOf(n.id) || {}).attrs?.name) || screens[0])} smart` : 'back'; }) }, icon('plus', 13), 'Ajouter une interaction'),
       h('div.hint', null, 'Astuce : en mode Prototype (Maj+E), tire la pastille bleue d\'un élément vers un écran pour créer un lien.')));
+    b.appendChild(this.gestureSec(n));
     if (n.tag === 'screen') b.appendChild(sec('Écran', h('div.prow', null, h('label', null, 'Écran de départ'), toggle(!!n.attrs.start, (v) => app.change(() => { for (const s of app.project.screens()) delete s.attrs.start; if (v) n.attrs.start = true; }))), h('button.btn', { onclick: () => this.hooks.play(n.attrs.name) }, icon('play', 13), 'Présenter depuis cet écran')));
     b.appendChild(sec('Référence actions', h('pre.ref', null, `go Écran [transition] [ms] [easing]
 back | close | restart
@@ -456,6 +457,35 @@ scroll clé | play clé shake | mode dark | wait 300
 → plusieurs actions : séparer par ;
 transitions : ${TRANS.join(' ')}
 easings : ${EASES.join(' ')}`)));
+  }
+
+  // direct manipulation: drag axis, bounds, snap points, physics, binding — plus one-click presets
+  gestureSec(n) {
+    const app = this.app; const a = n.attrs;
+    const set = (k, v) => app.change(() => { if (v == null || v === '') delete n.attrs[k]; else n.attrs[k] = v; });
+    const setMany = (o) => app.change(() => { for (const [k, v] of Object.entries(o)) { if (v == null) delete n.attrs[k]; else n.attrs[k] = v; } });
+    const axis = a.drag === true ? 'xy' : a.drag ? String(a.drag) : '';
+    const off = { drag: null, bounds: null, snap: null, elastic: null, momentum: null, release: null, 'drag-index': null, 'drag-progress': null };
+    const presets = [
+      ['Ligne balayable', { drag: 'x', bounds: '-96..0', snap: '0, -96', momentum: null }],
+      ['Tiroir (sheet)', { drag: 'y', bounds: null, snap: '0, -360', 'drag-progress': a['drag-progress'] || '$sheet' }],
+      ['Carrousel', { drag: 'x', bounds: null, snap: 'page', 'drag-index': a['drag-index'] || 'page' }],
+      ['Libre (xy)', { drag: 'xy', bounds: 'parent', snap: null }],
+    ];
+    const rows = [
+      h('div.prow', null, h('label', null, 'Glisser'), select([['', 'Non'], ['x', 'Horizontal'], ['y', 'Vertical'], ['xy', 'Libre']], axis, (v) => (v ? set('drag', v) : setMany(off)))),
+    ];
+    if (axis) rows.push(
+      h('div.prow', null, h('label', null, 'Limites'), input('g-bounds', a.bounds, (v) => set('bounds', v), { mono: true, placeholder: '-104..0 · parent' })),
+      h('div.prow', null, h('label', null, 'Aimants'), input('g-snap', a.snap, (v) => set('snap', v), { mono: true, placeholder: '0, -104 · page' })),
+      h('div.prow', null, h('label', null, 'Index lié'), input('g-index', a['drag-index'], (v) => set('drag-index', v), { mono: true, placeholder: 'prop ou $var' })),
+      h('div.prow', null, h('label', null, 'Progression liée'), input('g-prog', a['drag-progress'], (v) => set('drag-progress', v), { mono: true, placeholder: '$var 0..1' })),
+      h('div.prow', null, h('label', null, 'Élan (momentum)'), toggle(a.momentum !== 'false' && a.momentum !== false, (v) => set('momentum', v ? null : 'false'))),
+      h('div.prow', null, numOpt('Élastique', a.elastic ?? 0.35, (v) => set('elastic', v == null || v === 0.35 ? null : v))),
+      h('div.prow', null, h('label', null, 'Ressort'), input('g-rel', a.release, (v) => set('release', v), { mono: true, placeholder: 'spring(320, 30)' })));
+    rows.push(h('div.prow.wrap', null, presets.map(([l, o]) => h('button.btn', { onclick: () => setMany(o) }, l))));
+    rows.push(h('div.hint', null, 'Au doigt comme à la souris : élastique aux limites, élan projeté, aimant le plus proche, ressort qui reprend la vitesse du doigt. Événements : on:drag-start / drag / drag-end / drag-rest (x, y, vx, vy, progress, index). Donne toujours une alternative au simple appui (bouton, points, appui long) : le lint gesture-alt le vérifie.'));
+    return sec('Geste', ...rows);
   }
 
   interactionRow(n, key, action, screens, comps) {

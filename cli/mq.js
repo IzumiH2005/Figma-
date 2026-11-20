@@ -44,7 +44,7 @@ const HELP = `Maquette CLI
 
 Script de flow (.flow ou <flow name=…> dans le projet) — une commande par ligne :
   start Écran | wait 800 | click "Texte ou clé" | tap clé | hover clé | type clé "texte"
-  scroll 400 | scroll clé | swipe left [clé] | back | key Enter | shot nom.png | caption "Texte"
+  scroll 400 | scroll clé | swipe left [clé] | drag clé by dx dy [ms] | back | key Enter | shot nom.png | caption "Texte"
 `;
 
 function args(argv) {

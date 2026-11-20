@@ -109,6 +109,40 @@ const proto = await page.evaluate(async () => {
 ok(proto.n === 1 && proto.txt === '1', 'Player: inc $n re-rend le texte');
 ok(proto.screen === 'B', 'Player: go B (smart)');
 
+// gestures: real pointer drags through the Player (drag + snap + binding, flick projection, scrub, lint gesture-alt)
+await page.evaluate(() => {
+  const p = MQ.loadProject(`<vars>s: 0
+v: 0.5
+page: 0</vars><screen name=G start w=400 h=800>
+  <col name=sheet absolute x=0 y=700 w=400 h=300 fill=#eee drag=y snap="0, -300" drag-progress=$s/>
+  <stack name=sl absolute x=50 y=50 w=300 h=44 on:scrub="set $v = {px}"/>
+  <stack name=clip absolute x=0 y=200 w=400 h=100 clip><row name=track w=1200 h=100 drag=x snap=page drag-index=$page><frame w=400 h=100/><frame w=400 h=100/><frame w=400 h=100/></row></stack>
+  <frame name=lone absolute x=0 y=400 w=100 h=100 drag=xy/>
+</screen>`);
+  const host = document.createElement('div'); document.body.innerHTML = ''; document.body.appendChild(host);
+  window.__gp = new MQ.Player(p, host, {}); window.__gp.start();
+});
+const box = async (k) => page.evaluate((k) => { const r = document.querySelector('[data-key="' + k + '"]').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2, l: r.left, w: r.width }; }, k);
+const gesture = async (x, y, dx, dy, ms) => { await page.mouse.move(x, y); await page.mouse.down(); const n = Math.max(2, Math.round(ms / 16)); for (let i = 1; i <= n; i++) { const t = i / n, e = 2 * t * t - t * t * t; await page.mouse.move(x + dx * e, y + dy * e); await page.waitForTimeout(16); } await page.mouse.up(); };
+let b = await box('sheet'); await gesture(b.x, b.y - 140, 0, -120, 160); await page.waitForTimeout(900);
+const g1 = await page.evaluate(() => ({ s: window.__gp.vars.s, y: document.querySelector('[data-key=sheet]').getBoundingClientRect().top - window.__gp.host.getBoundingClientRect().top }));
+ok(Math.abs(g1.s - 1) < 0.02 && Math.abs(g1.y - 400) < 2, `geste : un flick court ouvre le tiroir jusqu'à l'aimant (élan projeté) et lie $s=1 ${JSON.stringify(g1)}`);
+b = await box('sl'); await gesture(b.l + b.w * 0.8, b.y, 0, 0, 40); await page.waitForTimeout(150);
+const g2 = await page.evaluate(() => window.__gp.vars.v);
+ok(Math.abs(g2 - 0.8) < 0.03, `geste : on:scrub donne la position sous le doigt (px=${g2.toFixed(2)})`);
+b = await box('clip'); await gesture(b.x + 100, b.y, -150, 0, 140); await page.waitForTimeout(900);
+const g3 = await page.evaluate(() => ({ page: window.__gp.vars.page, x: document.querySelector('[data-key=track]').getBoundingClientRect().left - document.querySelector('[data-key=clip]').getBoundingClientRect().left }));
+ok(g3.page === 1 && Math.abs(g3.x + 400) < 2, `geste : carrousel snap=page, drag-index écrit la page ${JSON.stringify(g3)}`);
+await page.evaluate(() => { window.__gp.vars.page = 2; window.__gp.scheduleRerender(); });
+await page.waitForTimeout(1000);
+const g4 = await page.evaluate(() => document.querySelector('[data-key=track]').getBoundingClientRect().left - document.querySelector('[data-key=clip]').getBoundingClientRect().left);
+ok(Math.abs(g4 + 800) < 2, `geste : changer la variable liée anime la piste (x=${g4.toFixed(0)})`);
+const gl = await page.evaluate(() => {
+  const lintOf = (src) => { const p = MQ.loadProject(src); document.body.innerHTML = ''; const el = MQ.screenElement(p, 'G'); document.body.appendChild(el); return MQ.lintScreen(el, p, p.screen('G')).map((x) => x.code); };
+  return { bare: lintOf(`<screen name=G start device=iphone-16><frame name=lone w=100 h=100 fill=#ccc drag=xy/></screen>`), kit: lintOf(`<screen name=G start device=iphone-16><Carousel count=2><frame w=fill h=80/><frame w=fill h=80/></Carousel><SwipeRow title=A action=B/></screen>`) };
+});
+ok(gl.bare.includes('gesture-alt') && !gl.kit.includes('gesture-alt'), `lint gesture-alt : drag sans alternative signalé, Carousel/SwipeRow (points, appui long) acceptés ${JSON.stringify(gl)}`);
+
 // Tailwind → attributes, and TSX (shadcn conventions) → .mq components, offline
 {
   const t = twToAttrs('inline-flex items-center gap-2 px-4 h-9 rounded-md text-sm font-medium bg-primary/90 hover:bg-accent border dark:bg-input', { radius: 10 });

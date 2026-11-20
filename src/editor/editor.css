@@ -129,6 +129,8 @@ kbd { font: 500 10.5px/1 "JetBrains Mono", monospace; background: var(--ui-input
 .prow { display: flex; align-items: center; gap: 8px; min-height: 28px; }
 .prow > label { flex: 1; color: var(--ui-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .prow > .sel, .prow > .inp, .prow > .colorf, .prow > .iconpick { flex: 1.6; min-width: 0; }
+.prow.wrap { flex-wrap: wrap; gap: 6px; padding-top: 4px; }
+.prow.wrap > .btn { flex: 1 1 45%; justify-content: center; }
 .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; } .grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
 .inp, .sel, .numinp { height: 28px; border-radius: 7px; border: 1px solid transparent; background: var(--ui-input); padding: 0 8px; outline: 0; width: 100%; min-width: 0; }
 .inp:focus, .numinp:focus, .sel:focus { border-color: var(--ui-accent); }

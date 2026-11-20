@@ -70,3 +70,7 @@ Timeline › **Auto-keyframe** (bouton rouge, comme dans Figma Motion) : place l
 ## Booléens animés (smart animate)
 
 Quand un `<boolean>` garde la même structure d'un état à l'autre, mais qu'un de ses opérandes s'est déplacé (par exemple l'encoche d'une barre d'onglets, `x={84 + $tab * 96}`), le smart animate interpole la position des opérandes et recalcule l'opération à chaque image. L'encoche glisse donc le long de la barre au lieu d'être déformée point par point. Pendant le mouvement, le remplissage est dessiné en SVG direct, sans masque CSS à re-décoder, donc sans clignotement. L'exemple `examples/notch-menu.mq` reproduit un menu à encoche : encoche et pastille synchronisées, icônes fixes en fondu de couleur, `smart 320 gentle`.
+
+## Gestes : la motion prend le relais du doigt
+
+Au lâcher d'un `drag`, aucune durée fixe : un ressort (`release="spring(k, c)"`, 320/30 par défaut) part de la **vitesse du doigt**, ce qui supprime l'à-coup entre geste et animation. Une raideur plus haute donne une pose plus vive ; un amortissement plus bas, un léger dépassement (follow-through). La destination est projetée (`momentum`) : position + v × 0,99 / (1 − 0,99). Pour vérifier : `mq video f.mq --flow demo --slowmo 0.25` avec des `drag "clé" by dx dy ms` courts (≤ 260 ms) pour un flick, longs (≥ 500 ms) pour un glissé lent.

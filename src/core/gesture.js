@@ -116,8 +116,7 @@ export const GestureMixin = {
         // a drag is not a click
         const eat = (c) => { c.stopPropagation(); c.preventDefault(); window.removeEventListener('click', eat, true); };
         window.addEventListener('click', eat, true); setTimeout(() => window.removeEventListener('click', eat, true), 0);
-        samples.push({ t: ev.timeStamp, x: ev.clientX, y: ev.clientY });
-        const v = vel(samples, g.scale);
+        const v = vel(samples, g.scale, ev.timeStamp);
         const target = { ...pos };
         for (const k of ['x', 'y']) {
           if (!spec[k]) continue;
@@ -252,8 +251,7 @@ export const GestureMixin = {
         };
         const up = (ev) => {
           window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', up);
-          samples.push({ t: ev.timeStamp, x: ev.clientX, y: ev.clientY });
-          const l = local(ev); const dx = (ev.clientX - p0.x) / l.scale, dy = (ev.clientY - p0.y) / l.scale; const v = vel(samples, l.scale);
+          const l = local(ev); const dx = (ev.clientX - p0.x) / l.scale, dy = (ev.clientY - p0.y) / l.scale; const v = vel(samples, l.scale, ev.timeStamp);
           if (scrub && events['on:scrub-end']) fire('on:scrub-end', l);
           if (panning) fire('on:pan-end', { ...l, dx, dy, vx: v.x, vy: v.y });
           // swipe = a flick (≥ 0.3 px/ms over ≥ 12 px) or a long enough stroke (≥ 40 px), along a dominant axis
@@ -314,8 +312,10 @@ export const GestureMixin = {
 };
 
 // finger velocity over the last ~90 ms, px/ms in layer space
-function vel(samples, scale = 1) {
-  if (samples.length < 2) return { x: 0, y: 0 };
+// velocity over the last ~90 ms of moves (the up event repeats the last position, so it is not a sample);
+// a finger that stopped before lifting (> 100 ms since the last move) has no velocity — like Android's VelocityTracker
+function vel(samples, scale = 1, upT) {
+  if (samples.length < 2 || (upT != null && upT - samples[samples.length - 1].t > 100)) return { x: 0, y: 0 };
   const a = samples[0], b = samples[samples.length - 1]; const dt = Math.max(8, b.t - a.t);
   return { x: (b.x - a.x) / scale / dt, y: (b.y - a.y) / scale / dt };
 }
