@@ -127,8 +127,8 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   fs.mkdirSync(DIST, { recursive: true });
   const runtime = await buildRuntime();
   fs.writeFileSync(path.join(DIST, 'runtime.js'), runtime);
-  const html = await buildEditorHTML({ projects: readExamples(), open: 'orbit-banking.mq' });
+  const html = await buildEditorHTML({ projects: readExamples(), open: 'volta.mq' });
   fs.writeFileSync(path.join(DIST, 'maquette.html'), html);
-  fs.writeFileSync(path.join(DIST, 'maquette-artifact.html'), await buildEditorHTML({ projects: readExamples(), open: 'orbit-banking.mq', artifact: true }));
+  fs.writeFileSync(path.join(DIST, 'maquette-artifact.html'), await buildEditorHTML({ projects: readExamples(), open: 'volta.mq', artifact: true }));
   console.log(`dist/runtime.js ${(runtime.length / 1024).toFixed(0)} Ko · dist/maquette.html ${(html.length / 1024).toFixed(0)} Ko`);
 }
