@@ -1,7 +1,8 @@
 // DOM renderer: Maquette node tree -> live HTML elements.
 import { Scope, interp, evaluate } from './expr.js';
 import { DEVICES, splitTop, withAlpha, parseColor, coerce } from './project.js';
-import { resolveColorFns } from './color.js';
+import { resolveColorFns, shade as shadeC, parseColor as parseC, toCss as toCssC } from './color.js';
+const shadeColor = (c, p) => { const v = parseC(c); if (!v) throw new Error('not a colour'); return toCssC(shadeC(v, p / 100)); };
 import { VECTOR_TAGS, nodePath, boxOf, booleanSubs, buildVector, buildTextPath, gooFilterSvg, maskCss, threeD, parseShapeSpec } from './vector.js';
 import { shapePath, serializePath } from './pathkit.js';
 import { textOf } from './parse.js';
@@ -458,7 +459,12 @@ export function cssFor(tag, a, parentLayout, ctx, isText) {
   if (tf.length) s.transform = tf.join(' ');
   if (a.origin) s.transformOrigin = a.origin;
   const depth = threeD(a, s);
-  if (depth) { if (isText) s.textShadow = [s.textShadow, depth].filter(Boolean).join(', '); else s.boxShadow = [s.boxShadow, depth].filter(Boolean).join(', '); }
+  if (depth && VECTOR_TAGS.has(tag) && tag !== 'textpath') {
+    // vectors: chained 1px drop-shadows extrude the real silhouette (crisp, opaque side colour)
+    const n = Math.min(32, Math.round(num(a.depth))); const [dx, dy] = String(a['depth-dir'] || '1 1').split(/\s+/).map(Number);
+    let col = a['depth-color']; if (!col) { try { col = shadeColor(String(a.fill || '#888'), 28); } catch { col = '#333'; } }
+    s.filter = [s.filter, Array.from({ length: n }, () => `drop-shadow(${dx}px ${dy}px 0 ${col})`).join(' ')].filter(Boolean).join(' ');
+  } else if (depth) { if (isText) s.textShadow = [s.textShadow, depth].filter(Boolean).join(', '); else s.boxShadow = [s.boxShadow, depth].filter(Boolean).join(', '); }
   if (a.tilt || a.preserve3d) s.transformStyle = 'preserve-3d';
   if (a.mask && a.mask !== true) { const m = maskCss(a.mask); if (m) { s.webkitMaskImage = m.image; s.maskImage = m.image; s.webkitMaskSize = m.size; s.maskSize = m.size; s.webkitMaskRepeat = 'no-repeat'; s.maskRepeat = 'no-repeat'; } }
 

@@ -110,6 +110,51 @@ C'est la source de vérité : l'éditeur visuel le lit et le réécrit, la CLI l
 - Préfixes conditionnels : `dark:fill=…` (mode), `md:cols=3` (largeur d'écran ≥ sm 640 / md 768 / lg 1024 / xl 1280), `hover:` `press:` `focus:` (états interactifs, avec transition auto).
 - Le kit fournit des tokens par défaut (`primary on-primary primary-soft bg surface surface-2 text muted border danger success warning radius`) ; le projet peut les redéfinir.
 
+## Vecteurs, formes et 3D
+
+Tout ce qui se dessine dans Figma (formes, plume, booléens, texte sur chemin) existe en texte, et reste éditable à la souris.
+
+```xml
+<!-- formes paramétriques (rig) : chaque paramètre est un attribut, et une poignée orange sur le canvas -->
+<shape kind=star points=6 inner=0.5 radius=4 w=120 h=120 fill=$primary/>
+<shape kind=squircle n=5 w=96 h=96 fill={linear(135, $brand-300, $brand-600)}/>
+<shape kind=ellipse start=-90 sweep=270 ratio=0.7 w=80 h=80 fill=$accent/>   <!-- arc / jauge / donut -->
+<shape kind=blob seed=7 wobble=0.3 w=200 h=180 fill=alpha($primary,20) morph="blob seed=12" loop="morph 3s"/>
+```
+
+| `kind` | paramètres (défaut) |
+|---|---|
+| `rect` | `radius` (0, ou « 8 8 0 0 »), `smoothing` (0–1, coins continus iOS) |
+| `squircle` | `n` (4.5) |
+| `ellipse` | `start`, `sweep` (360), `ratio` (trou intérieur 0–1) |
+| `ring` | `ratio` (0.6), `start`, `sweep` |
+| `polygon` | `sides` (6), `radius`, `rotate` (-90) |
+| `triangle` · `chevron` · `cross` · `arrow` | `radius` ; `thickness` ; `head`/`shaft` |
+| `star` · `burst` | `points`, `inner`/`depth`, `radius` |
+| `heart` · `line` · `spiral` (`turns`) · `wave` (`waves`, `amp`) · `gear` (`teeth`, `depth`, `hole`) · `bubble` (`radius`, `tail`) · `blob` (`seed`, `points`, `wobble`) | |
+
+```xml
+<!-- tracé libre : syntaxe SVG `d`, coordonnées locales à la boîte w×h -->
+<vector w=120 h=80 d="M0 80C20 0 100 0 120 80" stroke="3 $primary" cap=round end=arrow fill=none/>
+
+<!-- booléens (Figma : Union / Soustraire / Intersection / Exclure) ; enfants positionnés en x/y -->
+<boolean op=subtract w=120 h=120 fill=$primary>
+  <shape kind=squircle w=120 h=120/>
+  <ellipse x=40 y=40 w=40 h=40/>            <!-- contre-forme -->
+</boolean>
+
+<!-- texte sur chemin -->
+<textpath path="ellipse" w=160 h=160 size=13 ls=4 color=$muted>BADGE · ÉDITION LIMITÉE ·</textpath>
+```
+
+- **Contour** : `stroke="2 $primary inside|outside"`, `dash="6 4"`, `cap=round|square`, `join=round|bevel`, `start=`/`end=` `arrow|triangle|circle|square|bar`, `fill-rule=evenodd` pour les contre-formes.
+- **Masques** (tout élément) : `mask="star points=6"`, `mask="blob seed=3"`, `mask="fade bottom|edges"`.
+- **Fusion de formes** : `goo=10` sur un conteneur fond les enfants qui se touchent (métaballes ; à animer pour un effet liquide).
+- **Morphing** : `morph="heart"` (forme cible) + `loop="morph 2s"`, ou deux écrans dont un vecteur nommé change de `d` (smart animate interpole le tracé).
+- **Pseudo-3D** : `tilt="20 -12"` (rotateX rotateY [rotateZ]), `perspective=900`, `skew="8 0"`, `depth=8` (extrusion de la vraie silhouette, `depth-color`, `depth-dir="1 1"`), `tilt=pointer` (suit le pointeur).
+
+**Dans l'éditeur** : outil Formes (S) avec un menu de 15 formes, Plume (P : clic = angle, glisser = courbe, clic sur le premier point = fermer), Crayon (Maj+P : tracé lissé automatiquement). Double-clic ou Entrée sur une forme = édition des points (glisser un point ou une poignée, Alt casse la symétrie, clic sur le tracé ajoute un point, double-clic bascule angle/courbe, Suppr retire). Les losanges orange sont les poignées de rig (branches d'étoile, arc, rayon…). Sélection multiple → Union / Soustraire / Intersection / Exclure ; Ctrl+E aplatit en vecteur. Panneaux Forme, Tracé (Lisser, Simplifier, Miroirs), 3D (presets Carte posée / Isométrique / Relief) et Masque & fusion.
+
 ## Composants
 
 ```xml

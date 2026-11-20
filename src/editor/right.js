@@ -42,7 +42,7 @@ export class RightPanel {
     b.appendChild(sec('Projet', h('div.kv', null, h('span', null, 'Nom'), h('b', null, p.name)), h('div.kv', null, h('span', null, 'Écrans'), h('b', null, p.screens().length)), h('div.kv', null, h('span', null, 'Composants'), h('b', null, Object.values(p.components).filter((c) => !c.fromKit).length + ' (+ kit)')), h('div.kv', null, h('span', null, 'Modes'), h('b', null, p.modes.join(' · ')))));
     b.appendChild(sec('Raccourcis', ...[
       ['V / H', 'Déplacer / Main'], ['F R O T', 'Frame, Rect, Ellipse, Texte'], ['I N', 'Image, Note'], ['Ctrl+G', 'Grouper (stack)'], ['Maj+A', 'Auto layout (col)'], ['Ctrl+Alt+K', 'Créer un composant'],
-      ['Ctrl+D', 'Dupliquer'], ['Alt+glisser', 'Dupliquer en déplaçant'], ['Alt+survol', 'Mesurer les distances'], ['Entrée / Maj+Entrée', 'Enfant / parent'], ['Maj+1 / Maj+2', 'Tout voir / sélection'], ['P', 'Mode prototype'], ['Ctrl+Entrée', 'Présenter'], ['Ctrl+/', 'Code complet'],
+      ['Ctrl+D', 'Dupliquer'], ['Alt+glisser', 'Dupliquer en déplaçant'], ['Alt+survol', 'Mesurer les distances'], ['Entrée / Maj+Entrée', 'Enfant / parent'], ['Maj+1 / Maj+2', 'Tout voir / sélection'], ['Maj+E', 'Mode prototype'], ['P / Maj+P', 'Plume / crayon'], ['S', 'Formes'], ['Entrée', 'Éditer les points'], ['Ctrl+E', 'Aplatir'], ['Ctrl+Entrée', 'Présenter'], ['Ctrl+/', 'Code complet'],
     ].map(([k, v]) => h('div.kv', null, h('kbd', null, k), h('span', null, v)))));
   }
 
@@ -122,6 +122,57 @@ export class RightPanel {
     b.appendChild(sec('Apparence', ...app_rows));
     if (n.tag !== 'text' && n.tag !== 'icon') b.appendChild(sec('Remplissage', colorField(app, a.fill ?? a.bg, (v) => set('fill', v), 'fill')));
     if (n.tag !== 'text' && n.tag !== 'icon') b.appendChild(sec('Contour', input('stroke', a.stroke || '', (v) => set('stroke', v || null), { placeholder: '1 $border inside', mono: true }), h('div.chips', null, ['1 $border', '1.5 $primary', '2 #000 dashed', '1 rgba(255,255,255,.12)'].map((v) => h('button.chip', { onclick: () => set('stroke', v) }, v)))));
+    // ---- vector: shape parameters (rig), path, booleans, stroke details
+    if (!multi && n.tag === 'shape') {
+      const S = MQ.Path.SHAPES; const kind = a.kind || 'rect'; const def = (S[kind] || S.rect).params;
+      const rows = [h('div.prow', null, h('label', null, 'Type'), select(MQ.Path.SHAPE_KINDS.map((k) => [k, k]), kind, (v) => { const keep = {}; for (const k of Object.keys(S[kind].params)) keep[k] = null; setMany({ ...keep, kind: v }); }))];
+      const ks = Object.keys(def);
+      for (let i = 0; i < ks.length; i += 2) rows.push(h('div.grid2', null, ...ks.slice(i, i + 2).map((k) => num(k, a[k] ?? def[k], (v) => set(k, v === def[k] ? null : v)))));
+      if (kind === 'blob') rows.push(h('button.btn.ghost', { onclick: () => set('seed', Math.floor(Math.random() * 999)) }, icon('dices', 13), 'Nouvelle forme aléatoire'));
+      rows.push(h('div.hint', null, 'Les losanges orange sur le canvas sont des poignées de rig : glisse-les. Double-clic ou Entrée : éditer les points.'));
+      b.appendChild(sec('Forme', ...rows));
+    }
+    if (!multi && ['vector', 'shape', 'boolean', 'path'].includes(n.tag)) {
+      const rows = [h('div.chips', null,
+        h('button.chip', { onclick: () => this.hooks.editPoints(n.id) }, icon('spline', 12), ' Éditer les points'),
+        n.tag !== 'vector' ? h('button.chip', { onclick: () => this.hooks.flatten(n.id) }, icon('layers-2', 12), ' Aplatir') : null,
+        n.tag === 'vector' ? h('button.chip', { onclick: () => this.hooks.pathOp(n.id, 'smooth') }, icon('spline', 12), ' Lisser') : null,
+        n.tag === 'vector' ? h('button.chip', { onclick: () => this.hooks.pathOp(n.id, 'simplify') }, icon('minimize-2', 12), ' Simplifier') : null,
+        n.tag === 'vector' ? h('button.chip', { onclick: () => this.hooks.pathOp(n.id, 'flipx') }, icon('flip-horizontal-2', 12), ' Miroir H') : null,
+        n.tag === 'vector' ? h('button.chip', { onclick: () => this.hooks.pathOp(n.id, 'flipy') }, icon('flip-vertical-2', 12), ' Miroir V') : null)];
+      if (n.tag === 'boolean') rows.unshift(seg([['union', 'squares-unite', 'Union'], ['subtract', 'squares-subtract', 'Soustraire'], ['intersect', 'squares-intersect', 'Intersection'], ['exclude', 'squares-exclude', 'Exclure']], a.op || 'union', (v) => set('op', v)));
+      rows.push(h('div.prow', null, h('label', null, 'Règle de remplissage'), select([['', 'nonzero'], ['evenodd', 'evenodd (contre-formes)']], a['fill-rule'] || '', (v) => set('fill-rule', v || null))));
+      rows.push(h('div.grid2', null,
+        h('div.prow', null, select([['', 'Extrémité'], ['round', 'Ronde'], ['square', 'Carrée'], ['butt', 'Plate']], a.cap || '', (v) => set('cap', v || null))),
+        h('div.prow', null, select([['', 'Jointure'], ['round', 'Ronde'], ['bevel', 'Biseau'], ['miter', 'Angle']], a.join || '', (v) => set('join', v || null)))));
+      rows.push(h('div.grid2', null,
+        h('div.prow', null, select([['', 'Début'], ['arrow', 'Flèche'], ['triangle', 'Triangle'], ['circle', 'Cercle'], ['square', 'Carré'], ['bar', 'Barre']], a.start && a.start !== true ? a.start : '', (v) => set('start', v || null))),
+        h('div.prow', null, select([['', 'Fin'], ['arrow', 'Flèche'], ['triangle', 'Triangle'], ['circle', 'Cercle'], ['square', 'Carré'], ['bar', 'Barre']], a.end || '', (v) => set('end', v || null)))));
+      rows.push(h('div.prow', null, h('label', null, 'Pointillés'), input('dash', a.dash || '', (v) => set('dash', v || null), { placeholder: '6 4' })));
+      rows.push(h('div.prow', null, h('label', null, 'Morph vers'), input('morph', a.morph || '', (v) => set('morph', v || null), { placeholder: 'blob seed=9 | heart', mono: true })));
+      b.appendChild(sec(n.tag === 'boolean' ? 'Booléen & tracé' : 'Tracé', ...rows));
+    }
+    if (multi && nodes.every((x) => ['vector', 'shape', 'boolean', 'rect', 'ellipse', 'path'].includes(x.tag))) {
+      b.appendChild(sec('Booléens', seg([['union', 'squares-unite', 'Union'], ['subtract', 'squares-subtract', 'Soustraire'], ['intersect', 'squares-intersect', 'Intersection'], ['exclude', 'squares-exclude', 'Exclure']], '', (v) => this.hooks.booleanOp(v)), h('div.hint', null, 'Le résultat reste un groupe <boolean> éditable ; « Aplatir » (Ctrl+E) le fige en vecteur.')));
+    }
+    // ---- pseudo-3D, masks, fusion
+    if (!multi && n.tag !== 'screen') {
+      const [rx = 0, ry = 0] = a.tilt && a.tilt !== 'pointer' && a.tilt !== true ? String(a.tilt).split(/\s+/).map(Number) : [];
+      const [kx = 0, ky = 0] = a.skew ? String(a.skew).split(/\s+/).map(Number) : [];
+      const rows = [
+        h('div.grid2', null, num('Incl. X', rx, (v) => set('tilt', v || ry ? `${v} ${ry}` : null), '°'), num('Incl. Y', ry, (v) => set('tilt', v || rx ? `${rx} ${v}` : null), '°')),
+        h('div.grid2', null, num('Biais X', kx, (v) => set('skew', v || ky ? `${v} ${ky}` : null), '°'), num('Biais Y', ky, (v) => set('skew', v || kx ? `${kx} ${v}` : null), '°')),
+        h('div.grid2', null, numOpt('Profondeur', a.depth, (v) => set('depth', v)), numOpt('Perspective', a.perspective, (v) => set('perspective', v))),
+        h('div.prow', null, h('label', null, 'Couleur de tranche'), colorField(app, a['depth-color'], (v) => set('depth-color', v), 'depth-color', true)),
+        h('div.prow', null, h('label', null, 'Suit le pointeur'), toggle(a.tilt === 'pointer', (v) => set('tilt', v ? 'pointer' : null))),
+        h('div.chips', null, [['Carte posée', { tilt: '24 0', depth: null }], ['Isométrique', { tilt: '55 0 -45', depth: '8' }], ['Relief', { depth: '6', 'depth-color': null }], ['Aucun', { tilt: null, skew: null, depth: null, perspective: null, 'depth-color': null }]].map(([l, v]) => h('button.chip', { onclick: () => setMany(v) }, l))),
+      ];
+      b.appendChild(sec('3D', ...rows));
+      const mrows = [h('div.prow', null, h('label', null, 'Masque'), input('mask', a.mask || '', (v) => set('mask', v || null), { placeholder: 'star points=6 · fade bottom', mono: true })),
+        h('div.chips', null, ['circle', 'squircle', 'blob seed=4', 'star points=8 inner=0.7', 'fade bottom', 'fade edges'].map((v) => h('button.chip', { onclick: () => set('mask', v) }, v)))];
+      if (isContainer(n)) mrows.push(h('div.prow', null, h('label', null, 'Fusion goo (métaballes)'), numOpt('force', a.goo === true ? 10 : a.goo, (v) => set('goo', v))));
+      b.appendChild(sec('Masque & fusion', ...mrows));
+    }
     b.appendChild(sec('Effets',
       h('div.prow', null, h('label', null, 'Ombre'), select([['', 'Aucune'], ['xs', 'XS'], ['sm', 'S'], ['md', 'M'], ['lg', 'L'], ['xl', 'XL'], ['2xl', '2XL'], ['inner', 'Intérieure'], ['custom', 'Personnalisée…']], ['xs', 'sm', 'md', 'lg', 'xl', '2xl', 'inner'].includes(a.shadow) || !a.shadow ? a.shadow || '' : 'custom', async (v) => { if (v === 'custom') { const c = await ask('Ombre personnalisée', a.shadow || '0 8 24 rgba(0,0,0,.2)', 'x y flou [étendue] couleur ; plusieurs ombres séparées par +'); if (c) set('shadow', c); } else set('shadow', v || null); })),
       h('div.grid2', null, numOpt('Flou', a.blur, (v) => set('blur', v)), numOpt('Flou fond', a.bgblur, (v) => set('bgblur', v))),
@@ -258,7 +309,7 @@ export class RightPanel {
     const evs = Object.entries(n.attrs).filter(([k]) => k.startsWith('on:') || k.startsWith('@'));
     const rows = evs.map(([k, v]) => this.interactionRow(n, k, String(v), screens, comps));
     b.appendChild(sec('Interactions', ...rows, h('button.btn', { onclick: () => app.change(() => { const free = TRIGGERS.find(([t]) => !n.attrs[t]); n.attrs[free ? free[0] : 'on:click'] = screens[0] ? `go ${q(screens.find((s) => s !== (app.project.screenOf(n.id) || {}).attrs?.name) || screens[0])} smart` : 'back'; }) }, icon('plus', 13), 'Ajouter une interaction'),
-      h('div.hint', null, 'Astuce : en mode Prototype (touche P), tire la pastille bleue d\'un élément vers un écran pour créer un lien.')));
+      h('div.hint', null, 'Astuce : en mode Prototype (Maj+E), tire la pastille bleue d\'un élément vers un écran pour créer un lien.')));
     if (n.tag === 'screen') b.appendChild(sec('Écran', h('div.prow', null, h('label', null, 'Écran de départ'), toggle(!!n.attrs.start, (v) => app.change(() => { for (const s of app.project.screens()) delete s.attrs.start; if (v) n.attrs.start = true; }))), h('button.btn', { onclick: () => this.hooks.play(n.attrs.name) }, icon('play', 13), 'Présenter depuis cet écran')));
     b.appendChild(sec('Référence actions', h('pre.ref', null, `go Écran [transition] [ms] [easing]
 back | close | restart

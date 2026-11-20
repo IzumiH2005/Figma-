@@ -1,6 +1,7 @@
 // Infinite canvas: rendering, selection, drag/reorder/reparent, resize, guides, drawing tools, prototype noodles
 import { MQ, h, clear, menu, toast } from './dom.js';
 import { isContainer, uniqueName } from './state.js';
+import { VectorEditor } from './vectoredit.js';
 
 const SNAP = 6;
 const round = (v) => Math.round(v);
@@ -16,6 +17,7 @@ export class Canvas {
     this.root.append(this.world, this.overlay);
     this.items = new Map(); this.links = [];
     this.drag = null; this.spaceDown = false;
+    this.vedit = new VectorEditor(this, app);
     this.bind();
   }
 
@@ -93,7 +95,7 @@ export class Canvas {
         const r = this.local(el.getBoundingClientRect());
         const b = h('div.ov.cv-sel' + (k > 0 ? '.ghost' : ''), { style: box(r) });
         this.overlay.appendChild(b);
-        if (k === 0 && single && !this.drag?.reorder) {
+        if (k === 0 && single && !this.drag?.reorder && !this.vedit.active) {
           for (const hd of ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w']) {
             const hh = h('div.ov.cv-handle.' + hd); hh.dataset.handle = hd;
             const [px, py] = { nw: [0, 0], n: [0.5, 0], ne: [1, 0], e: [1, 0.5], se: [1, 1], s: [0.5, 1], sw: [0, 1], w: [0, 0.5] }[hd];
@@ -128,6 +130,7 @@ export class Canvas {
     if (this.drag && this.drag.draw) this.overlay.appendChild(h('div.ov.cv-draw', { style: box(this.drag.draw) }));
     if (this.drag && this.drag.noodle) { const { a, b } = this.drag.noodle; this.curve(a.x, a.y, b.x, b.y, true); }
     if (this.measure) this.drawMeasure(this.measure);
+    this.vedit.draw(this.overlay, this.svg);
     if (this.trails && this.trails.length) {
       const NS = 'http://www.w3.org/2000/svg'; const R = this.rect;
       const toS = (p) => ({ x: p.x * this.app.zoom + this.app.panX, y: p.y * this.app.zoom + this.app.panY });
@@ -273,6 +276,7 @@ export class Canvas {
     if (document.activeElement && document.activeElement !== document.body && !this.root.contains(document.activeElement)) document.activeElement.blur();
     if (e.button === 1 || this.spaceDown || app.tool === 'hand') { this.drag = { pan: true, sx: e.clientX, sy: e.clientY, px: app.panX, py: app.panY }; this.root.classList.add('panning'); return; }
     if (e.button !== 0) return;
+    if (this.vedit.down(e)) return;
     // handles / noodle / labels
     if (t.dataset && t.dataset.handle) return this.startResize(e, t.dataset.handle);
     if (t.dataset && t.dataset.noodle) { const r = this.local(t.getBoundingClientRect()); this.drag = { noodle: { a: { x: r.x + r.w / 2, y: r.y + r.h / 2 }, b: { x: r.x, y: r.y } }, from: t.dataset.noodle }; return; }
@@ -328,6 +332,7 @@ export class Canvas {
   }
 
   move(e) {
+    if (this.vedit.move(e)) return;
     const app = this.app; const d = this.drag;
     if (!d) {
       if (this.editing || !this.root.contains(e.target) && !this.overlay.contains(e.target)) return;
@@ -493,6 +498,7 @@ export class Canvas {
   }
 
   up(e) {
+    if (this.vedit.up(e)) return;
     const app = this.app; const d = this.drag;
     if (!d) return;
     this.drag = null; this.root.classList.remove('panning');
@@ -550,7 +556,8 @@ export class Canvas {
     const app = this.app; const z = app.zoom;
     let { w, h: hh } = d.draw; const click = w < 4 && hh < 4;
     const tool = d.tool;
-    const defaults = { frame: [200, 120], rect: [120, 80], ellipse: [80, 80], text: [0, 0], image: [240, 160], note: [240, 0], icon: [24, 24] }[tool] || [100, 100];
+    if (tool.startsWith('shape:')) { d.kind = tool.slice(6); d.tool = 'shape'; return this.finishDraw({ ...d, tool: 'shape' }, e); }
+    const defaults = { shape: [120, 120], frame: [200, 120], rect: [120, 80], ellipse: [80, 80], text: [0, 0], image: [240, 160], note: [240, 0], icon: [24, 24] }[tool] || [100, 100];
     w = click ? defaults[0] : round(w / z); hh = click ? defaults[1] : round(hh / z);
     const make = () => {
       const id = MQ.newId();
@@ -561,6 +568,7 @@ export class Canvas {
         case 'image': return { id, tag: 'image', attrs: { src: 'gen:mountains/' + Math.floor(Math.random() * 99), w: String(w), h: String(hh), radius: '12' }, children: [] };
         case 'note': return { id, tag: 'note', attrs: { w: String(w) }, children: [{ id: MQ.newId(), tag: '#text', text: 'Note…' }] };
         case 'icon': return { id, tag: 'icon', attrs: { name: 'star', size: '24' }, children: [] };
+        case 'shape': return { id, tag: 'shape', attrs: { kind: d.kind || 'star', w: String(w), h: String(hh), fill: '#6E56F8' }, children: [] };
         default: return { id, tag: 'text', attrs: click ? {} : { w: String(w) }, children: [{ id: MQ.newId(), tag: '#text', text: 'Texte' }] };
       }
     };
@@ -590,6 +598,8 @@ export class Canvas {
 
   dbl(e) {
     const app = this.app;
+    if (this.vedit.dbl(e)) return;
+    { const s0 = app.selNodes[0]; const ch0 = this.chainAt(e.target); if (s0 && ['vector', 'shape', 'boolean', 'path'].includes(s0.tag) && ch0.includes(s0.id)) { this.vedit.enter(s0.id); return; } }
     if (e.target.dataset && e.target.dataset.screenLabel) return this.renameScreen(e.target.dataset.screenLabel, e.target);
     const chain = this.chainAt(e.target);
     if (!chain.length) return;

@@ -368,3 +368,17 @@ body[data-view="contrast-low"] .cv-world, body[data-view="contrast-low"] .play-h
 .cv-trail { fill: none; stroke-width: 1.5; opacity: .55; }
 .cv-trail-dot { stroke: #fff; stroke-width: 1; }
 .tl-rate, .play-rate { width: auto; }
+
+/* ---------- vector editing */
+.canvas[data-tool="pen"], .canvas[data-tool="pencil"], .canvas[data-tool^="shape:"] { cursor: crosshair; }
+.ve-path { fill: none; stroke: var(--ui-sel); stroke-width: 1.5; }
+.ve-hit { fill: none; stroke: transparent; stroke-width: 12; pointer-events: stroke; cursor: copy; }
+.cv-svg { pointer-events: none; }
+.ve-arm { stroke: var(--ui-sel); stroke-width: 1; opacity: .8; }
+.ve-anchor { position: absolute; width: 9px; height: 9px; margin: -4.5px 0 0 -4.5px; background: #fff; border: 1.5px solid var(--ui-sel); pointer-events: auto; cursor: move; border-radius: 1px; }
+.ve-anchor.smooth { border-radius: 50%; }
+.ve-anchor.sel { background: var(--ui-sel); }
+.ve-handle { position: absolute; width: 7px; height: 7px; margin: -3.5px 0 0 -3.5px; border-radius: 50%; background: #fff; border: 1.5px solid var(--ui-sel); pointer-events: auto; cursor: pointer; }
+.ve-rig { position: absolute; width: 11px; height: 11px; margin: -5.5px 0 0 -5.5px; background: #FFB547; border: 2px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.35); transform: rotate(45deg); pointer-events: auto; cursor: grab; }
+.ve-anchor-svg { fill: #fff; stroke: var(--ui-sel); stroke-width: 1.5; } .ve-anchor-svg.first { fill: var(--ui-sel); }
+.ve-help { position: absolute; background: var(--ui-panel); color: var(--ui-muted); font-size: 11px; padding: 4px 8px; border-radius: 6px; box-shadow: var(--shadow); white-space: nowrap; }

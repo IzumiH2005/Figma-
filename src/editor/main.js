@@ -87,7 +87,10 @@ function boot() {
     itemEl: (id) => canvas.items.get(id),
     setTrails: (t) => { canvas.trails = t; canvas.drawOverlay(); },
     toWorld: (x, y) => canvas.toWorld(x, y),
-    setMarkers: (issues) => { canvas.markers = issues.filter((i) => i.level !== 'info' && i.id); canvas.drawOverlay(); },
+    setMarkers: (issues) => { canvas.markers = issues.filter((i) => i.level !== 'info' && i.id); canvas.drawOverlay(); },    editPoints: (id) => canvas.vedit.enter(id),
+    flatten: (id) => flatten(id),
+    booleanOp: (op) => booleanOp(op),
+    pathOp: (id, op) => pathOp(id, op),
   };
   canvas = new Canvas(app, canvasEl, hooks);
   left = new LeftPanel(app, leftEl, hooks);
@@ -96,7 +99,9 @@ function boot() {
   timeline = new Timeline(app, tlEl, hooks);
 
   // ---------------- topbar
-  const TOOLS = [['move', 'mouse-pointer-2', 'Déplacer (V)'], ['hand', 'hand', 'Main (H)'], ['frame', 'frame', 'Frame / écran (F)'], ['rect', 'square', 'Rectangle (R)'], ['ellipse', 'circle', 'Ellipse (O)'], ['text', 'type', 'Texte (T)'], ['image', 'image', 'Image (I)'], ['note', 'sticky-note', 'Note (N)']];
+  const TOOLS = [['move', 'mouse-pointer-2', 'Déplacer (V)'], ['hand', 'hand', 'Main (H)'], ['frame', 'frame', 'Frame / écran (F)'], ['rect', 'square', 'Rectangle (R)'], ['ellipse', 'circle', 'Ellipse (O)'], ['shapes', 'shapes', 'Formes (étoile, polygone, blob…) (S)'], ['pen', 'pen-tool', 'Plume (P)'], ['pencil', 'pencil', 'Crayon (Maj+P)'], ['text', 'type', 'Texte (T)'], ['image', 'image', 'Image (I)'], ['note', 'sticky-note', 'Note (N)']];
+  const SHAPE_MENU = [['star', 'star', 'Étoile'], ['polygon', 'hexagon', 'Polygone'], ['triangle', 'triangle', 'Triangle'], ['squircle', 'squircle', 'Squircle'], ['blob', 'cloud', 'Blob organique'], ['heart', 'heart', 'Cœur'], ['burst', 'sun', 'Éclat / badge'], ['ring', 'circle-dot', 'Anneau'], ['arrow', 'arrow-right', 'Flèche'], ['chevron', 'chevron-right', 'Chevron'], ['cross', 'plus', 'Croix'], ['bubble', 'message-square', 'Bulle'], ['wave', 'waves', 'Vague'], ['gear', 'cog', 'Engrenage'], ['spiral', 'loader', 'Spirale']];
+  const shapeMenu = (btn) => { const r = btn.getBoundingClientRect(); menu(r.left, r.bottom + 4, SHAPE_MENU.map(([k, ic, l]) => ({ label: l, icon: ic, run: () => { app.tool = 'shape:' + k; app.emit('tool'); } }))); };
   const toolBtns = {};
   const zoomLabel = h('button.zoom', { onclick: (e) => { const r = e.currentTarget.getBoundingClientRect(); menu(r.left, r.bottom + 4, [{ label: 'Tout voir', key: 'Maj+1', run: () => canvas.zoomToFit() }, { label: 'Zoom sélection', key: 'Maj+2', run: () => canvas.zoomToFit(app.selection) }, { label: '50 %', run: () => canvas.zoomTo(0.5) }, { label: '100 %', key: 'Maj+0', run: () => canvas.zoomTo(1) }, { label: '200 %', run: () => canvas.zoomTo(2) }]); } }, '50%');
   const fileBtn = h('button.filebtn', { onclick: (e) => fileMenu(e) });
@@ -107,7 +112,7 @@ function boot() {
     topbar.append(
       h('div.brand', null, h('span.logo', { html: '<svg width="22" height="22" viewBox="0 0 24 24"><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8B7BFF"/><stop offset="1" stop-color="#FF6BB5"/></linearGradient></defs><rect x="2" y="2" width="9" height="9" rx="3" fill="url(#lg)"/><rect x="13" y="2" width="9" height="9" rx="4.5" fill="#fff" opacity=".9"/><rect x="2" y="13" width="9" height="9" rx="2" fill="#fff" opacity=".55"/><path d="M13 13h9v9h-5a4 4 0 0 1-4-4z" fill="url(#lg)"/></svg>' }), h('b', null, 'Maquette')),
       fileBtn,
-      h('div.tools', null, TOOLS.map(([t, ic, title]) => (toolBtns[t] = h('button.tb' + (app.tool === t ? '.on' : ''), { title, onclick: () => { app.tool = t; app.emit('tool'); } }, icon(ic, 16))))),
+      h('div.tools', null, TOOLS.map(([t, ic, title]) => (toolBtns[t] = h('button.tb' + (app.tool === t || (t === 'shapes' && app.tool.startsWith('shape:')) ? '.on' : ''), { title, onclick: (e) => { if (t === 'shapes') return shapeMenu(e.currentTarget); app.tool = t; app.emit('tool'); } }, icon(ic, 16))))),
       h('span.grow'),
       h('div.pagename', null, h('span.muted', null, app.project.name), ' / ', app.page ? app.page.attrs.name || 'Page' : ''),
       h('span.grow'),
@@ -203,6 +208,13 @@ function boot() {
       { label: 'Envelopper en colonne', key: 'Maj+A', icon: 'rows-3', disabled: !n || n.tag === 'screen', run: () => wrap('col', { gap: '8' }) },
       { label: 'Dégrouper', key: 'Ctrl+Maj+G', icon: 'ungroup', disabled: !n || !isContainer(n) || n.tag === 'screen', run: () => unwrap() },
       '-',
+      n && ['vector', 'shape', 'rect', 'ellipse', 'boolean'].includes(n.tag) ? { label: 'Éditer les points', key: 'Entrée', icon: 'spline', run: () => canvas.vedit.enter(n.id) } : null,
+      sel.length > 1 ? { label: 'Union', icon: 'squares-unite', run: () => booleanOp('union') } : null,
+      sel.length > 1 ? { label: 'Soustraire', icon: 'squares-subtract', run: () => booleanOp('subtract') } : null,
+      sel.length > 1 ? { label: 'Intersection', icon: 'squares-intersect', run: () => booleanOp('intersect') } : null,
+      sel.length > 1 ? { label: 'Exclure', icon: 'squares-exclude', run: () => booleanOp('exclude') } : null,
+      n && ['shape', 'boolean', 'rect', 'ellipse', 'textpath'].includes(n.tag) ? { label: 'Aplatir en vecteur', key: 'Ctrl+E', icon: 'layers-2', run: () => flatten(n.id) } : null,
+      '-',
       { label: 'Créer un composant', key: 'Ctrl+Alt+K', icon: 'component', disabled: !n || n.tag === 'screen' || isComp, run: () => makeComponent() },
       isComp && !isComp.fromKit ? { label: `Éditer ${n.tag}`, icon: 'pencil', run: () => editComponent(n.tag) } : null,
       isComp ? { label: 'Détacher l\'instance', icon: 'unlink', run: () => detach() } : null,
@@ -213,6 +225,37 @@ function boot() {
       n && n.tag === 'screen' ? { label: 'Présenter depuis cet écran', icon: 'play', run: () => play.open(n.attrs.name) } : null,
       { label: 'Voir le code', icon: 'code-xml', disabled: !n, run: () => { right.tab = 'code'; right.render(); } },
     ]);
+  }
+  // boolean operations on the selection (Figma: Union / Subtract / Intersect / Exclude)
+  function booleanOp(op) {
+    const nodes = app.selNodes.filter((n) => n.tag !== 'screen'); if (nodes.length < 2) return;
+    const parent = app.parent(nodes[0].id); if (!nodes.every((n) => app.parent(n.id) === parent)) { toast('Sélectionne des formes du même parent'); return; }
+    const z = app.zoom; const pel = canvas.elOf(nodes[0].id).offsetParent || canvas.elOf(nodes[0].id).parentElement; const pr = pel.getBoundingClientRect();
+    const boxes = nodes.map((n) => { const r = canvas.elOf(n.id).getBoundingClientRect(); return { n, x: (r.left - pr.left) / z, y: (r.top - pr.top) / z, w: r.width / z, h: r.height / z }; });
+    const x0 = Math.min(...boxes.map((b) => b.x)), y0 = Math.min(...boxes.map((b) => b.y)), x1 = Math.max(...boxes.map((b) => b.x + b.w)), y1 = Math.max(...boxes.map((b) => b.y + b.h));
+    app.change(() => {
+      const first = nodes[0];
+      const b = { id: MQ.newId(), tag: 'boolean', attrs: { op, x: String(Math.round(x0)), y: String(Math.round(y0)), w: String(Math.round(x1 - x0)), h: String(Math.round(y1 - y0)), fill: first.attrs.fill || '#6E56F8' }, children: [] };
+      if (first.attrs.stroke) b.attrs.stroke = first.attrs.stroke;
+      const sib = app.siblings(first.id); const idx = sib.indexOf(first);
+      for (const bx of boxes) { const c = bx.n; app.remove([c.id]); c.attrs.x = String(Math.round(bx.x - x0)); c.attrs.y = String(Math.round(bx.y - y0)); if (!/^\d/.test(String(c.attrs.w))) c.attrs.w = String(Math.round(bx.w)); if (!/^\d/.test(String(c.attrs.h))) c.attrs.h = String(Math.round(bx.h)); for (const k of ['absolute', 'place', 'top', 'left', 'right', 'bottom']) delete c.attrs[k]; b.children.push(c); }
+      sib.splice(Math.min(idx, sib.length), 0, b); app.selection = [b.id];
+    });
+    toast(`Booléen « ${op} » créé (reste éditable ; « Aplatir » le fige)`);
+  }
+  function pathOp(id, op) {
+    const n = app.node(id); if (!n || !n.attrs.d) return; const P = MQ.Path; let subs = P.parsePath(n.attrs.d);
+    const w = +n.attrs.w || P.bbox(subs).w, hh = +n.attrs.h || P.bbox(subs).h;
+    // Lisser: every anchor becomes a smooth (Catmull-Rom) node; Simplifier: resample + RDP + smooth (fewer points)
+    if (op === 'smooth') subs = subs.flatMap((s) => P.smoothPath(s.nodes.map((q) => [q.x, q.y]), s.closed, 1));
+    if (op === 'simplify') subs = P.flatten(subs, 0.5).flatMap((f) => { let pts = P.simplify(f.pts, Math.max(1.5, Math.max(w, hh) / 60)); if (f.closed && pts.length > 3) pts = pts.slice(0, -1); return P.smoothPath(pts, f.closed, 1); });
+    if (op === 'flipx') subs = P.transformPath(subs, (q) => ({ x: w - q.x, y: q.y }));
+    if (op === 'flipy') subs = P.transformPath(subs, (q) => ({ x: q.x, y: hh - q.y }));
+    app.change(() => { n.attrs.d = P.serializePath(subs); });
+  }
+  function flatten(id) {
+    const n = app.node(id); const el = canvas.elOf(id); if (!n || !el || !el._path) return;
+    app.change(() => canvas.vedit.toVector(n, el)); toast('Aplati en vecteur');
   }
   function copy() { if (!app.selection.length) return; app.clipboard = app.selNodes.map((n) => MQ.serializeNode(n)).join('\n'); try { navigator.clipboard.writeText(app.clipboard); } catch (e) { /* */ } toast('Copié'); }
   function paste(text) {
@@ -289,6 +332,7 @@ function boot() {
     if (play.root) return;
     const t = e.target;
     if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+    if (canvas.vedit.key(e)) { e.preventDefault(); canvas.drawOverlay(); return; }
     const mod = e.metaKey || e.ctrlKey; const k = e.key.toLowerCase();
     if (k === ' ') { canvas.spaceDown = true; canvasEl.classList.add('grab'); e.preventDefault(); return; }
     if (mod && k === 'z') { e.preventDefault(); e.shiftKey ? app.redo() : app.undo(); return; }
@@ -301,6 +345,7 @@ function boot() {
     if (mod && e.altKey && k === 'k') { e.preventDefault(); makeComponent(); return; }
     if (mod && e.shiftKey && k === 'g') { e.preventDefault(); unwrap(); return; }
     if (mod && k === 'g') { e.preventDefault(); wrap('stack'); return; }
+    if (mod && k === 'e') { e.preventDefault(); const n = app.selNodes[0]; if (n) flatten(n.id); return; }
     if (mod && k === ']') { reorder(1); return; }
     if (mod && k === '[') { reorder(-1); return; }
     if (mod && k === '/') { e.preventDefault(); code.toggle(); return; }
@@ -311,10 +356,12 @@ function boot() {
     if (e.shiftKey && (e.code === 'Digit2')) { canvas.zoomToFit(app.selection); return; }
     if (e.shiftKey && (e.code === 'Digit0')) { canvas.zoomTo(1); return; }
     if (e.shiftKey && k === 'a') { wrap('col', { gap: '8' }); return; }
+    if (e.shiftKey && k === 'p') { app.tool = 'pencil'; app.emit('tool'); return; }
+    if (e.shiftKey && k === 'e') { app.protoView = !app.protoView; app.emit('proto'); return; }
     if (e.shiftKey && k === 'g') { toggleGrid(); return; }
     if (k === 'delete' || k === 'backspace') { del(); return; }
     if (k === 'escape') { if (app.tool !== 'move') { app.tool = 'move'; app.emit('tool'); } else { const n = app.selNodes[0]; const p = n && app.parent(n.id); app.select(p && p.tag !== 'page' && p.tag !== 'project' ? p.id : []); } return; }
-    if (k === 'enter') { const n = app.selNodes[0]; if (!n) return; if (e.shiftKey) { const p = app.parent(n.id); if (p && p.tag !== 'page' && p.tag !== 'project') app.select(p.id); } else if (n.tag === 'text' || n.tag === 'note') canvas.editText(n.id); else { const c = (n.children || []).filter((x) => x.tag !== '#text'); if (c.length) app.select(c.map((x) => x.id)); } return; }
+    if (k === 'enter') { const n = app.selNodes[0]; if (!n) return; if (['vector', 'shape', 'boolean'].includes(n.tag) && !e.shiftKey) { canvas.vedit.enter(n.id); return; } if (e.shiftKey) { const p = app.parent(n.id); if (p && p.tag !== 'page' && p.tag !== 'project') app.select(p.id); } else if (n.tag === 'text' || n.tag === 'note') canvas.editText(n.id); else { const c = (n.children || []).filter((x) => x.tag !== '#text'); if (c.length) app.select(c.map((x) => x.id)); } return; }
     if (k === 'tab') { e.preventDefault(); const n = app.selNodes[0]; if (!n) return; const sib = app.siblings(n.id).filter((x) => x.tag !== '#text'); const i = sib.indexOf(n); app.select(sib[(i + (e.shiftKey ? -1 : 1) + sib.length) % sib.length].id); return; }
     if (k.startsWith('arrow') && app.selection.length) {
       e.preventDefault(); const step = e.shiftKey ? 10 : 1;
@@ -330,9 +377,9 @@ function boot() {
       return;
     }
     if (mod || e.altKey) return;
-    const toolKeys = { v: 'move', h: 'hand', f: 'frame', r: 'rect', o: 'ellipse', t: 'text', i: 'image', n: 'note' };
+    const toolKeys = { v: 'move', h: 'hand', f: 'frame', r: 'rect', o: 'ellipse', t: 'text', i: 'image', n: 'note', p: 'pen', s: 'shape:star' };
     if (toolKeys[k]) { app.tool = toolKeys[k]; app.emit('tool'); return; }
-    if (k === 'p') { app.protoView = !app.protoView; app.emit('proto'); return; }
+
   });
   addEventListener('keyup', (e) => { if (e.key === ' ') { canvas.spaceDown = false; canvasEl.classList.remove('grab'); } if (e.key === 'Alt') { canvas.measure = null; canvas.drawOverlay(); } });
 
@@ -350,7 +397,7 @@ function boot() {
   // ---------------- reactivity
   let raf = null;
   app.on((what) => {
-    if (what === 'tool') { for (const [t, b] of Object.entries(toolBtns)) b.classList.toggle('on', app.tool === t); canvasEl.dataset.tool = app.tool; return; }
+    if (what === 'tool') { for (const [t, b] of Object.entries(toolBtns)) b.classList.toggle('on', app.tool === t || (t === 'shapes' && app.tool.startsWith('shape:'))); canvasEl.dataset.tool = app.tool; return; }
     if (what === 'selection') { canvas.drawOverlay(); left.render(); right.render(); code.scrollToSelection(); if (timeline.open) timeline.render(); return; }
     if (what === 'proto') { protoBtn.classList.toggle('on', app.protoView); document.body.classList.toggle('proto', app.protoView); if (app.protoView && right.tab === 'design') right.tab = 'proto'; else if (!app.protoView && right.tab === 'proto') right.tab = 'design'; right.render(); canvas.drawOverlay(); return; }
     if (what === 'error') { code.setStatus(); return; }
