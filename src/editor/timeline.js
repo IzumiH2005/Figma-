@@ -34,7 +34,8 @@ export class Timeline {
       h('b', null, app.node(sid).attrs.name), h('span.muted', null, `${this.entries.length} animation(s) · ${Math.round(total)} ms`),
       h('select.sel.tl-rate', { title: 'Vitesse de lecture (ralenti pour vérifier arcs et spacing)', onchange: (e) => { this.rate = +e.target.value; }, onkeydown: (e) => e.stopPropagation() }, [1, 0.5, 0.25, 0.1].map((r) => h('option', { value: r, selected: (this.rate || 1) === r }, r === 1 ? 'Vitesse 1×' : `Ralenti ${r}×`))),
       h('button.btn' + (this.trails ? '.primary' : ''), { title: 'Trajectoires image par image (24 i/s) : vérifie les arcs et le spacing', onclick: () => { this.trails = !this.trails; this.render(); } }, icon('spline', 13), 'Trajectoires'),
-      h('span.grow'), h('span.muted', null, 'Glisse une barre : délai · son bord droit : durée'),
+      h('button.btn' + (app.recorder ? '.rec' : ''), { title: 'Auto-keyframe : chaque modification (position, rotation, opacité, échelle) devient une image clé au temps de la tête de lecture', onclick: () => this.toggleRecord() }, h('span.recdot'), app.recorder ? 'Enregistrement…' : 'Auto-keyframe'),
+      h('span.grow'), h('span.muted', null, app.recorder ? 'Place la tête de lecture puis déplace / tourne / estompe l’élément' : 'Glisse une barre : délai · son bord droit : durée'),
       h('button.mini', { onclick: () => this.toggle(false) }, icon('x', 14)));
     const ruler = h('div.tl-ruler');
     for (let t = 0; t <= total; t += total > 4000 ? 1000 : 250) ruler.appendChild(h('span', { style: { left: scale(t) } }, t >= 1000 ? (t / 1000).toFixed(t % 1000 ? 2 : 0) + 's' : t + 'ms'));
@@ -53,7 +54,14 @@ export class Timeline {
     track.addEventListener('pointerdown', (ev) => { if (ev.target.closest('.tl-bar')) return; const r = rows.getBoundingClientRect(); const seek = (x) => this.seek(Math.max(0, Math.min(1, (x - r.left - 160) / (r.width - 160))) * total); seek(ev.clientX); const mv = (e2) => seek(e2.clientX); const upf = () => { removeEventListener('pointermove', mv); removeEventListener('pointerup', upf); }; addEventListener('pointermove', mv); addEventListener('pointerup', upf); });
     this.root.append(head, track);
     this.hooks.setTrails(this.trails ? this.sampleTrails(total) : []);
-    this.seek(total);
+    this.seek(this.app.recorder ? Math.min(this.t || 0, total) : total);
+  }
+
+  toggleRecord() {
+    const app = this.app;
+    if (app.recorder) { app.recorder = null; this.root.classList.remove('recording'); this.render(); return; }
+    app.recorder = { t: () => this.t || 0, onRecord: (k) => { this.hooks.toast && this.hooks.toast(`${k} image(s) clé(s) à ${Math.round(this.t)} ms`); setTimeout(() => this.render(), 30); } };
+    this.root.classList.add('recording'); this.render(); this.seek(0);
   }
 
   dragBar(bar, e, n, total) {

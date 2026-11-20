@@ -1,5 +1,5 @@
 // Maquette editor bootstrap
-import { MQ, h, icon, clear, toast, store, download, menu, ask } from './dom.js';
+import { MQ, h, icon, clear, toast, store, download, menu, ask, modal } from './dom.js';
 import { App, isContainer, hashStr } from './state.js';
 import { Canvas } from './canvas.js';
 import { LeftPanel } from './left.js';
@@ -96,6 +96,9 @@ function boot() {
     bakeMods: (id) => bakeMods(id),
     shapeBuilder: () => canvas.sbuild.start(app.selection),
     registerTidy: (fn) => { tidyFn = fn; },
+    toast: (m) => toast(m),
+    exportSelectionPNG: () => exportSelectionPNG(),
+    exportSelectionSVG: () => exportSelectionSVG(),
   };
   canvas = new Canvas(app, canvasEl, hooks);
   left = new LeftPanel(app, leftEl, hooks);
@@ -151,6 +154,7 @@ function boot() {
       '-',
       { label: 'Nouveau projet', icon: 'file-plus', run: () => { const name = `projet-${app.files.length + 1}.mq`; app.files.push({ file: name, source: NEW_PROJECT, baseHash: hashStr(NEW_PROJECT), local: true }); store('localfiles', app.files.filter((f) => f.local).map((f) => f.file)); openFile(app.files.length - 1); } },
       { label: 'Importer un .mq…', icon: 'upload', run: () => importFile() },
+      { label: 'Historique des versions…', key: 'Ctrl+Alt+S', icon: 'history', run: () => versions() },
       { label: 'Télécharger le .mq', icon: 'download', run: () => download(app.files[app.fileIndex].file, app.source) },
       app.files[app.fileIndex].draft ? { label: 'Annuler mes modifications locales', icon: 'undo-2', run: () => { const f = app.files[app.fileIndex]; const orig = document.querySelector(`script[data-file="${CSS.escape(f.file)}"]`); if (orig) { f.source = orig.textContent.replace(/<\\\/script/gi, '</script'); f.draft = false; store('draft:' + f.file, null); openFile(app.fileIndex); } } } : null,
     ]);
@@ -168,6 +172,8 @@ function boot() {
       { label: 'Copier le source', icon: 'copy', run: () => { navigator.clipboard && navigator.clipboard.writeText(app.source); toast('Source copiée'); } },
       { label: 'HTML statique de la sélection', icon: 'code', disabled: !app.selection.length, run: () => { const el = canvas.elOf(app.selection[0]); if (el) { navigator.clipboard && navigator.clipboard.writeText(MQ.toStaticHTML(el)); toast('HTML copié'); } } },
       { label: 'PNG de l\'écran sélectionné', icon: 'image', disabled: !selectedScreenName(), run: () => exportPNG(selectedScreenName()) },
+      { label: 'PNG de la sélection', icon: 'image', disabled: !app.selection.length, run: () => exportSelectionPNG() },
+      { label: 'SVG du vecteur sélectionné', icon: 'pen-tool', disabled: !app.selection.length, run: () => exportSelectionSVG() },
     ]);
   }
   function exportPrototype() {
@@ -175,6 +181,46 @@ function boot() {
     const esc = (s) => s.replace(/<\/script/gi, '<\\/script');
     const html = `<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${app.project.name}</title><style>html,body{margin:0;height:100%;background:#0f1014;overflow:hidden}#stage{position:fixed;inset:0}</style></head><body><div id="stage"></div><script type="text/x-maquette" id="src">${esc(app.source)}</script><script>${esc(rt)}</script><script>const p=MQ.loadProject(document.getElementById('src').textContent.replace(/<\\\/script/gi,'</script'));const m=MQ.mountPrototype(p,document.getElementById('stage'),{pad:16});addEventListener('keydown',e=>{if(e.key==='r')m.player.start();if(e.key==='Backspace')m.player.back()});</script></body></html>`;
     download(app.files[app.fileIndex].file.replace(/\.mq$/, '') + '-prototype.html', html, 'text/html');
+  }
+  // rasterize any element (screen or selection) via SVG foreignObject; shown in a dialog (downloads are blocked in artifacts)
+  function rasterize(el, scale = 2) {
+    return new Promise((res, rej) => {
+      const w = el.offsetWidth, hh = el.offsetHeight; const clone = el.cloneNode(true); clone.style.transform = 'none'; clone.style.position = 'static'; clone.style.margin = '0';
+      const css = [...document.querySelectorAll('style')].map((s) => s.textContent).filter((t) => t.includes('mq-')).join('\n');
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w * scale}" height="${hh * scale}"><foreignObject width="${w}" height="${hh}" transform="scale(${scale})"><div xmlns="http://www.w3.org/1999/xhtml"><style>${css}</style>${new XMLSerializer().serializeToString(clone)}</div></foreignObject></svg>`;
+      const img = new Image(); img.onload = () => { const c = document.createElement('canvas'); c.width = w * scale; c.height = hh * scale; c.getContext('2d').drawImage(img, 0, 0); try { res(c.toDataURL('image/png')); } catch (e) { rej(e); } };
+      img.onerror = rej; img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+    });
+  }
+  async function exportSelectionPNG() {
+    const id = app.selection[0]; const el = id && canvas.elOf(id); if (!el) return;
+    try { const url = await rasterize(el); showImage(url, (app.node(id).attrs.name || app.node(id).tag) + '.png'); } catch (e) { toast('Export PNG impossible dans ce navigateur', 'error'); }
+  }
+  function showImage(url, name) {
+    modal('Export PNG', h('div.mq-dbody', null, h('img', { src: url, style: { maxWidth: 'min(520px, 80vw)', maxHeight: '50vh', display: 'block', margin: '0 auto', background: 'repeating-conic-gradient(#ddd 0 25%, #fff 0 50%) 0 0/12px 12px' } }), h('div.hint', null, 'Clic droit › Enregistrer l’image, ou le bouton ci-dessous.')), (close) => [
+      h('button.btn', { onclick: close }, 'Fermer'),
+      h('a.btn.primary', { href: url, download: name }, 'Télécharger'),
+    ]);
+  }
+  function exportSelectionSVG() {
+    const id = app.selection[0]; const n = app.node(id); const el = id && canvas.elOf(id); if (!el || !el._path) { toast('Sélectionne un vecteur ou une forme'); return; }
+    const vw = +el.dataset.vw || el.offsetWidth, vh = +el.dataset.vh || el.offsetHeight; const cs = getComputedStyle(el.querySelector('.mq-vec-fill') || el);
+    const fill = n.attrs.fill && !/^\$|\(/.test(n.attrs.fill) ? n.attrs.fill : (el.querySelector('.mq-vec-fill') ? cs.backgroundColor : 'none');
+    const st = el.querySelector('.mq-vec-stroke path'); const stroke = st ? ` stroke="${st.getAttribute('stroke')}" stroke-width="${st.getAttribute('stroke-width')}"` : '';
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${vw}" height="${vh}" viewBox="0 0 ${vw} ${vh}"><path d="${MQ.Path.serializePath(el._path)}" fill="${fill}" fill-rule="evenodd"${stroke}/></svg>`;
+    download((n.attrs.name || 'forme') + '.svg', svg, 'image/svg+xml');
+  }
+  // version history (named snapshots per file, kept in this browser)
+  function versions() {
+    const key = 'versions:' + app.files[app.fileIndex].file; const list = store(key) || [];
+    const render = () => h('div.mq-dbody', { style: { display: 'grid', gap: '6px', minWidth: 'min(460px, 86vw)' } },
+      list.length ? list.slice().reverse().map((v, k) => h('div.trow', { style: { display: 'flex', gap: '8px', alignItems: 'center' } }, h('b', { style: { flex: 1 } }, v.name), h('span.muted', null, new Date(v.at).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' })),
+        h('button.btn', { onclick: () => { app.setSource(v.source); toast(`Version « ${v.name} » restaurée (Ctrl+Z pour annuler)`); document.querySelector('.mq-modal')?.remove(); } }, 'Restaurer'),
+        h('button.mini', { title: 'Supprimer', onclick: () => { list.splice(list.length - 1 - k, 1); store(key, list); versions(); } }, icon('trash-2', 13)))) : h('div.empty', null, 'Aucune version enregistrée pour ce fichier.'));
+    modal('Historique des versions', render(), (close) => [
+      h('button.btn', { onclick: close }, 'Fermer'),
+      h('button.btn.primary', { onclick: async () => { const name = await ask('Nom de la version', new Date().toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }), 'Ex : « avant refonte de la home »'); if (!name) return; list.push({ name, at: Date.now(), source: app.source }); store(key, list.slice(-40)); toast('Version enregistrée'); versions(); } }, icon('save', 13), 'Enregistrer cette version'),
+    ]);
   }
   async function exportPNG(name) {
     // rasterize via SVG foreignObject (fonts may fall back if not embedded)
@@ -224,6 +270,7 @@ function boot() {
       n && ['vector', 'shape', 'boolean', 'rect', 'ellipse', 'path'].includes(n.tag) && (n.attrs.stroke || n.attrs['width-profile'] || n.attrs.brush) ? { label: 'Vectoriser le contour', key: 'Ctrl+Alt+O', icon: 'pen-line', run: () => outlineStroke(n.id) } : null,
       n && (n.attrs.offset || n.attrs['width-profile'] || n.attrs.brush) ? { label: 'Figer les modificateurs', icon: 'stamp', run: () => bakeMods(n.id) } : null,
       '-',
+      n && (/^(\w+\.)?[A-Z]/.test(n.tag) || n.tag === 'instance') ? { label: 'Remplacer l’instance…', icon: 'replace', run: () => swapInstance(n.id) } : null,
       { label: 'Créer un composant', key: 'Ctrl+Alt+K', icon: 'component', disabled: !n || n.tag === 'screen' || isComp, run: () => makeComponent() },
       isComp && !isComp.fromKit ? { label: `Éditer ${n.tag}`, icon: 'pencil', run: () => editComponent(n.tag) } : null,
       isComp ? { label: 'Détacher l\'instance', icon: 'unlink', run: () => detach() } : null,
@@ -277,6 +324,17 @@ function boot() {
     return { id: MQ.newId(), tag: 'vector', attrs: { x: String(Math.round((x0 + bb.x) * 10) / 10), y: String(Math.round((y0 + bb.y) * 10) / 10), w: String(Math.max(1, Math.round(bb.w * 10) / 10)), h: String(Math.max(1, Math.round(bb.h * 10) / 10)), ...attrs, d: P.serializePath(P.translatePath(geo, -bb.x, -bb.y)) }, children: [] };
   }
   // Figma "Use as mask": the bottom-most selected layer masks the others (mask group = <stack mask=first>)
+  // Instance swap: replace a component instance by another component, keeping props they share
+  function swapInstance(id) {
+    const n = app.node(id); if (!n) return; const r = canvas.elOf(id)?.getBoundingClientRect() || { left: 200, bottom: 200 };
+    const comps = Object.keys(app.project.components).filter((c) => !/Base$/.test(c) && c !== n.tag);
+    const same = comps.filter((c) => c.split('.')[0] === n.tag.split('.')[0] && c.includes('.') === n.tag.includes('.'));
+    menu(r.left, r.bottom + 4, [...same, ...comps.filter((c) => !same.includes(c))].slice(0, 60).map((c) => ({ label: c, icon: 'component', run: () => {
+      const props = app.project.components[c].props;
+      app.change(() => { const keep = {}; for (const [k, v] of Object.entries(n.attrs)) if (k in props || !(k in (app.project.components[n.tag]?.props || {}))) keep[k] = v; n.tag = c; n.attrs = keep; });
+      toast(`Instance remplacée par ${c}`);
+    } })));
+  }
   function useAsMask() {
     const nodes = app.selNodes.filter((n) => n.tag !== 'screen'); if (nodes.length < 2) { toast('Sélectionne le masque et les calques à masquer'); return; }
     const parent = app.parent(nodes[0].id); if (!nodes.every((n) => app.parent(n.id) === parent)) { toast('Sélectionne des calques du même parent'); return; }
@@ -426,6 +484,7 @@ function boot() {
     if (e.shiftKey && k === 'p') { app.tool = 'pencil'; app.emit('tool'); return; }
     if (e.shiftKey && k === 'm' && !mod) { canvas.sbuild.start(app.selection); return; }
     if (mod && e.altKey && k === 'm') { e.preventDefault(); useAsMask(); return; }
+    if (mod && e.altKey && k === 's') { e.preventDefault(); versions(); return; }
     if (mod && e.altKey && k === 't') { e.preventDefault(); if (tidyFn && app.selection.length > 1) tidyFn(); return; }
     if (mod && e.altKey && k === 'o') { e.preventDefault(); const n = app.selNodes[0]; if (n) outlineStroke(n.id); return; }
     if (e.shiftKey && k === 'e') { app.protoView = !app.protoView; app.emit('proto'); return; }

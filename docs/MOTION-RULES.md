@@ -62,3 +62,7 @@ Outils de contrôle :
 ```
 Pour écrire un `$` littéral dans une valeur (documentation), utiliser `$$`.
 Pour ignorer volontairement une règle sur un écran (page de démonstration) : `<screen lint-ignore="motion-loops">`.
+
+## Auto-keyframe (éditeur)
+
+Timeline › **Auto-keyframe** (bouton rouge, comme dans Figma Motion) : place la tête de lecture, puis déplace, tourne, estompe ou redimensionne l'élément sélectionné. Chaque modification devient une image clé au temps courant, dans un bloc `<keyframes name="<nom>-motion">`, et l'élément reçoit `anim="<nom>-motion <durée>"`. La valeur de base n'est pas modifiée. x/y sont enregistrés en décalages ; rotate, opacity et scale en valeurs absolues. Si tu enregistres au-delà de la durée, elle s'allonge et les images clés existantes sont recalées. Recliquer arrête l'enregistrement.

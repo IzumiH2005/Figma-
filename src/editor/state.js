@@ -55,8 +55,53 @@ export class App {
 
   // ---- history
   snapshot() { return { nodes: cloneTree(this.project.nodes), sel: [...this.selection], page: this.pageIndex }; }
-  begin() { this.undoStack.push(this.snapshot()); if (this.undoStack.length > 200) this.undoStack.shift(); this.redoStack = []; }
+  begin() {
+    this.undoStack.push(this.snapshot()); if (this.undoStack.length > 200) this.undoStack.shift(); this.redoStack = [];
+    // auto-keyframe: remember animatable values of the selection before the change
+    this._rec = this.recorder ? this.selection.map((id) => { const n = this.node(id); return n && n.attrs ? { id, a: { ...n.attrs } } : null; }).filter(Boolean) : null;
+  }
+  // Figma Motion "auto-keyframe": a change made while recording becomes a keyframe at the playhead (base value kept)
+  recordKeyframes() {
+    const R = this.recorder; const rec = this._rec; this._rec = null; if (!R || !rec) return 0;
+    const PROPS = ['x', 'y', 'rotate', 'opacity', 'scale'];
+    const n0 = (v, d) => { const f = parseFloat(v); return isNaN(f) ? d : f; };
+    let count = 0;
+    for (const { id, a: before } of rec) {
+      const n = this.node(id); if (!n) continue;
+      const ch = PROPS.filter((k) => String(before[k] ?? '') !== String(n.attrs[k] ?? ''));
+      if (!ch.length) continue;
+      const vals = {};
+      for (const k of ch) {
+        if (k === 'x' || k === 'y') vals[k] = Math.round(n0(n.attrs[k], 0) - n0(before[k], 0));
+        else vals[k] = n0(n.attrs[k], k === 'rotate' ? 0 : 1);
+        if (before[k] === undefined) delete n.attrs[k]; else n.attrs[k] = before[k];
+      }
+      const kname = (String(n.attrs.name || 'el-' + id).replace(/[^\w-]/g, '')) + '-motion';
+      const top = this.project.rootNode ? this.project.rootNode.children : this.project.nodes;
+      let kf = top.find((c) => c.tag === 'keyframes' && c.attrs.name === kname);
+      if (!kf) { kf = { id: MQ.newId(), tag: 'keyframes', attrs: { name: kname }, children: [], raw: '' }; const i = top.findIndex((c) => c.tag === 'screen' || c.tag === 'page'); top.splice(i < 0 ? top.length : i, 0, kf); }
+      const frames = new Map();
+      for (const line of String(kf.raw || '').split('\n')) { const m = /^\s*([\d.]+)\s*\{([^}]*)\}/.exec(line); if (!m) continue; const at = {}; for (const p of m[2].trim().split(/\s+/)) { const q = /^([\w-]+)=(.+)$/.exec(p); if (q) at[q[1]] = q[2]; } frames.set(+m[1], at); }
+      const spec = String(n.attrs.anim || ''); const cur = spec.startsWith(kname) ? spec.split(/\s+/) : null;
+      let dur = cur ? n0(cur[1], 1000) : 1000; const t = Math.max(0, R.t());
+      if (t > dur) { const nd = Math.ceil(t / 100) * 100; const k = dur / nd; const old = [...frames]; frames.clear(); for (const [o, at] of old) frames.set(Math.round(o * k * 10) / 10, at); dur = nd; }
+      const off = Math.round((t / dur) * 1000) / 10;
+      if (!frames.has(0)) frames.set(0, {});
+      frames.set(off, { ...(frames.get(off) || {}), ...Object.fromEntries(Object.entries(vals).map(([k, v]) => [k, String(v)])) });
+      // every frame carries every animated property (carry the previous value forward)
+      const keys = new Set(); for (const at of frames.values()) Object.keys(at).forEach((k) => keys.add(k));
+      const neutral = { x: '0', y: '0', rotate: '0', opacity: '1', scale: '1' };
+      const sorted = [...frames].sort((p, q) => p[0] - q[0]); const last = {};
+      for (const [, at] of sorted) for (const k of keys) { if (at[k] === undefined) at[k] = last[k] ?? neutral[k] ?? '0'; last[k] = at[k]; }
+      kf.raw = '\n' + sorted.map(([o, at]) => `    ${o} { ${[...keys].map((k) => `${k}=${at[k]}`).join(' ')} }`).join('\n') + '\n  ';
+      n.attrs.anim = `${kname} ${dur}${cur && cur.length > 2 ? ' ' + cur.slice(2).join(' ') : ''}`;
+      count++;
+    }
+    if (count && R.onRecord) R.onRecord(count);
+    return count;
+  }
   commit(what = 'doc') {
+    if (this._rec) this.recordKeyframes();
     this.project.reindex();
     this.selection = this.selection.filter((id) => this.project.byId.has(id));
     this.persist();

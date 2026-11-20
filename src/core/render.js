@@ -504,6 +504,9 @@ export function cssFor(tag, a, parentLayout, ctx, isText) {
   if (a.mono) s.fontFamily = fontStack('mono');
   if (a.size !== undefined && tag !== 'icon' && tag !== 'ellipse' && tag !== 'rect' && tag !== 'box') s.fontSize = px(a.size);
   if (a.weight !== undefined) s.fontWeight = WEIGHTS[a.weight] || a.weight;
+  // variable font axes (axes="wght 650, wdth 90, opsz 32") and OpenType features (features="tnum ss01 -liga")
+  if (a.axes) s.fontVariationSettings = String(a.axes).split(',').map((p) => p.trim().split(/\s+/)).filter((p) => p.length === 2).map(([t, v]) => `"${t}" ${v}`).join(', ');
+  if (a.features) s.fontFeatureSettings = String(a.features).split(/[\s,]+/).filter(Boolean).map((f) => (f.startsWith('-') ? `"${f.slice(1)}" 0` : `"${f}" 1`)).join(', ');
   if (a.bold) s.fontWeight = 700;
   if (a.lh !== undefined) s.lineHeight = num(a.lh) <= 4 ? String(num(a.lh)) : px(a.lh);
   if (a.ls !== undefined) s.letterSpacing = String(a.ls).endsWith('%') ? `${num(a.ls) / 100}em` : String(a.ls).endsWith('em') ? a.ls : px(a.ls);
@@ -603,6 +606,13 @@ export function renderNode(node, scope, parentLayout, ctx, overrides) {
     ctx.owner = saved; return els;
   }
 
+  // instance swap: <instance of={icon ? 'IconButton' : 'Button'} …/> renders the named component with the same props
+  if (node.tag === 'instance') {
+    const name = String(safeInterp(node.attrs.of ?? '', scope, ctx) || '').trim();
+    if (!ctx.project.components[name]) { ctx.errors.push(`<instance of=…> : composant inconnu « ${name} »`); return []; }
+    const attrs = { ...node.attrs }; delete attrs.of;
+    return renderNode({ ...node, tag: name, attrs }, scope, parentLayout, ctx, overrides);
+  }
   // component instance
   const comp = /^(\w+\.)?[A-Z]/.test(node.tag) ? ctx.project.components[node.tag] : null;
   if (comp) return [renderInstance(node, comp, scope, parentLayout, ctx, overrides)];
@@ -960,6 +970,7 @@ export function fontsHref(project) {
   const all = new Map();
   for (const f of fams) { const [n, w] = f.split(':'); all.set(n.trim(), w || '400;500;600;700'); }
   if (!all.has('Inter')) all.set('Inter', '400;500;600;700');
-  const q = [...all].map(([n, w]) => `family=${encodeURIComponent(n).replace(/%20/g, '+')}:wght@${w.split(/[;,]/).sort((x, y) => x - y).join(';')}`).join('&');
+  // "Roboto Flex:opsz,wdth,wght@8..144,25..151,100..1000" passes axis ranges through (variable fonts)
+  const q = [...all].map(([n, w]) => `family=${encodeURIComponent(n).replace(/%20/g, '+')}:${w.includes('@') ? w : 'wght@' + w.split(/[;,]/).sort((x, y) => parseFloat(x) - parseFloat(y)).join(';')}`).join('&');
   return `https://fonts.googleapis.com/css2?${q}&display=swap`;
 }

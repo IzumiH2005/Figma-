@@ -20,7 +20,7 @@ export class RightPanel {
     const focus = document.activeElement && this.root.contains(document.activeElement) ? document.activeElement.dataset.f : null;
     const scroll = this.body ? this.body.scrollTop : 0;
     clear(this.root);
-    const tabs = [['design', 'Design'], ['proto', 'Prototype'], ['motion', 'Motion'], ['code', 'Code'], ['lint', 'Lint']];
+    const tabs = [['design', 'Design'], ['proto', 'Prototype'], ['motion', 'Motion'], ['code', 'Code'], ['dev', 'Dev'], ['lint', 'Lint']];
     this.root.appendChild(h('div.ptabs', null, tabs.map(([k, l]) => h('button.ptab' + (this.tab === k ? '.on' : ''), { onclick: () => { this.tab = k; this.render(); } }, l, k === 'lint' && this.lintCount ? h('span.badge', null, this.lintCount) : null))));
     this.body = h('div.pbody');
     this.root.appendChild(this.body);
@@ -32,6 +32,7 @@ export class RightPanel {
     else if (this.tab === 'proto') this.proto(nodes);
     else if (this.tab === 'motion') this.motion(nodes);
     else if (this.tab === 'code') this.code(nodes);
+    else if (this.tab === 'dev') this.dev(nodes);
     this.body.scrollTop = scroll;
     if (focus) { const f = this.root.querySelector(`[data-f="${focus}"]`); if (f) f.focus(); }
   }
@@ -72,6 +73,13 @@ export class RightPanel {
         const cur = a[k];
         const isBool = typeof def === 'boolean';
         if (isBool) return h('div.prow', null, h('label', null, k), toggle(cur === true || cur === 'true' || (cur === undefined && def), (v) => set(k, v ? true : (def ? 'false' : null))));
+        const swapM = new RegExp(`${k}\\s*:\\s*swap\\(([^)]*)\\)`).exec(comp.desc);
+        const isComp = (v) => typeof v === 'string' && !!app.project.components[v];
+        if (swapM || isComp(def)) {
+          const preferred = swapM ? swapM[1].split('|').map((x) => x.trim()).filter(Boolean) : [];
+          const others = Object.keys(app.project.components).filter((c) => !preferred.includes(c) && !app.project.components[c].fromKit || (!preferred.length && !c.includes('Base')));
+          return h('div.prow', null, h('label', null, k + ' ⇄'), select([...preferred.map((c) => [c, '★ ' + c]), ...others.filter((c) => !preferred.includes(c)).map((c) => [c, c])], cur ?? def, (v) => set(k, v === def ? null : v)));
+        }
         const opts = /:\s*([\w-]+(\|[\w-]+)+)/.exec((comp.desc.match(new RegExp(`${k}\\s*:\\s*[\\w|-]+`)) || [''])[0]);
         if (opts) return h('div.prow', null, h('label', null, k), select(opts[1].split('|').map((o) => [o, o]), cur ?? def, (v) => set(k, v === def ? null : v)));
         return h('div.prow', null, h('label', null, k), input('p-' + k, cur !== undefined && cur !== true ? cur : '', (v) => set(k, v === '' ? null : v), { placeholder: typeof def === 'object' ? JSON.stringify(def) : String(def) }));
@@ -202,6 +210,9 @@ export class RightPanel {
         rows.push(h('div.chips', null, [['upper', 'AA'], ['italic', 'I'], ['underline', 'U'], ['strike', 'S'], ['truncate', '…'], ['nowrap', '↔'], ['tabular', '123'], ['balance', '⚖']].map(([k, l]) => h('button.chip' + (a[k] ? '.on' : ''), { title: k, onclick: () => set(k, a[k] ? null : true) }, l))));
         rows.push(h('div.grid2', null, numOpt('Lignes max', a.lines, (v) => set('lines', v)), h('span')));
         rows.push(h('div.prow', null, h('label', null, 'Dégradé de texte'), input('tfill', a.fill || '', (v) => set('fill', v || null), { placeholder: 'linear(90, #f0f, #0ff)', mono: true })));
+        rows.push(h('div.prow', null, h('label', null, 'Axes variables'), input('axes', a.axes || '', (v) => set('axes', v || null), { placeholder: 'wght 650, wdth 90, opsz 32', mono: true })));
+        rows.push(h('div.prow', null, h('label', null, 'OpenType'), input('features', a.features || '', (v) => set('features', v || null), { placeholder: 'tnum ss01 -liga', mono: true })));
+        rows.push(h('div.chips', null, [['tnum', 'Chiffres tabulaires'], ['frac', 'Fractions'], ['smcp', 'Petites capitales'], ['ss01', 'Jeu stylistique 1'], ['zero', 'Zéro barré'], ['-liga', 'Sans ligatures']].map(([f, l]) => { const on = String(a.features || '').split(/\s+/).includes(f); return h('button.chip' + (on ? '.on' : ''), { title: f, onclick: () => { const cur = String(a.features || '').split(/\s+/).filter(Boolean); set('features', (on ? cur.filter((x) => x !== f) : [...cur, f]).join(' ') || null); } }, l); })));
       }
       b.appendChild(sec('Texte', ...rows));
     }
@@ -457,6 +468,25 @@ easings : ${EASES.join(' ')}`)));
   }
 
   // ------------------------------------------------------------ code
+  // Dev mode: what a developer needs for the selection — box, CSS, tokens used, HTML, exports
+  dev(nodes) {
+    const b = this.body; const app = this.app; const n = nodes[0]; const el = this.hooks.elOf(n.id);
+    if (!el) { b.appendChild(h('div.empty', null, 'Élément non rendu.')); return; }
+    const cs = getComputedStyle(el); const r = el.getBoundingClientRect(); const z = app.zoom;
+    const PROPS = ['display', 'flex-direction', 'align-items', 'justify-content', 'gap', 'padding', 'margin', 'width', 'height', 'min-width', 'max-width', 'position', 'left', 'top', 'right', 'bottom', 'background-color', 'background-image', 'color', 'border', 'border-radius', 'box-shadow', 'opacity', 'font-family', 'font-size', 'font-weight', 'line-height', 'letter-spacing', 'text-align', 'transform', 'filter', 'backdrop-filter', 'font-variation-settings', 'font-feature-settings'];
+    const DEF = { display: 'block', 'flex-direction': 'row', 'align-items': 'normal', 'justify-content': 'normal', gap: 'normal', padding: '0px', margin: '0px', position: 'static', left: 'auto', top: 'auto', right: 'auto', bottom: 'auto', 'background-color': 'rgba(0, 0, 0, 0)', 'background-image': 'none', border: '0px none', 'border-radius': '0px', 'box-shadow': 'none', opacity: '1', 'letter-spacing': 'normal', 'text-align': 'start', transform: 'none', filter: 'none', 'backdrop-filter': 'none', 'min-width': 'auto', 'max-width': 'none', 'font-variation-settings': 'normal', 'font-feature-settings': 'normal' };
+    const css = PROPS.map((p) => [p, cs.getPropertyValue(p)]).filter(([p, v]) => v && v !== DEF[p] && !(p === 'border' && /^0px/.test(v))).map(([p, v]) => `  ${p}: ${v.length > 120 ? v.slice(0, 117) + '…' : v};`).join('\n');
+    const tokens = [...new Set(Object.values(n.attrs).flatMap((v) => String(v).match(/\$[\w.-]+/g) || []))];
+    const pre = (t) => h('pre.devcode', { style: { whiteSpace: 'pre-wrap', fontSize: '11px', userSelect: 'text', maxHeight: '320px', overflow: 'auto' } }, t);
+    const copy = (t, what) => h('button.chip', { onclick: () => { navigator.clipboard && navigator.clipboard.writeText(t); toast(what + ' copié'); } }, 'Copier');
+    b.appendChild(sec('Boîte', h('div.grid2', null, h('div.hint', null, `${Math.round(r.width / z)} × ${Math.round(r.height / z)} px`), h('div.hint', null, `<${n.tag}>${n.attrs.name ? ' · ' + n.attrs.name : ''}`))));
+    if (tokens.length) b.appendChild(sec('Tokens utilisés', h('div.chips', null, tokens.map((t) => { const v = app.project.token(t.slice(1).split('/')[0], app.mode); return h('span.chip', { title: String(v) }, h('span.swatch', { style: { background: MQ.parseColor(String(v)) ? v : 'transparent', width: '10px', height: '10px', display: 'inline-block', borderRadius: '3px', marginRight: '4px' } }), t); }))));
+    const cssText = `.${(n.attrs.name || n.tag).replace(/[^\w-]/g, '-')} {\n${css}\n}`;
+    b.appendChild(sec('CSS', pre(cssText), copy(cssText, 'CSS')));
+    const html = MQ.toStaticHTML(el); b.appendChild(sec('HTML', pre(html.length > 4000 ? html.slice(0, 4000) + '\n…' : html), copy(html, 'HTML')));
+    b.appendChild(sec('Exporter', h('div.chips', null, h('button.chip', { onclick: () => this.hooks.exportSelectionPNG() }, 'PNG ×2'), el._path ? h('button.chip', { onclick: () => this.hooks.exportSelectionSVG() }, 'SVG') : null)));
+  }
+
   code(nodes) {
     const app = this.app; const n = nodes[0];
     const src = MQ.serializeNode(n);
@@ -600,6 +630,8 @@ function colorField(app, value, onCommit, f, compact) {
   const resolved = value ? (String(value).startsWith('$') ? p.token(String(value).slice(1).split('/')[0], app.mode) : value) : null;
   const sw = h('span.swatch', { style: { background: resolved && !/^(linear|radial|mesh|conic|noise|dots|grid|stripes|image|aurora)\(/.test(resolved) ? resolved : resolved ? 'linear-gradient(135deg,#7c5cff,#ff5ca8)' : 'repeating-conic-gradient(#ccc 0 25%, #fff 0 50%) 0 0/8px 8px' } });
   const picker = h('input', { type: 'color', class: 'hiddenpick' });
+  // eyedropper (Figma: I) — native EyeDropper API where available
+  const eye = window.EyeDropper ? h('button.mini', { title: 'Pipette : prélever une couleur à l’écran', onclick: async () => { try { const r = await new window.EyeDropper().open(); onCommit(r.sRGBHex.toUpperCase()); } catch (e) { /* cancelled */ } } }, icon('pipette', 13)) : null;
   const c = MQ.parseColor(resolved || '');
   if (c) picker.value = '#' + c.slice(0, 3).map((x) => Math.round(x).toString(16).padStart(2, '0')).join('');
   picker.addEventListener('change', () => onCommit(picker.value.toUpperCase()));
@@ -610,7 +642,7 @@ function colorField(app, value, onCommit, f, compact) {
     const r = e.currentTarget.getBoundingClientRect();
     import('./dom.js').then(({ menu }) => menu(r.left - 180, r.bottom + 4, colorTokens.slice(0, 40).map((k) => ({ label: '$' + k, icon: 'circle', run: () => onCommit('$' + k) }))));
   } }, icon('palette', 13));
-  return h('div.colorf' + (compact ? '.compact' : ''), null, sw, picker, inp, tokBtn);
+  return h('div.colorf' + (compact ? '.compact' : ''), null, sw, picker, inp, tokBtn, eye);
 }
 
 function iconPicker(value, onCommit) {

@@ -389,3 +389,11 @@ body[data-view="contrast-low"] .cv-world, body[data-view="contrast-low"] .play-h
 .sb-region.merged { fill: color-mix(in srgb, var(--sb) 35%, transparent); stroke: var(--sb); stroke-dasharray: none; stroke-width: 1.5; }
 .sb-region.removed { fill: repeating-linear-gradient(45deg, rgba(229,72,77,.25) 0 4px, transparent 4px 8px); fill: rgba(229,72,77,.18); stroke: #E5484D; }
 .canvas.sbuild .cv-svg { pointer-events: auto; }
+
+/* auto-keyframe */
+.btn.rec { background: #E5484D; color: #fff; border-color: #E5484D; }
+.recdot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #E5484D; margin-right: 2px; }
+.btn.rec .recdot { background: #fff; animation: mq-blink 1s infinite; }
+@keyframes mq-blink { 50% { opacity: .3; } }
+.timeline.recording { box-shadow: inset 0 3px 0 #E5484D; }
+.timeline.recording .tl-cursor { background: #E5484D; }

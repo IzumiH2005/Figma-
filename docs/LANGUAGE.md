@@ -100,6 +100,12 @@ C'est la source de vérité : l'éditeur visuel le lit et le réécrit, la CLI l
 
 ## Typographie (hérite comme en CSS)
 
+Polices variables et OpenType :
+- `fonts="Roboto Flex:opsz,wdth,wght@8..144,25..151,100..1000"` charge les plages d'axes ;
+- `axes="wght 650, wdth 90, opsz 32"` règle les axes de la police variable ;
+- `features="tnum ss01 frac smcp zero -liga"` active les fonctions OpenType (`-` désactive).
+
+
 `font` (famille ou `$token`, `mono`, `serif`), `size`, `weight` (`400` ou `semibold`…), `lh` (≤4 = multiplicateur), `ls` (px ou `%`), `align` (sur un texte) / `talign`, `upper` `lower` `caps` `italic` `underline` `strike` `tabular` `nowrap` `balance` `truncate` `lines=2`.
 
 ## Tokens, modes, styles, fondations
@@ -239,6 +245,8 @@ Les tokens acceptent des **modes nommés** (`sh-primary: light: #171717 | dark: 
   - Feedback : `Alert` (tone `info success warning error`), `Toast`, `Snackbar`, `Tooltip`, `Progress`, `Skeleton`, `EmptyState`.
   - Menus et dialogues : `Menu` + `MenuItem` (icône, `shortcut`, `submenu`, `danger`, `selected`, `disabled`), `Dialog`, `ConfirmDialog`, `Sheet`, `Grabber`, `Accordion`.
   - Contenu : `Card`, `ListItem`, `Avatar`, `AvatarGroup`, `Badge`, `Chip`, `Stat`, `Rating`, `Testimonial`, `SocialProof`, `OrDivider`.
+
+**Instance swap** : `<instance of={done ? 'Badge' : 'Chip'} label="…"/>` affiche le composant nommé avec les mêmes props. Une prop déclarée `icon: swap(IconButton|FAB)` dans `desc` (ou dont la valeur par défaut est le nom d'un composant) propose une liste de remplacement, avec ses valeurs préférées en tête. Clic droit sur une instance › « Remplacer l'instance… ».
 
 ## Données, boucles, conditions
 
