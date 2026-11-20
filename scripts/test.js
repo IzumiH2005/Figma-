@@ -8,6 +8,7 @@ import { buildRuntime, buildEditorHTML, readExamples } from './build.js';
 import { convertRegistryItem } from '../src/core/shadcn-import.js';
 import { twToAttrs } from '../src/core/tailwind.js';
 import { drive } from '../cli/drive.js';
+import { generateSystem, toDTCG, fromDTCG } from '../src/core/system.js';
 
 const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -271,6 +272,23 @@ export function PillRow({ className, ...props }) { return <div className={cn("fl
     return { codes: [...new Set(iss.map((i) => i.code))], gStates: [...g.classList].some((c) => c.startsWith('mqs')), gAnim: el._mq.anims.some((a) => a.el === g) };
   });
   ok(['icon-gap', 'icon-size', 'button-padding', 'no-feedback'].every((c) => r.codes.includes(c)) && r.gStates && r.gAnim, `Anatomie des composants + recettes de motion ${JSON.stringify(r)}`);
+}
+
+// design system engine: contrast-safe roles for hard brand colors, DTCG round-trip, kit linked to the system
+{
+  const brands = ['#FACC15', '#22D3EE', '#0F766E', '#E11D48', '#111111', '#A3E635'];
+  const fails = brands.flatMap((b) => generateSystem({ brand: b, accent: '#F97316' }).checks.filter((c) => !c.ok).map((c) => `${b} ${c.mode} ${c.fg}/${c.bg} ${c.ratio}`));
+  ok(!fails.length, `Design system : tous les rôles passent AA pour des marques difficiles (${brands.join(' ')}) ${fails.slice(0, 4).join(' | ')}`);
+  const sys = generateSystem({ brand: '#7C5CFF', radius: 'pill', density: 'compact' });
+  const back = fromDTCG(toDTCG(sys, 't'));
+  ok(back['brand-600'] === sys.primitives['brand-600'] && back.primary && back.primary.dark === sys.dark.primary && back['button-radius'] === '999' && back['space-3'] === sys.scales['space-3'], `DTCG aller-retour (primitives, alias, modes, composant) ${JSON.stringify({ p: back.primary, r: back['button-radius'] })}`);
+  const r = await page.evaluate(() => {
+    const p = MQ.loadProject(`<project modes="light dark"><system brand=#0F766E radius=pill density=compact/><screen name="S" w=400 h=200><Button label="Go"/></screen></project>`);
+    MQ.ensureStyles(); document.body.innerHTML = ''; const el = MQ.screenElement(p, 'S'); document.body.appendChild(el);
+    const b = el.querySelector('[data-comp="Button"]'); const cs = getComputedStyle(b.firstElementChild || b);
+    return { bg: getComputedStyle(b).backgroundColor, radius: getComputedStyle(b).borderTopLeftRadius, h: b.offsetHeight, sh: p.token('sh-primary', 0) };
+  });
+  ok(r.bg === 'rgb(15, 118, 110)' && parseFloat(r.radius) > 100 && r.h === 36 && r.sh === '#0F766E', `Kit lié au système (couleur, pilule, densité compacte, alias shadcn) ${JSON.stringify(r)}`);
 }
 
 // editor boots

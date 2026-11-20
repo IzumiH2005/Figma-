@@ -256,6 +256,44 @@ Conversion : `cva` → props (`variant`, `size`…) avec leurs valeurs par défa
 ```
 Les tokens acceptent des **modes nommés** (`sh-primary: light: #171717 | dark: #E5E5E5`) indépendants de l'ordre des modes du projet, et les couleurs `oklch()` / `hsl()`.
 
+## Design system (`<system>`)
+
+```xml
+<system brand=#0F766E accent=#F97316 neutral=warm radius=round density=comfortable elevation=soft motion=calm type="Inter/Fraunces" scale=major-third/>
+```
+
+Une ligne génère un design system complet en trois niveaux (primitives → sémantique → composant, comme les collections de variables de Figma). Les choix « perceptifs » sont la personnalité de la marque :
+- `neutral` : `tinted | pure | warm | cool | olive` ;
+- `radius` : `soft | sharp | round | pill | <n>` ;
+- `density` : `compact | comfortable | spacious` ;
+- `elevation` : `soft | flat | deep` ;
+- `motion` : `calm | snappy | playful` ;
+- `type` : polices « texte/titres » ;
+- `scale` : `minor-third | major-third | perfect-fourth | golden` ou un ratio.
+
+Ce qui est généré :
+- **Primitives** : rampes OKLCH `brand-50…950`, `accent-*`, `gray-*` (neutres), `success-* warning-* danger-* info-*`.
+- **Sémantique**, par mode `light` / `dark` :
+  - surfaces `bg surface surface-2 surface-3`, textes `text muted subtle`, lignes `border divider` ;
+  - pour chaque rôle (`primary accent success warning danger info`) : le rôle, `on-<rôle>`, `<rôle>-hover`, `<rôle>-soft`, `<rôle>-text` ;
+  - `focus` et `shadow-1…4`.
+
+  Chaque teinte est choisie pour **passer AA** (texte ≥ 4,5:1 sur ses surfaces, `on-primary` sur `primary`, UI ≥ 3:1). En sombre, les rôles s'éclaircissent et l'élévation vient de surfaces plus claires.
+- **Échelles** : `space-1…10`, `radius-sm|md|lg|xl|full`, `text-xs…5xl`, `font-sans|display|mono`, `dur-fast|base|slow`, `ease-standard|enter|exit`, `spring`.
+- **Composant** : `button-h-sm|md|lg button-radius button-px input-h input-radius card-radius card-pad chip-radius dialog-radius`.
+- **Alias shadcn** (`sh-*`) : les composants `ui.*` importés suivent le système.
+
+Le kit (Button, Field, Card, Chip, Dialog…) et tes composants lisent ces noms : changer `brand` ou `radius` rethème tout. Les `<tokens>` du projet restent prioritaires sur le système.
+
+Ligne de commande :
+- `mq ds f.mq` : résumé et contrôles de contraste ;
+- `--init "brand=#hex radius=soft"` : crée le `<system>` ;
+- `--export dtcg|css|tailwind -o …` : W3C DTCG 2025.10 avec alias `{color.brand.600}` et modes en `$extensions`, variables CSS `[data-theme=dark]`, config Tailwind ;
+- `--import tokens.json` : DTCG vers `<tokens>` ;
+- `--guide -o guide.png [--write]` : page de style générée avec les vrais composants.
+
+Éditeur : panneau **Tokens › Design system** (marque, accent, neutres, formes, densité, élévation, motion, échelle, polices ; contrôles AA en direct ; **Page de style** ; exports).
+
 ## Composants
 
 ```xml

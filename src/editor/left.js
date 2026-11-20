@@ -1,5 +1,5 @@
 // Left panel: pages, layers tree, assets (components / icons / images / devices), tokens & variables
-import { MQ, h, icon, clear, debounce, menu, ask, toast, modal } from './dom.js';
+import { MQ, h, icon, clear, debounce, menu, ask, toast, modal, download } from './dom.js';
 import { importShadcn } from '../core/shadcn-import.js';
 import { isContainer, uniqueName } from './state.js';
 
@@ -222,6 +222,7 @@ export class LeftPanel {
   tokens() {
     const app = this.app; const p = app.project;
     const wrap = h('div.tokens');
+    wrap.appendChild(this.systemSection());
     wrap.appendChild(h('div.phead', null, h('span', null, 'Modes'), h('div.modes', null, p.modes.map((m, i) => h('button.chip' + (i === app.mode ? '.on' : ''), { onclick: () => { app.mode = i; app.emit('mode'); } }, m)))));
     const tokNode = (p.rootNode ? p.rootNode.children : p.nodes).find((n) => n.tag === 'tokens');
     const own = new Set();
@@ -260,6 +261,56 @@ export class LeftPanel {
       wrap.appendChild(h('div.tlist', null, st.map((s) => h('div.trow', null, h('span.tname', null, '.' + s), h('span.tv', null, Object.entries(p.styles[s]).map(([a, b]) => b === true ? a : `${a}=${b}`).join(' ').slice(0, 60))))));
     }
     return wrap;
+  }
+
+  // ---- Design system: <system> controls (perceptual choices), checks, style guide, exports
+  systemSection() {
+    const app = this.app; const p = app.project; const box = h('div.ds');
+    const top = p.rootNode ? p.rootNode.children : p.nodes;
+    const node = top.find((n) => n.tag === 'system');
+    box.appendChild(h('div.phead', null, h('span', null, 'Design system')));
+    if (!node) {
+      box.appendChild(h('div.empty', null, 'Génère primitives, rôles (clair/sombre, contrastes AA), échelles et tokens de composant à partir de ta marque. ',
+        h('a', { onclick: () => app.change(() => { top.unshift({ id: MQ.newId(), tag: 'system', attrs: { brand: '#5B5BF7', neutral: 'tinted', radius: 'soft', density: 'comfortable', elevation: 'soft', motion: 'calm' }, children: [] }); if (!/dark/.test(p.meta.modes || '')) p.rootNode && (p.rootNode.attrs.modes = 'light dark'); }) }, 'Créer un design system')));
+      return box;
+    }
+    const a = node.attrs; const set = (k, v) => app.change(() => { const n = app.node(node.id); if (v === null || v === '') delete n.attrs[k]; else n.attrs[k] = v; });
+    const color = (k, label) => { const inp = h('input', { type: 'color', value: String(a[k] || '#5B5BF7').slice(0, 7), style: { width: '28px', height: '22px', border: 'none', padding: '0', background: 'none' }, onchange: (e) => set(k, e.target.value.toUpperCase()) }); return h('div.trow', null, h('span.tname', null, label), inp, h('span.tv', null, a[k] || '—'), k === 'accent' && a[k] ? h('button.mini', { title: 'Retirer', onclick: () => set(k, null) }, icon('x', 12)) : null); };
+    const pick = (k, label, opts) => h('div.trow', null, h('span.tname', null, label), h('select.sel', { onchange: (e) => set(k, e.target.value), onkeydown: (e) => e.stopPropagation() }, opts.map(([v, l]) => h('option', { value: v, selected: String(a[k] || opts[0][0]) === v }, l))));
+    box.append(color('brand', 'Marque'), color('accent', 'Accent'),
+      pick('neutral', 'Neutres', [['tinted', 'Teintés marque'], ['pure', 'Purs'], ['warm', 'Chauds'], ['cool', 'Froids'], ['olive', 'Olive']]),
+      pick('radius', 'Formes', [['soft', 'Douces'], ['sharp', 'Nettes'], ['round', 'Rondes'], ['pill', 'Pilule']]),
+      pick('density', 'Densité', [['comfortable', 'Confortable'], ['compact', 'Compacte'], ['spacious', 'Aérée']]),
+      pick('elevation', 'Élévation', [['soft', 'Douce'], ['flat', 'Plate'], ['deep', 'Profonde']]),
+      pick('motion', 'Motion', [['calm', 'Calme'], ['snappy', 'Vive'], ['playful', 'Joueuse']]),
+      pick('scale', 'Échelle typo', [['major-third', 'Tierce majeure 1,25'], ['minor-third', 'Tierce mineure 1,2'], ['perfect-fourth', 'Quarte 1,333'], ['golden', 'Nombre d’or 1,618']]),
+      h('div.trow', null, h('span.tname', null, 'Polices'), (() => { const i = h('input.inp', { value: a.type || 'Inter', placeholder: 'Texte/Titres', onkeydown: (e) => { e.stopPropagation(); if (e.key === 'Enter') set('type', i.value.trim()); }, onblur: () => i.value.trim() !== (a.type || 'Inter') && set('type', i.value.trim()) }); return i; })()));
+    const sys = p.system;
+    if (sys) {
+      const fails = sys.checks.filter((c) => !c.ok);
+      box.appendChild(h('div.hint', { style: { padding: '6px 12px' } }, fails.length ? `⚠ ${fails.length} contraste(s) insuffisant(s) : ${fails.slice(0, 3).map((c) => `${c.mode} ${c.fg}/${c.bg} ${c.ratio}:1`).join(' · ')}` : `✓ ${sys.checks.length}/${sys.checks.length} contrastes AA (clair + sombre) · ${Object.keys(sys.primitives).length} primitives · ${Object.keys(sys.light).length} rôles · ${Object.keys(sys.components).length} tokens de composant`));
+      const dl = (name, text) => download(name, text);
+      box.appendChild(h('div.chips', { style: { padding: '0 12px 10px' } },
+        h('button.chip', { onclick: () => this.insertStyleGuide() }, 'Page de style'),
+        h('button.chip', { onclick: () => dl('tokens.json', JSON.stringify(MQ.System.toDTCG(sys, p.name), null, 2)) }, 'DTCG'),
+        h('button.chip', { onclick: () => dl('tokens.css', MQ.System.toCSS(sys)) }, 'CSS'),
+        h('button.chip', { onclick: () => dl('tailwind.config.js', MQ.System.toTailwind(sys)) }, 'Tailwind')));
+    }
+    return box;
+  }
+  insertStyleGuide() {
+    const app = this.app; const p = app.project; if (!p.system) return;
+    const name = 'Système · ' + p.name;
+    const parsed = MQ.parse(`<project>${MQ.styleGuideSource(p.system, name)}</project>`);
+    const screenNode = (parsed.children || parsed)[0].children ? (parsed.children || parsed)[0].children.find((n) => n.tag === 'screen') : null;
+    if (!screenNode) return;
+    app.change(() => {
+      const top = p.rootNode ? p.rootNode.children : p.nodes;
+      for (let i = top.length - 1; i >= 0; i--) if (top[i].tag === 'page' && top[i].attrs.name === 'Système') top.splice(i, 1);
+      top.push({ id: MQ.newId(), tag: 'page', attrs: { name: 'Système' }, children: [screenNode] });
+    });
+    app.pageIndex = app.project.pages.findIndex((pg) => pg.attrs && pg.attrs.name === 'Système'); app.emit('page');
+    toast('Page « Système » générée : rampes, rôles, typo, espacements, rayons, élévation, motion, composants');
   }
 
   // merge token lines into the project's <tokens> block (replacing same names)

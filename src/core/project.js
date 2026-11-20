@@ -2,6 +2,7 @@
 import { parse, serialize, saveSource, newId, textOf } from './parse.js';
 import { evaluate, Scope } from './expr.js';
 import { parseColor, ramp, neutrals, resolveColorFns, toHex } from './color.js';
+import { generateSystem, systemTokens } from './system.js';
 
 export const DEVICES = {
   'iphone-16': { w: 393, h: 852, safeTop: 59, safeBottom: 34, radius: 55, kind: 'phone', island: true },
@@ -104,6 +105,19 @@ export class Project {
 
     if (this.kitSource) this._ingest(parse(this.kitSource), true);
     this._ingest(top, false);
+    // <system …/> : generated design-system tokens override the kit, never the project's own <tokens>
+    const sysNode = top.find((n) => n.tag === 'system');
+    if (sysNode) {
+      try {
+        this.system = generateSystem(sysNode.attrs); this.systemNode = sysNode;
+        for (const [k, v] of Object.entries(systemTokens(this.system))) {
+          const cur = this.tokens[k]; if (cur && !cur._kit && !cur._sys) continue;
+          let arr; if (v && typeof v === 'object') { arr = [v.light, v.dark]; arr._named = { light: v.light, dark: v.dark }; } else arr = [String(v)];
+          arr._sys = true; this.tokens[k] = arr;
+        }
+        if (this.system.scales['font-sans'] && !this.fonts.length) this.fonts = [`${this.system.scales['font-sans']}:400;500;600;700`, ...(this.system.scales['font-display'] !== this.system.scales['font-sans'] ? [`${this.system.scales['font-display']}:600;700;800`] : [])];
+      } catch (e) { this.systemError = e.message; }
+    }
     this.expandTokens();
     this.typescale = meta.typescale || 'ui';
     const scale = TYPESCALES[this.typescale] || TYPESCALES.ui;

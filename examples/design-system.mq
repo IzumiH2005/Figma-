@@ -1,0 +1,46 @@
+<project name="Atelier Céleste" modes="light dark" typescale=ui>
+  <!-- Un design system complet généré par <system> : primitives (rampes OKLCH), rôles sémantiques par mode vérifiés
+       au contraste AA, échelles (espace, rayon, typo, élévation, motion), tokens de composant. Le kit, les composants du
+       projet et les composants shadcn importés lisent ces tokens : changer la marque ici rethème tout.
+       mq ds examples/design-system.mq            résumé + contrastes
+       mq ds … --export dtcg|css|tailwind         W3C DTCG 2025.10, variables CSS, config Tailwind
+       mq ds … --guide -o guide.png               page de style générée -->
+  <system brand=#0F766E accent=#F97316 neutral=warm radius=round density=comfortable elevation=soft motion=calm type="Inter/Fraunces"/>
+
+  <vars>
+    plan: 1
+  </vars>
+
+  <!-- composant du projet : il n'utilise que des tokens (rôles + composant), donc suit le système -->
+  <component name="PlanCard" props="title='Studio' price='19 €' note='' items={[]} selected=false" desc="Carte d'offre ; selected met en avant">
+    <col w=fill gap=16 p=$card-pad radius=$card-radius fill={selected ? $primary : $surface} color={selected ? $on-primary : $text}
+      shadow={selected ? $shadow-3 : $shadow-1} motion="press lift" cursor=pointer>
+      <row justify=between>
+        <text size=$text-lg weight=600>{title}</text>
+        <text if={note} size=12 weight=600 px=8 py=4 radius=$chip-radius fill={selected ? alpha($on-primary, 18) : $accent-soft} color={selected ? $on-primary : $accent-text}>{note}</text>
+      </row>
+      <row gap=4 align=baseline><text size=$text-3xl weight=700 font=$font-display>{price}</text><text size=14 color={selected ? $on-primary : $muted}>/ mois</text></row>
+      <col gap=8 motion=cascade>
+        <row each={items} as=it gap=8><icon name=check size=16 color={selected ? $on-primary : $primary-text}/><text size=14>{it}</text></row>
+      </col>
+    </col>
+  </component>
+
+  <screen name="Offres" device=iphone-16 statusbar homebar fill=$bg color=$text font=$font-sans pt=safe>
+    <col w=fill px=$space-5 pt=$space-6 gap=$space-5 pb=120>
+      <col gap=8 motion=appear>
+        <text size=12 weight=600 color=$primary-text upper ls=8%>Atelier Céleste</text>
+        <text size=$text-3xl weight=700 font=$font-display lh=1.1>Choisis ton atelier</text>
+        <text color=$muted lh=1.5>Change d'offre quand tu veux. Les prix sont TTC.</text>
+      </col>
+      <col gap=$space-4 motion=cascade>
+        <PlanCard title="Esquisse" price="0 €" items={['3 projets', 'Export PNG']} selected={$plan == 0} on:click="set $plan = 0 smart 320 gentle"/>
+        <PlanCard title="Studio" price="19 €" note="Populaire" items={['Projets illimités', 'Design system', 'Prototypes animés']} selected={$plan == 1} on:click="set $plan = 1 smart 320 gentle"/>
+        <PlanCard title="Équipe" price="49 €" items={['Tout Studio', '5 sièges', 'Bibliothèque partagée']} selected={$plan == 2} on:click="set $plan = 2 smart 320 gentle"/>
+      </col>
+    </col>
+    <col fixed place=bottom w=fill px=$space-5 pt=$space-4 pb=safe fill=$bg>
+      <Button label="Continuer avec l'offre" iconRight=arrow-right full/>
+    </col>
+  </screen>
+</project>

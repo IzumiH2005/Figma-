@@ -14,6 +14,18 @@
   warning: #F5A524
   info: #2F6FEB
   radius: 14
+  // component tier: what the components read (a <system> regenerates them from its density / radius personality)
+  button-h-sm: 40
+  button-h-md: 48
+  button-h-lg: 56
+  button-radius: 12
+  button-px: 24
+  input-h: 52
+  input-radius: 14
+  card-radius: 20
+  card-pad: 16
+  chip-radius: 999
+  dialog-radius: 24
 </tokens>
 
 <component name="Button" props="label='Bouton' kind=primary size=md icon='' iconRight='' full=false loading=false disabled=false state=''" desc="Bouton. kind: primary|secondary|tonal|outline|ghost|link|danger ; size: sm|md|lg (40/48/56px) ; state: hover|pressed|focus|disabled|loading (pour documenter les états)">
@@ -23,7 +35,7 @@
 </component>
 
 <component name="ButtonBase" props="label='' kind=primary size=md icon='' iconRight='' full=false loading=false disabled=false state='' bg='transparent' fg='#000000'" desc="(interne) rendu commun des boutons">
-  <row gap=8 justify=center radius={size == 'lg' ? 16 : 12} h={kind == 'link' ? 'hug' : size == 'sm' ? 40 : size == 'lg' ? 56 : 48} minh={kind == 'link' ? 44 : 0} px={kind == 'link' ? 4 : size == 'sm' ? 16 : 24} w={full ? 'fill' : 'hug'}
+  <row gap=8 justify=center radius={size == 'lg' && num($button-radius) < 100 ? num($button-radius) + 4 : num($button-radius)} h={kind == 'link' ? 'hug' : size == 'sm' ? $button-h-sm : size == 'lg' ? $button-h-lg : $button-h-md} minh={kind == 'link' ? 44 : 0} px={kind == 'link' ? 4 : size == 'sm' ? 16 : $button-px} w={full ? 'fill' : 'hug'}
     fill={state == 'hover' ? (bg == 'transparent' ? alpha(fg, 8) : shade(bg, 10)) : state == 'pressed' ? (bg == 'transparent' ? alpha(fg, 14) : shade(bg, 18)) : bg}
     hover:fill={bg == 'transparent' ? alpha(fg, 8) : shade(bg, 10)} press:fill={bg == 'transparent' ? alpha(fg, 14) : shade(bg, 18)} press:scale=0.98
     color={fg} stroke={kind == 'outline' ? '1.5 ' + alpha(fg, 45) : 'none'} underline={kind == 'link'}
@@ -50,7 +62,7 @@
 </component>
 
 <component name="Chip" props="label='Filtre' selected=false icon=''" desc="Puce de filtre / tag sélectionnable">
-  <row gap=8 h=36 px=16 radius=full size=14 weight=500 press:scale=0.96
+  <row gap=8 h=36 px=16 radius=$chip-radius size=14 weight=500 press:scale=0.96
     fill={selected ? $text : $surface-2} color={selected ? $bg : $text}>
     <icon if={icon} name={icon} size=16/>
     <text nowrap>{label}</text>
@@ -99,7 +111,7 @@
 <component name="Field" props="label='' placeholder='Saisir…' bind='' icon='' type=text hint='' error='' optional=false valid=false" desc="Champ texte réellement saisissable en prototype (bind=nomDeVariable)">
   <col gap=8 w=fill>
     <text if={label} size=14 weight=600 color=$muted>{label}{optional ? ' (optionnel)' : ''}</text>
-    <row gap=12 h=52 px=16 radius=$radius fill=$surface stroke={error ? '1.5 ' + $danger : 'none'} focus:stroke={'2 ' + $primary}>
+    <row gap=12 h=$input-h px=16 radius=$input-radius fill=$surface stroke={error ? '1.5 ' + $danger : 'none'} focus:stroke={'2 ' + $primary}>
       <icon if={icon} name={icon} size=18 color=$muted/>
       <input w=fill h=fill placeholder={placeholder} bind={bind} type={type} size=16/>
       <icon if={valid} name=circle-check size=18 color=$success/>
@@ -130,8 +142,8 @@
   </row>
 </component>
 
-<component name="Card" props="pad=16" desc="Carte conteneur (slot)">
-  <col gap=12 p={pad} radius={$radius + 6} fill=$surface w=fill>
+<component name="Card" props="pad=''" desc="Carte conteneur (slot) ; pad vide = $card-pad du système">
+  <col gap=12 p={pad || $card-pad} radius=$card-radius fill=$surface w=fill>
     <slot/>
   </col>
 </component>
@@ -228,7 +240,7 @@
 </component>
 
 <component name="Dialog" props="title='Confirmer' message='' confirm='OK' cancel='Annuler'" desc="Boîte de dialogue centrée (overlay)">
-  <col w=300 fill=$bg radius=24 p=24 gap=12 shadow=xl>
+  <col w=300 fill=$bg radius=$dialog-radius p=24 gap=12 shadow=xl>
     <text size=20 weight=700 align=center>{title}</text>
     <text if={message} color=$muted align=center>{message}</text>
     <slot/>

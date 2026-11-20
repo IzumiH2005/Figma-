@@ -9,6 +9,8 @@ import { buildRuntime, buildEditorHTML, readExamples, iconSubset } from '../scri
 import { importShadcnTheme } from '../src/core/themes.js';
 import { importShadcn, SHADCN_REGISTRY } from '../src/core/shadcn-import.js';
 import { drive, send as driveSend } from './drive.js';
+import { generateSystem, toDTCG, toCSS, toTailwind, fromDTCG, tokenLines } from '../src/core/system.js';
+import { styleGuideSource } from '../src/core/styleguide.js';
 
 const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -27,6 +29,7 @@ const HELP = `Maquette CLI
   mq export  <file.mq> [-o proto.html]                               prototype HTML autonome (lecture seule)
   mq fmt     <file.mq> [--write]                                     reformate le source
   mq kit     [préfixe]                                               liste les composants du kit + props (mq kit ui. : pack shadcn)
+  mq ds      <file.mq> [--init "brand=#hex"] [--export dtcg|css|tailwind] [--import t.json] [--guide -o g.png]   design system
   mq spec    <file.mq> <Composant> [--props "k=v"] [-o spec.png]   fiche technique : paddings, écarts, tailles, typo, tokens
   mq drive   <file.mq> <gestes.txt> [--write] [--video s.mp4]       pilote souris : gestes continus dans l'éditeur (points, plume, rigs, menus…)
   mq drive   <file.mq> --serve [port]  ·  mq drive send "cmd; cmd"   session persistante (navigateur gardé ouvert)
@@ -535,6 +538,58 @@ async function cmdSpec(o) {
   console.log(`✓ ${out}\n  ` + res.legend.join('\n  '));
 }
 
+// design system engine: mq ds f.mq [--export dtcg|css|tailwind] [-o out] [--import tokens.json] [--guide -o guide.png]
+async function cmdDs(o) {
+  const file = o._[1]; if (!file) throw new Error('usage : mq ds f.mq [--export dtcg|css|tailwind -o fichier] [--import tokens.json] [--guide [-o guide.png] [--mode dark]] [--init "brand=#5B5BF7 radius=soft"]');
+  let src = fs.readFileSync(file, 'utf8');
+  if (o.init) {
+    if (/<system\b/.test(src.replace(/<!--[\s\S]*?-->/g, ''))) throw new Error('ce projet a déjà un <system>');
+    src = src.replace(/(<project[^>]*>)/, `$1\n  <system ${String(o.init === true ? 'brand=#5B5BF7' : o.init)}/>`);
+    fs.writeFileSync(file, src); console.log(`✓ <system ${o.init === true ? 'brand=#5B5BF7' : o.init}/> ajouté à ${file}`);
+  }
+  if (o.import) {
+    const map = fromDTCG(JSON.parse(fs.readFileSync(o.import, 'utf8')));
+    const lines = tokenLines(map);
+    const m = /<tokens>([\s\S]*?)<\/tokens>/.exec(src);
+    const block = lines.map((l) => '    ' + l).join('\n');
+    src = m ? src.slice(0, m.index) + '<tokens>' + m[1].replace(/\s*$/, '\n') + block + '\n  </tokens>' + src.slice(m.index + m[0].length) : src.replace(/(<project[^>]*>)/, `$1\n  <tokens>\n${block}\n  </tokens>`);
+    fs.writeFileSync(file, src); console.log(`✓ ${lines.length} tokens DTCG importés dans ${file}`); return;
+  }
+  const m = /<system\b([^>]*)\/?>/.exec(src.replace(/<!--[\s\S]*?-->/g, ''));
+  if (!m) throw new Error('aucun <system …/> dans ce projet (mq ds f.mq --init "brand=#hex radius=soft density=comfortable")');
+  const { parseAttrString } = await import('../src/core/project.js');
+  const attrs = parseAttrString(m[1].replace(/\/\s*$/, ''));
+  const sys = generateSystem(attrs);
+  const name = (/<project[^>]*name="([^"]+)"/.exec(src) || [])[1] || 'Design system';
+  if (o.export) {
+    const kind = String(o.export);
+    const out = kind === 'css' ? toCSS(sys) : kind === 'tailwind' ? toTailwind(sys) : JSON.stringify(toDTCG(sys, name), null, 2) + '\n';
+    const dest = o.o || (kind === 'css' ? 'tokens.css' : kind === 'tailwind' ? 'tailwind.config.js' : 'tokens.json');
+    fs.writeFileSync(dest, out); console.log(`✓ ${dest} (${kind === 'css' ? 'variables CSS, thème sombre [data-theme=dark]' : kind === 'tailwind' ? 'config Tailwind' : 'W3C DTCG 2025.10'})`);
+    return;
+  }
+  if (o.guide) {
+    const guideSrc = src.replace(/<\/project>\s*$/, styleGuideSource(sys, name) + '\n</project>\n');
+    const tmp = path.join(process.env.TMPDIR || '/tmp', `mq-guide-${process.pid}.mq`); fs.writeFileSync(tmp, guideSrc);
+    const outDir = path.dirname(o.o || 'out/guide.png'); fs.mkdirSync(outDir, { recursive: true });
+    await cmdRender({ _: ['render', tmp], s: name, o: outDir, scale: o.scale || 1, mode: o.mode, full: true });
+    const produced = path.join(outDir, `${slug(name)}.png`);
+    if (o.o && produced !== o.o) fs.renameSync(produced, o.o);
+    fs.unlinkSync(tmp);
+    if (o.write) { fs.writeFileSync(file, guideSrc); console.log(`✓ page de style ajoutée à ${file}`); }
+    return;
+  }
+  // summary
+  const ok = sys.checks.filter((c) => c.ok).length;
+  console.log(`Design system « ${name} » — ${attrs.brand || '#5B5BF7'} · neutres ${attrs.neutral || 'tinted'} · rayons ${attrs.radius || 'soft'} · densité ${attrs.density || 'comfortable'} · élévation ${attrs.elevation || 'soft'} · motion ${attrs.motion || 'calm'}`);
+  console.log(`  primitives : ${Object.keys(sys.primitives).length} (${sys.ramps.join(', ')} × 11 pas)`);
+  console.log(`  sémantiques : ${Object.keys(sys.light).length} par mode (clair / sombre)`);
+  console.log(`  échelles : ${Object.keys(sys.scales).length} · composant : ${Object.keys(sys.components).length} · alias shadcn : ${Object.keys(sys.shadcn).length}`);
+  console.log(`  contrastes : ${ok}/${sys.checks.length} conformes`);
+  for (const c of sys.checks.filter((x) => !x.ok)) console.log(`    ✖ ${c.mode} ${c.fg} sur ${c.bg} : ${c.ratio}:1 < ${c.min}`);
+  for (const role of ['primary', 'accent', 'danger']) if (sys.light[role]) console.log(`  ${role.padEnd(8)} clair ${sys.light[role]} / ${sys.light['on-' + role]} · sombre ${sys.dark[role]} / ${sys.dark['on-' + role]}`);
+}
+
 // agent pointer: drive the real editor with continuous mouse gestures (see cli/drive.js)
 async function cmdDrive(o) {
   if (o._[1] === 'send') { // client of a persistent session (mq drive f.mq --serve)
@@ -616,6 +671,6 @@ async function cmdScenes() {
 
 const o = args(process.argv.slice(2));
 const cmd = o._[0];
-const table = { motion: cmdMotion, render: cmdRender, board: cmdBoard, inspect: cmdInspect, lint: (x) => cmdLint(x), audit: (x) => cmdLint(x, true), video: (x) => cmdVideo(x), anim: (x) => cmdVideo(x, true), build: cmdBuild, export: cmdExport, fmt: cmdFmt, kit: cmdKit, 'shadcn-theme': cmdShadcnTheme, shadcn: cmdShadcn, drive: cmdDrive, spec: cmdSpec, icons: cmdIcons, scenes: cmdScenes };
+const table = { motion: cmdMotion, render: cmdRender, board: cmdBoard, inspect: cmdInspect, lint: (x) => cmdLint(x), audit: (x) => cmdLint(x, true), video: (x) => cmdVideo(x), anim: (x) => cmdVideo(x, true), build: cmdBuild, export: cmdExport, fmt: cmdFmt, kit: cmdKit, 'shadcn-theme': cmdShadcnTheme, shadcn: cmdShadcn, drive: cmdDrive, spec: cmdSpec, ds: cmdDs, icons: cmdIcons, scenes: cmdScenes };
 if (!cmd || !table[cmd]) { console.log(HELP); process.exit(cmd ? 1 : 0); }
 try { await table[cmd](o); } catch (e) { console.error('✖ ' + (e && e.message || e)); process.exit(1); }
