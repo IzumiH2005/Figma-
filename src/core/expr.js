@@ -96,7 +96,7 @@ function parseExpr(src) {
 
 const pc = (c) => parseColor(String(c)) || [0, 0, 0, 1];
 const pct = (p, d) => { const n = Number(p ?? d); return n > 1 ? n / 100 : n; };
-export const FALLBACK = { morph: null };
+export const FALLBACK = { morph: null, shape: null, gen: 0 }; // gen: bump to invalidate named-shape caches (live key editing)
 const BUILTINS = {
   fake: (k, seed) => fake(k, seed), fakeList: (n, fields, seed) => fakeList(n, fields, seed),
   shade: (c, p) => toCss(_shade(pc(c), pct(p, 10))), tint: (c, p) => toCss(_tint(pc(c), pct(p, 10))),
@@ -142,6 +142,13 @@ function ev(e, scope) {
     case 'tern': return ev(e.c, scope) ? ev(e.a, scope) : ev(e.b, scope);
     case 'call': {
       if (e.f.k === 'id' && e.f.v === 'dollar') return scope.lookup('$' + ev(e.args[0], scope));
+      if (e.f.k === 'id' && e.f.v === 'pathmix') { // keyframes: path data, or the name of a vector layer (bare or quoted)
+        const [t, ...rest] = e.args;
+        const ds = rest.map((x) => { let v = ev(x, scope); if (v === undefined && x.k === 'id' && !x.v.startsWith('$')) v = x.v;
+          if (typeof v === 'string' && !/^\s*[Mm]/.test(v)) { const r = scope.root && scope.root.shape ? scope.root.shape(v.trim()) : FALLBACK.shape ? FALLBACK.shape(v.trim()) : null; if (r) v = r; }
+          return v; });
+        return BUILTINS.pathmix(ev(t, scope), ...ds);
+      }
       const fn = e.f.k === 'id' ? BUILTINS[e.f.v] : null;
       if (!fn) throw new Error(`Fonction inconnue: ${e.f.v}`);
       return fn(...e.args.map((x) => ev(x, scope)));

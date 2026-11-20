@@ -22,7 +22,8 @@ import { genImage, SCENE_NAMES } from './gen.js';
 import { ICONS } from './icons.js';
 import { PACKS, registerPack, registerPacks, loadPack, ensureIconPacks, iconsUsed, getIcon, iconSvg, packIcons, packLoaded, setIconBase } from './iconpacks.js';
 import { deviceFrame } from './chrome.js';
-import { evaluate, interp, Scope } from './expr.js';
+import { evaluate, interp, Scope, FALLBACK as ExprHooks } from './expr.js';
+const Expr = { FALLBACK: ExprHooks };
 import { importShadcnTheme } from './themes.js';
 import KIT from './kit.mq';
 
@@ -114,6 +115,6 @@ export {
   playAnims, PRESETS, ENTRANCE, LOOPS, ACCENTS, MODIFIERS, EASINGS, parseSpec, totalDuration, springEasing, resolveEasing, shapeFrames, setTimeScale, getTimeScale, prefersReducedMotion,
   inspectScreen, lintScreen, lintProject, formatIssues, contrast, scoreIssues, applyFixes, fixSource, CATEGORIES, patchSource, patchStyle, saveSource,
   importShadcnTheme,
-  genImage, SCENE_NAMES, ICONS, deviceFrame, evaluate, interp, Scope, KIT,
+  genImage, SCENE_NAMES, ICONS, deviceFrame, evaluate, interp, Scope, Expr, KIT,
   PACKS, registerPack, registerPacks, loadPack, ensureIconPacks, iconsUsed, getIcon, iconSvg, packIcons, packLoaded, setIconBase,
 };

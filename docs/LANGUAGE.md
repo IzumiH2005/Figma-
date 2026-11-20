@@ -215,6 +215,10 @@ Tout ce qui se dessine dans Figma (formes, plume, booléens, texte sur chemin) e
 - **Fusion de formes** : `goo=10` sur un conteneur fond les enfants qui se touchent (métaballes ; à animer pour un effet liquide).
 - **Morphing** : `morph="heart"` (forme cible) + `loop="morph 2s"`, ou deux écrans dont un vecteur nommé change de `d` (smart animate interpole le tracé).
 - **Tracé piloté par une variable** : `d={pathmix($mood, "M8 32C32 4 64 4 88 32", "M8 20C32 20 64 20 88 20", "M8 8C32 40 64 40 88 8")}` interpole entre des tracés clés (t de 0 à 1, autant de clés que voulu). Si les tracés ont la même structure (mêmes commandes, même nombre de points), points **et** poignées sont interpolés exactement ; sinon un morph rééchantillonné prend le relais. Avec un `Slider` (`on:scrub="set $mood = {px}"`), la forme suit le doigt image par image : l'« emotion slider » de Figma, sans trois frames ni Smart Animate. Modèle : `examples/emotion-slider.mq`.
+  - **Clés nommées** : `d={pathmix($mood, triste, neutre, content)}`. Un argument qui n'est pas un tracé (nom nu ou `"entre guillemets"`) désigne un calque du projet :
+    - un `vector` de ce nom donne son tracé dans sa propre boîte ;
+    - un **cadre** de ce nom fusionne ses tracés, chacun décalé de son `x`/`y` dans le cadre.
+    Dessine donc chaque clé dans un cadre **de la taille du calque cible** (ici 96 × 40, posés sur la page à côté de l'écran) : la clé tombe exactement où la cible dessine, même après une édition qui recalcule la boîte du tracé. En édition de points d'une clé, tous les calques qui l'utilisent suivent **pendant** le geste. Un nom masqué par une variable locale (prop `content` d'un composant…) : mets-le entre guillemets.
 - **Modificateurs de tracé (non destructifs)** :
   - `offset=10` grossit et `offset=-6` rétrécit la forme, avec des jonctions arrondies. `offset-smooth` lisse le résultat. Figma n'a pas cette fonction en natif.
   - `width-profile=taper|taper-start|taper-end|brush|ink|calligraphy|bulge|wedge|marker`, ou des points `"0:0.1 0.3:1 1:0.2"`, donne une épaisseur variable au contour (`stroke="14 $ink"`).

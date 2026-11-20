@@ -1,5 +1,5 @@
 // DOM renderer: Maquette node tree -> live HTML elements.
-import { Scope, interp, evaluate } from './expr.js';
+import { Scope, interp, evaluate, FALLBACK } from './expr.js';
 import { DEVICES, platformOf, splitTop, withAlpha, parseColor, coerce } from './project.js';
 import { twToAttrs } from './tailwind.js';
 import { smoothShadow, buildConnector, buildChart } from './plugins.js';
@@ -10,7 +10,7 @@ import { meshDataURL, bindElastic, parseMesh } from './meshgrad.js';
 import { resolveColorFns, shade as shadeC, parseColor as parseC, toCss as toCssC } from './color.js';
 const shadeColor = (c, p) => { const v = parseC(c); if (!v) throw new Error('not a colour'); return toCssC(shadeC(v, p / 100)); };
 import { VECTOR_TAGS, nodePath, boxOf, booleanSubs, booleanParts, buildVector, ROUNDABLE, cornerOf, withCorners, buildTextPath, gooFilterSvg, maskCss, threeD, parseShapeSpec } from './vector.js';
-import { shapePath, serializePath } from './pathkit.js';
+import { shapePath, serializePath, translatePath } from './pathkit.js';
 import { textOf } from './parse.js';
 import { ICONS } from './icons.js';
 import { iconSvg, splitIconName, packLoaded } from './iconpacks.js';
@@ -51,8 +51,37 @@ const NON_STYLE = new Set(['name', 'key', 'class', 'if', 'repeat', 'each', 'as',
 
 let UID = 0;
 
+// Named shape for pathmix($t, triste, neutre, content): a vector layer named so (its d in its own box),
+// or a frame of that name whose vector children are merged, each offset by its x/y in the frame.
+// Draw the keyframes in frames the size of the target vector and they land exactly where it draws.
+export function namedShape(project, name) {
+  let hit = null;
+  const find = (n) => { if (hit || !n || n.tag === '#text') return; if (n.attrs && n.attrs.name === name && n.tag !== 'screen' && n.tag !== 'page') { hit = n; return; } (n.children || []).forEach(find); };
+  project.pages.forEach(find);
+  if (!hit) for (const c of Object.values(project.components || {})) { find(c.node || c); if (hit) break; }
+  if (!hit) return null;
+  const lit = (v) => v === undefined || /^-?[\d.]+$/.test(String(v).trim());
+  const geom = (n, dx, dy) => {
+    const a = n.attrs || {}; if (a.d && String(a.d).includes('{')) return '';
+    const subs = nodePath(n, a, boxOf(a));
+    return serializePath(dx || dy ? translatePath(subs, dx, dy) : subs);
+  };
+  if (['vector', 'path', 'svg', 'shape', 'ellipse', 'rect'].includes(hit.tag)) return geom(hit, 0, 0) || null;
+  const parts = [];
+  const walk = (n, ox, oy) => (n.children || []).forEach((c) => {
+    if (!c.attrs) return;
+    const x = ox + (lit(c.attrs.x) ? +(c.attrs.x || 0) : 0), y = oy + (lit(c.attrs.y) ? +(c.attrs.y || 0) : 0);
+    if (c.tag === 'vector' || c.tag === 'path' || c.tag === 'svg' || c.tag === 'shape' || c.tag === 'ellipse' || c.tag === 'rect') { const d = geom(c, x, y); if (d) parts.push(d); }
+    else walk(c, x, y);
+  });
+  walk(hit, 0, 0);
+  return parts.length ? parts.join(' ') : null;
+}
+
 export function rootScope(project, state) {
+  const shapes = new Map();
   const root = {
+    shape: (n) => { const k = FALLBACK.gen + ':' + n; if (!shapes.has(k)) shapes.set(k, namedShape(project, n)); return shapes.get(k); },
     platform: null, // posée par renderScreen : $platform = ios | android | web
     dollar: (n) => {
       if (state.vars && n in state.vars) return state.vars[n];
@@ -806,6 +835,7 @@ function createElementFor(node, a, scope, parentLayout, ctx) {
         el = document.createElement('div'); el.className = 'mq-vector';
         const box = boxOf(a, 100);
         buildVector(el, node, a, withCorners(nodePath(node, a, box), cornerOf(a)), box, ctx, (v) => fillToCss(v, ctx));
+        if (/pathmix\(/.test(String(node.attrs.d || ''))) el._liveD = () => { try { return serializePath(withCorners(nodePath(node, { ...a, d: interp(node.attrs.d, scope) }, box), cornerOf(a))); } catch { return null; } }; // keyframe being edited → follow live
         break;
       }
       el = document.createElement('div'); el.className = 'mq-vector';

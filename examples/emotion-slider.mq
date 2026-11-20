@@ -3,7 +3,9 @@
        de triste à content. Dans Figma il faut trois frames et Smart Animate (qui ne sait morpher un tracé que si
        les points correspondent un à un). Ici, une seule expression : d={pathmix($mood, triste, neutre, content)}
        interpole les points ET les poignées, image par image, pendant que le doigt glisse.
-       Pour redessiner une bouche : double-clic sur le tracé, puis tire directement sur le segment (outil Bend). -->
+       triste, neutre et content sont les trois cadres « clés » posés à droite de l'écran, à la taille de la bouche
+       (96 × 40) : pour redessiner une expression, double-clic sur son tracé puis tire sur le segment (outil Bend),
+       la bouche du prototype suit aussitôt. -->
   <system brand=#7A3FB0 accent=#E0567A neutral=warm radius=round density=comfortable elevation=soft motion=playful type="Roboto/Roboto"/>
 
   <vars>
@@ -26,7 +28,7 @@
             <frame w=28 h={round(44 - abs($mood - 0.5) * 16)} radius=full fill=#2B1B3D/>
           </row>
           <vector name=bouche absolute x=52 y=120 w=96 h=40 fill=none stroke="8 #2B1B3D" cap=round
-                  d={pathmix($mood, "M8 32C32 4 64 4 88 32", "M8 20C32 20 64 20 88 20", "M8 8C32 40 64 40 88 8")}/>
+                  d={pathmix($mood, triste, neutre, content)}/>
         </stack>
 
         <text name=humeur class=t-h3 align=center>{$mood < 0.34 ? 'Pas terrible' : $mood < 0.67 ? 'Neutre' : 'Plutôt bien'}</text>
@@ -50,5 +52,18 @@
         <Button label="Enregistrer l'humeur" w=fill/>
       </row>
     </screen>
+
+    <!-- Clés de la bouche : même taille que le calque bouche, un tracé à 4 points chacun (même structure,
+         donc interpolation exacte point par point). -->
+    <note x=520 y=40 w=240>Clés de la bouche. Double-clic sur un tracé, puis tire sur la courbe : le visage suit.</note>
+    <frame name=triste x=520 y=160 w=96 h=40 fill=#F6EEF9 radius=8>
+      <vector name=trait-triste absolute x=8 y=4 w=80 h=28 fill=none stroke="8 #2B1B3D" cap=round d="M0 28C24 0 56 0 80 28"/>
+    </frame>
+    <frame name=neutre x=520 y=232 w=96 h=40 fill=#F6EEF9 radius=8>
+      <vector name=trait-neutre absolute x=8 y=20 w=80 h=1 fill=none stroke="8 #2B1B3D" cap=round d="M0 0C24 0 56 0 80 0"/>
+    </frame>
+    <frame name=content x=520 y=304 w=96 h=40 fill=#F6EEF9 radius=8>
+      <vector name=trait-content absolute x=8 y=8 w=80 h=24 fill=none stroke="8 #2B1B3D" cap=round d="M0 0C24 32 56 32 80 0"/>
+    </frame>
   </page>
 </project>

@@ -377,12 +377,20 @@ export class VectorEditor {
     return false;
   }
 
+  // layers drawn with pathmix(…, key…) follow the key being edited, live (the emotion-slider face)
+  followers() {
+    const els = [...this.canvas.root.querySelectorAll('.mq-vector')].filter((el) => el._liveD); if (!els.length) return;
+    const n = this.app.node(this.id); if (!n) return;
+    const keep = n.attrs.d; n.attrs.d = P().serializePath(this.subs); MQ.Expr.FALLBACK.gen++;
+    try { for (const el of els) { const d = el._liveD(); if (d) MQ.Vector.setVectorD(el, d); } } finally { n.attrs.d = keep; MQ.Expr.FALLBACK.gen++; }
+  }
+
   preview() {
     const F = this.frame(); if (!F) return;
     if (this.op) { // recompute the boolean with the edited operand → live result, like Figma
       const b = F.el._bool; const parts = b.parts.map((q, i) => P().translatePath(i === this.op.index ? this.subs : q.local, q.x, q.y));
       MQ.Vector.setVectorD(F.el, P().serializePath(MQ.Vector.booleanResult(parts, b.op, b)));
-    } else MQ.Vector.setVectorD(F.el, P().serializePath(this.subs));
+    } else { MQ.Vector.setVectorD(F.el, P().serializePath(this.subs)); this.followers(); }
     this.canvas.drawOverlay();
   }
 

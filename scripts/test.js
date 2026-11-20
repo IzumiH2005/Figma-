@@ -109,6 +109,16 @@ const proto = await page.evaluate(async () => {
 ok(proto.n === 1 && proto.txt === '1', 'Player: inc $n re-rend le texte');
 ok(proto.screen === 'B', 'Player: go B (smart)');
 
+// pathmix with named keyframes: frames of the target's size, their vector offset by x/y inside the frame
+const pmx = await page.evaluate(() => {
+  const p = MQ.loadProject(`<page name=P><screen name=S w=200 h=100><vector name=v w=40 h=20 fill=none stroke="2 #000" d={pathmix(0.5, haut, bas)}/></screen>
+    <frame name=haut x=300 w=40 h=20><vector absolute x=4 y=2 w=32 h=1 d="M0 0C10 0 22 0 32 0"/></frame>
+    <frame name=bas x=360 w=40 h=20><vector absolute x=4 y=18 w=32 h=1 d="M0 0C10 0 22 0 32 0"/></frame></page>`);
+  document.body.innerHTML = ''; const el = MQ.screenElement(p, 'S'); document.body.appendChild(el);
+  const path = el.querySelector('[data-key=v] path'); return path && path.getAttribute('d');
+});
+ok(/^M4 10C14 10 26 10 36 10/.test(String(pmx).replace(/\s+/g, ' ').replace(/ (?=[A-Z])/g, '')), 'pathmix: clés nommées (cadre + décalage du tracé) → ' + pmx);
+
 // gestures: real pointer drags through the Player (drag + snap + binding, flick projection, scrub, lint gesture-alt)
 await page.evaluate(() => {
   const p = MQ.loadProject(`<vars>s: 0
@@ -477,6 +487,8 @@ export function PillRow({ className, ...props }) { return <div className={cn("fl
   ok(P.pathMixSame(0.5, ['M0 0L10 0', 'M0 0L10 0L10 10']) === null, 'pathmix: different structure → fallback');
   const { evaluate, Scope } = await import('../src/core/expr.js');
   ok(evaluate('pathmix(0.5, "M0 0L10 0", "M0 10L10 10")', new Scope({})) === 'M0 5L10 5', 'pathmix() in expressions');
+  const keys = { a: 'M0 0L10 0', b: 'M0 10L10 10' };
+  ok(evaluate('pathmix(0.5, a, "b")', new Scope({}, null, { dollar: () => undefined, shape: (n) => keys[n] || null })) === 'M0 5L10 5', 'pathmix(t, nom, nom): vecteurs nommés');
 }
 
 // editor boots
