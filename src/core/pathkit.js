@@ -160,7 +160,8 @@ export function pathMixSame(t, ds) {
   const P = ds.map((d) => parsePath(String(d)));
   const same = P.every((s) => s.length === P[0].length && s.every((sub, i) => sub.nodes.length === P[0][i].nodes.length && !!sub.closed === !!P[0][i].closed));
   if (!same) return null;
-  const n = ds.length - 1; const x = Math.min(1, Math.max(0, +t || 0)) * n; const i = Math.min(n - 1, Math.floor(x)); const u = x - i;
+  // beyond 0..1 (a spring overshooting) the first/last span extrapolates a little: the shape overshoots too
+  const n = ds.length - 1; const x = Math.min(1.5, Math.max(-0.5, +t || 0)) * n; const i = Math.min(n - 1, Math.max(0, Math.floor(x))); const u = x - i;
   const A = P[i], B = P[i + 1]; const L = (p, q) => ({ x: p.x + (q.x - p.x) * u, y: p.y + (q.y - p.y) * u });
   const out = A.map((sub, si) => ({ closed: sub.closed, nodes: sub.nodes.map((a, ni) => { const b = B[si].nodes[ni];
     const ai = a.in || a, bi = b.in || b, ao = a.out || a, bo = b.out || b; const hasIn = a.in || b.in, hasOut = a.out || b.out;

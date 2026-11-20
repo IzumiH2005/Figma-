@@ -214,7 +214,7 @@ Tout ce qui se dessine dans Figma (formes, plume, booléens, texte sur chemin) e
 - **Sélectionner les calques correspondants** (menu contextuel) : même type, remplissage, contour, classe, taille, rayon dans la même maquette, comme dans Figma.
 - **Fusion de formes** : `goo=10` sur un conteneur fond les enfants qui se touchent (métaballes ; à animer pour un effet liquide).
 - **Morphing** : `morph="heart"` (forme cible) + `loop="morph 2s"`, ou deux écrans dont un vecteur nommé change de `d` (smart animate interpole le tracé).
-- **Tracé piloté par une variable** : `d={pathmix($mood, "M8 32C32 4 64 4 88 32", "M8 20C32 20 64 20 88 20", "M8 8C32 40 64 40 88 8")}` interpole entre des tracés clés (t de 0 à 1, autant de clés que voulu). Si les tracés ont la même structure (mêmes commandes, même nombre de points), points **et** poignées sont interpolés exactement ; sinon un morph rééchantillonné prend le relais. Avec un `Slider` (`on:scrub="set $mood = {px}"`), la forme suit le doigt image par image : l'« emotion slider » de Figma, sans trois frames ni Smart Animate. Modèle : `examples/emotion-slider.mq`.
+- **Tracé piloté par une variable** : `d={pathmix($mood, "M8 32C32 4 64 4 88 32", "M8 20C32 20 64 20 88 20", "M8 8C32 40 64 40 88 8")}` interpole entre des tracés clés (t de 0 à 1, autant de clés que voulu). Si les tracés ont la même structure (mêmes commandes, même nombre de points), points **et** poignées sont interpolés exactement ; sinon un morph rééchantillonné prend le relais. Avec un `Slider` (`on:scrub="set $mood = {px}"`), la forme suit le doigt image par image : l'« emotion slider » de Figma, sans trois frames ni Smart Animate. Modèle : `examples/emotion-slider.mq`. Les `pathmix` s'imbriquent (`pathmix(err, pathmix(f, repos, actif), erreur)` : un axe par état) et, à même structure, **extrapolent** au-delà de 0..1 (jusqu'à −0,5 et 1,5) : le dépassement d'un ressort se lit dans la forme. Modèle : `examples/champ-corde.mq`.
   - **Clés nommées** : `d={pathmix($mood, triste, neutre, content)}`. Un argument qui n'est pas un tracé (nom nu ou `"entre guillemets"`) désigne un calque du projet :
     - un `vector` de ce nom donne son tracé dans sa propre boîte ;
     - un **cadre** de ce nom fusionne ses tracés, chacun décalé de son `x`/`y` dans le cadre.
@@ -485,7 +485,7 @@ Les plugins Figma les plus utilisés existent ici en natif :
 <text if={len($panier) == 0}>Panier vide</text>
 ```
 
-Dans une boucle : `item` (ou `as=`), `i`, `first`, `last`.
+Dans une boucle : `item` (ou `as=`), `i`, `first`, `last`. Avec `each=`/`repeat=`, `if=` est testé **par élément** (il peut lire `item`, `as`, `i`) : `<stack each={domaines} as=d if={includes(d, saisie)}>` filtre la liste.
 Expressions : littéraux, tableaux/objets, `+ - * / %`, comparaisons, `&& || ! ?? ? :`, accès `a.b` / `a[0]`.
 **Convertisseurs (à la Rive)** : une seule valeur pilote plusieurs sorties, sans cascade de ternaires.
 - `keys(t, a, b, c…)` : clés réparties de 0 à 1 (`keys($p, 24, 14, 6, 0)` → minutes restantes) ;
@@ -503,7 +503,7 @@ Fonctions : `len min max round floor ceil abs clamp fixed money(n,'€') percent
 <screen on:after-2000="go Accueil dissolve 600"> …
 ```
 
-**Déclencheurs** : `on:click` `on:dblclick` / `on:doubletap` `on:press` `on:release` `on:longpress` `on:enter` `on:leave` `on:swipe-left|right|up|down` `on:load` `on:after-1500` `on:key-Enter` (n'importe quelle touche) `on:change` (input, `value` dans le scope) `on:submit`, plus les gestes continus ci-dessous.
+**Déclencheurs** : `on:click` `on:dblclick` / `on:doubletap` `on:press` `on:release` `on:longpress` `on:enter` `on:leave` `on:swipe-left|right|up|down` `on:load` `on:after-1500` `on:key-Enter` (n'importe quelle touche) `on:change` / `on:input` (input, `value` dans le scope) `on:focus` / `on:blur` (champ qui prend ou perd le focus) `on:submit` (Entrée dans le champ), plus les gestes continus ci-dessous.
 
 ### Gestes (doigt et souris)
 
@@ -548,8 +548,10 @@ Tout se manipule au doigt **et** à la souris (Pointer Events), avec un seuil de
 | `overlay Nom [center|bottom|top|left|right] [dim=.5] [blur=6] [noclose]` | ouvre un écran **ou un composant** en overlay |
 | `close` · `swap Nom` | fermer / remplacer l'overlay |
 | `set $v = expr [smart ms]` · `toggle $v` · `inc $v [n]` · `dec $v` | variables (re-rendu animé en smart par défaut) |
-| `set $v = expr tween ms [easing]` | **la variable elle-même voyage** (nombre, couleur, tracé, tableau, objet), image par image : tout ce qui en dépend suit (texte qui décompte, `keys()`, `along=`, `pathmix`). L'action suivante attend la fin |
+| `set $v = expr tween ms [easing] [&]` | **la variable elle-même voyage** (nombre, couleur, tracé, tableau, objet), image par image : tout ce qui en dépend suit (texte qui décompte, `keys()`, `along=`, `pathmix`). L'action suivante attend la fin, sauf avec `&` (en parallèle) |
+| `set ${prop} = expr` | dans un composant : écrit la variable **dont le nom est dans la prop** (`bind='email'`), comme `<input bind={bind}>` qui la lit |
 | `change k=v [smart ms easing]` · `inc k` · `dec k` (sans `$`) | dans un composant : modifie la prop de cette instance |
+| `change k=v tween ms [easing] [&]` | la **prop de l'instance** voyage image par image. Avec un ressort (`bouncy`, `wobbly`, `snap`…) elle dépasse puis revient : `pathmix`, `keys()` et `along=` qui en dépendent rebondissent avec elle. `&` lance plusieurs tweens en même temps ; une prop relancée en cours de route repart de sa valeur actuelle |
 | `if expr then action [else action]` · `if {expr} action` | conditionnelle |
 | `scroll clé` · `scroll top` | défilement doux vers un élément nommé |
 | `play clé preset` | jouer une animation (ex. `shake` sur erreur) |

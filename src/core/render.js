@@ -655,7 +655,7 @@ export function renderNode(node, scope, parentLayout, ctx, overrides) {
   if (ctx.depth > 40) { ctx.errors.push('Récursion de composants trop profonde'); return []; }
   const at = node.attrs || {};
   // conditionals & loops
-  if (at.if !== undefined) {
+  if (at.if !== undefined && at.each === undefined && at.repeat === undefined) { // with each/repeat: tested per item (it can read the item, i…)
     let ok = true;
     try { ok = !!evaluate(String(at.if).replace(/^\{|\}$/g, ''), scope); } catch (e) { ctx.errors.push(e.message); }
     if (!ok) return [];
@@ -870,7 +870,7 @@ function createElementFor(node, a, scope, parentLayout, ctx) {
       el.className = 'mq-input';
       if (tag === 'input') el.type = a.type || 'text';
       if (a.placeholder) el.placeholder = a.placeholder;
-      const bind = node.attrs.bind ? String(node.attrs.bind).replace(/^\$/, '') : null;
+      const rawB = node.attrs.bind; const bind = rawB ? String(/\{/.test(String(rawB)) ? a.bind : rawB).replace(/^\$/, '') || null : null; // bind={prop} inside a component
       if (bind && ctx.vars && ctx.vars[bind] != null) el.value = ctx.vars[bind];
       else if (a.value !== undefined) el.value = a.value;
       if (bind) el.dataset.bind = bind;

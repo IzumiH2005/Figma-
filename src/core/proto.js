@@ -52,7 +52,7 @@ export class Player {
     window.addEventListener('keydown', this._onKey);
   }
 
-  destroy() { this.clearTimers(); window.removeEventListener('keydown', this._onKey); this.host.innerHTML = ''; }
+  destroy() { this.clearTimers(); if (this._twRaf) cancelAnimationFrame(this._twRaf); this._tw = {}; window.removeEventListener('keydown', this._onKey); this.host.innerHTML = ''; }
   clearTimers() { this.timers.forEach(clearTimeout); this.timers = []; this.keyHandlers = []; }
   emit(type, data) { this.opts.onEvent && this.opts.onEvent(type, data); }
 
@@ -129,6 +129,13 @@ export class Player {
         case 'on:enter': case 'on:hover': el.addEventListener('pointerenter', run(ev)); break;
         case 'on:leave': el.addEventListener('pointerleave', run(ev)); break;
         case 'on:change': case 'on:input': el.addEventListener('input', run(ev, (e) => ({ value: e.target.value }))); break;
+        // focus / blur: inputs (focus, blur) or containers (focusin, focusout). The per-frame re-render moves focus to the
+        // rebuilt input: those hand-overs are not real focus changes and are ignored.
+        case 'on:focus': el.addEventListener(/^(INPUT|TEXTAREA)$/.test(el.tagName) ? 'focus' : 'focusin', (e) => { if (!this._refocus) run(ev, () => ({ value: e.target.value ?? '' }))(e); }); break;
+        case 'on:blur': el.addEventListener(/^(INPUT|TEXTAREA)$/.test(el.tagName) ? 'blur' : 'focusout', (e) => {
+          if (this._refocus) return; const bindKey = e.target.dataset && e.target.dataset.bind; const value = e.target.value ?? '';
+          setTimeout(() => { const a = document.activeElement; if (bindKey && a && a.dataset && a.dataset.bind === bindKey && a !== e.target && a.isConnected) return; run(ev, () => ({ value }))(e); }, 0);
+        }); break;
         case 'on:submit': el.addEventListener('keydown', (e) => { if (e.key === 'Enter') run(ev, () => ({ value: e.target.value }))(e); }); break;
         case 'on:longpress': {
           let t; el.addEventListener('pointerdown', (e) => { t = setTimeout(() => run(ev)(e), 500); });
@@ -189,22 +196,32 @@ export class Player {
 
   // set $x = v tween 2400 [courbe] : the VARIABLE itself travels (numbers, colours, paths, arrays, objects), one
   // instant re-render per frame, so every binding (text, keys(), along=, pathmix) follows. Resolves at the end.
-  tweenVar(name, to, dur, ease) {
-    const from = this.vars[name]; this._tw = this._tw || {};
-    if (this._tw[name]) this._tw[name].cancel();
-    if (prefersReducedMotion() || from === undefined || dur <= 0) { this.vars[name] = to; return this.rerender({ type: 'instant' }); }
+  tweenVar(name, to, dur, ease) { return this.tweenOn(this.vars, name, 'var:' + name, to, dur, ease); }
+
+  // obj[prop] travels to `to` (numbers, colours, paths, arrays, objects); id = one running tween per target
+  tweenOn(obj, prop, id, to, dur, ease) {
+    const from = obj[prop]; this._tw = this._tw || {};
+    if (this._tw[id]) this._tw[id].cancel();
+    if (prefersReducedMotion() || from === undefined || dur <= 0) { obj[prop] = to; return this.rerender({ type: 'instant' }); }
     const f = easeFn(resolveEasing(ease || 'in-out').easing);
     return new Promise((done) => {
-      const t0 = performance.now(); let raf = 0;
-      const tw = (this._tw[name] = { cancel: () => { cancelAnimationFrame(raf); done(); } });
-      const tick = (now) => {
-        const u = Math.min(1, ((now - t0) * getTimeScale()) / dur);
-        this.vars[name] = u >= 1 ? to : lerpAny(from, to, f(u));
-        this.rerender({ type: 'instant' });
-        if (u < 1) raf = requestAnimationFrame(tick); else { if (this._tw[name] === tw) delete this._tw[name]; done(); }
-      };
-      raf = requestAnimationFrame(tick);
+      const tw = (this._tw[id] = { obj, prop, from, to, f, dur, t0: performance.now(), done, cancel: () => { if (this._tw[id] === tw) delete this._tw[id]; done(); } });
+      // one ticker for every running tween: several values travelling together cost one re-render per frame
+      if (!this._twRaf) this._twRaf = requestAnimationFrame((now) => this.tweenTick(now));
     });
+  }
+
+  tweenTick(now) {
+    this._twRaf = 0; const all = Object.entries(this._tw || {}); if (!all.length) return;
+    const ended = [];
+    for (const [id, tw] of all) {
+      const u = Math.min(1, ((now - tw.t0) * getTimeScale()) / tw.dur);
+      tw.obj[tw.prop] = u >= 1 ? tw.to : lerpAny(tw.from, tw.to, tw.f(u));
+      if (u >= 1) ended.push([id, tw]);
+    }
+    for (const [id, tw] of ended) { delete this._tw[id]; tw.done(); }
+    this.rerender({ type: 'instant' });
+    if (Object.keys(this._tw).length) this._twRaf = requestAnimationFrame((t) => this.tweenTick(t));
   }
 
   scheduleRerender(t) {
@@ -244,18 +261,19 @@ export class Player {
         case 'close': return await this.closeOverlay(w.slice(1));
         case 'swap': { await this.closeOverlay(['instant']); return await this.openOverlay(resolveName(w[1]), w.slice(2), scope); }
         case 'set': {
-          const m = /^set\s+\$?([\w-]+)\s*=\s*(.+?)(\s+(smart|instant|dissolve|tween)(\s+\d+)?(\s+\S+)?)?$/.exec(step);
+          const m = /^set\s+\$?(\{[^{}]*\}|[\w-]+)\s*=\s*(.+?)(\s+(smart|instant|dissolve|tween)(\s+\d+)?(\s+[^\s&]+)?)?(\s*&)?$/.exec(step);
           if (!m) throw new Error(`set invalide: ${step}`);
+          if (m[1][0] === '{') m[1] = String(interp(m[1], scope)).replace(/^\$/, ''); // set ${bind} = … : name held by a prop
           const ex = m[2].trim();
           const val = /^\{[^{}]*\}$/.test(ex) ? interp(ex, scope) : evaluate(ex, scope);
-          if (m[4] === 'tween') { await this.tweenVar(m[1], val, m[5] ? +m[5] : 600, (m[6] || '').trim()); return; }
+          if (m[4] === 'tween') { const p = this.tweenVar(m[1], val, m[5] ? +m[5] : 600, (m[6] || '').trim()); if (!m[7]) await p; return; } // « & » : en parallèle
           this.vars[m[1]] = val;
           return { dirty: true, transition: m[3] ? parseTransition(words(m[3])) : null };
         }
         case 'change': { // change k=v k2={expr} [smart 300 ease] → the enclosing instance's own props (Figma "Change to", on any prop)
           const key = scope.lookup('__inst'); if (!key) throw new Error('change : à utiliser dans un composant');
           const rest = step.replace(/^change\s+/, ''); const re = /([\w-]+)\s*=\s*(\{[^{}]*\}|"[^"]*"|'[^']*'|\S+)/g; let m, last = 0;
-          const loc = (this.inst[key] = this.inst[key] || {});
+          const loc0 = (this.inst[key] = this.inst[key] || {}); const pend = {}; const loc = pend;
           while ((m = re.exec(rest))) {
             const [, k, ex] = m; last = re.lastIndex;
             let v;
@@ -267,6 +285,14 @@ export class Player {
             loc[k] = v;
           }
           const tail = words(rest.slice(last));
+          if (tail[0] === 'tween') { // change k=v tween 600 bouncy [&] : the instance's props travel, frame by frame
+            const nowait = tail.includes('&'); const t2 = tail.filter((x) => x !== '&'); const dur = /^\d+$/.test(t2[1] || '') ? +t2[1] : 600; const ease = t2[/^\d+$/.test(t2[1] || '') ? 2 : 1] || '';
+            const cur = scope.child({}); const ps = [];
+            for (const k of Object.keys(pend)) { if (!(k in loc0)) { try { loc0[k] = cur.lookup(k); } catch (e) { /* */ } } ps.push(this.tweenOn(loc0, k, key + '.' + k, pend[k], dur, ease)); }
+            if (!nowait) await Promise.all(ps);
+            return;
+          }
+          Object.assign(loc0, pend);
           return { dirty: true, transition: tail.length ? parseTransition(tail) : null };
         }
         case 'toggle': { const n = w[1].replace(/^\$/, ''); const key = !w[1].startsWith('$') && !(n in this.vars) && scope.lookup('__inst'); if (key) { const loc = (this.inst[key] = this.inst[key] || {}); loc[n] = !(n in loc ? loc[n] : scope.lookup(n)); return { dirty: true, transition: w.length > 2 ? parseTransition(w.slice(2)) : null }; } this.vars[n] = !this.vars[n]; return { dirty: true, transition: w.length > 2 ? parseTransition(w.slice(2)) : null }; }
@@ -372,7 +398,7 @@ export class Player {
         const n = s.body ? newEl.querySelector('.mq-screen-body') : newEl.querySelector(`[data-id="${s.id}"]`);
         if (n) { n.scrollTop = s.top; n.scrollLeft = s.left; }
       }
-      if (active) { const inp = newEl.querySelector(`[data-bind="${active.bind}"]`); if (inp) { inp.focus(); try { inp.setSelectionRange(active.s, active.e); } catch (e) { /* */ } } }
+      if (active) { const inp = newEl.querySelector(`[data-bind="${active.bind}"]`); if (inp) { this._refocus = true; try { inp.focus(); inp.setSelectionRange(active.s, active.e); } catch (e) { /* */ } finally { this._refocus = false; } } }
       startFresh();
     };
     // the new screen is current right away: a click during a running transition re-renders from it, not from a stale one

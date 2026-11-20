@@ -142,6 +142,31 @@ const alg = await page.evaluate(async () => {
 ok(/M\s*40[ ,]+20/.test(alg.path) && alg.dist === '0%' && /auto/.test(alg.rot), `along= : offset-path décalé par x/y du vecteur ${alg.path} · ${alg.dist} · ${alg.rot}`);
 ok(alg.mid > 0.05 && alg.mid < 0.95 && alg.end === 1 && alg.txt === '100', `set … tween : la variable voyage (${alg.mid.toFixed(2)} → ${alg.end}), le texte suit (${alg.txt})`);
 
+// component state tweened per instance (change … tween &), on:focus/on:blur, bind={prop}, set ${prop} = …, if per item of each
+const cmp = await page.evaluate(async () => {
+  const p = MQ.loadProject(`<vars>mail: 'ada@'</vars>
+  <component name=Champ props="bind='mail' f=0 foc=0">
+    <col w=300><input name=saisie bind={bind} type=text w=fill h=48 on:focus="change foc=1 tween 120 out &; change f=1 tween 300 bouncy &" on:blur="change foc=0 tween 120 out"/>
+      <text name=val>{f}</text>
+      <row name=puces><stack each={['gmail.com','proton.me']} as=dom if={includes(dom, 'gm')} name={'p-' + dom} on:click="set \${bind} = {first(split(dollar(bind), '@')) + '@' + dom}"><text>{dom}</text></stack></row>
+    </col></component>
+  <screen name=S w=320 h=200 start><Champ/></screen>`);
+  const host = document.createElement('div'); document.body.innerHTML = ''; document.body.appendChild(host);
+  const pl = new MQ.Player(p, host, {}); pl.start();
+  const q = (k) => host.querySelector('[data-key="' + k + '"]');
+  const inputVal = (q('saisie').querySelector('input') || q('saisie')).value;
+  const chips = [...host.querySelectorAll('[data-key^="p-"]')].map((e) => e.dataset.key.split('#')[0]);
+  const inp = q('saisie').querySelector('input') || q('saisie'); inp.focus(); inp.dispatchEvent(new FocusEvent('focus')); inp.dispatchEvent(new FocusEvent('focusin', { bubbles: true }));
+  await new Promise((r) => setTimeout(r, 90)); const mid = Number(q('val').textContent);
+  await new Promise((r) => setTimeout(r, 600)); const end = Number(q('val').textContent);
+  host.querySelector('[data-key^="p-gmail.com"]').click(); await new Promise((r) => setTimeout(r, 200));
+  return { inputVal, chips, mid, end, mail: pl.vars.mail };
+});
+ok(cmp.inputVal === 'ada@', `bind={prop} : le champ du composant lit la variable nommée par la prop (${cmp.inputVal})`);
+ok(cmp.chips.length === 1 && cmp.chips[0] === 'p-gmail.com', `if + each : la condition est testée par élément ${JSON.stringify(cmp.chips)}`);
+ok(cmp.mid > 0 && cmp.mid < 1.3 && Math.abs(cmp.end - 1) < 0.02, `on:focus + change … tween : l'état d'instance voyage (${cmp.mid} → ${cmp.end})`);
+ok(cmp.mail === 'ada@gmail.com', `set \${prop} = … : écrit la variable nommée par la prop (${cmp.mail})`);
+
 // gestures: real pointer drags through the Player (drag + snap + binding, flick projection, scrub, lint gesture-alt)
 await page.evaluate(() => {
   const p = MQ.loadProject(`<vars>s: 0
@@ -508,6 +533,7 @@ export function PillRow({ className, ...props }) { return <div className={cn("fl
   ok(P.pathMixSame(0.5, ['M0 0C10 10 20 10 30 0', 'M0 10C10 0 20 0 30 10']) === 'M0 5C10 5 20 5 30 5', 'pathmix: node-wise midpoint');
   ok(P.pathMixSame(0.75, ['M0 0L10 0', 'M0 10L10 10', 'M0 20L10 20']) === 'M0 15L10 15', 'pathmix: keyframes');
   ok(P.pathMixSame(0.5, ['M0 0L10 0', 'M0 0L10 0L10 10']) === null, 'pathmix: different structure → fallback');
+  ok(P.pathMixSame(1.2, ['M0 0L10 0', 'M0 10L10 10']) === 'M0 12L10 12' && P.pathMixSame(9, ['M0 0L10 0', 'M0 10L10 10']) === 'M0 15L10 15', 'pathmix: extrapolation (dépassement de ressort), bornée à 1,5');
   const { evaluate, Scope } = await import('../src/core/expr.js');
   ok(evaluate('pathmix(0.5, "M0 0L10 0", "M0 10L10 10")', new Scope({})) === 'M0 5L10 5', 'pathmix() in expressions');
   const keys = { a: 'M0 0L10 0', b: 'M0 10L10 10' };
