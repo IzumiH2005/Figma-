@@ -36,9 +36,9 @@
         <text weight=700 size=18 ls=-0.4>Nimbus</text>
       </row>
       <row gap=32 hidden md:hidden=false size=14 color=$muted weight=500>
-        <text hover:color=$text cursor=pointer on:click="scroll features">Fonctionnalités</text>
-        <text hover:color=$text cursor=pointer on:click="scroll pricing">Tarifs</text>
-        <text hover:color=$text cursor=pointer on:click="scroll faq">FAQ</text>
+        <text py=6 hover:color=$text cursor=pointer on:click="scroll features">Fonctionnalités</text>
+        <text py=6 hover:color=$text cursor=pointer on:click="scroll pricing">Tarifs</text>
+        <text py=6 px=4 hover:color=$text cursor=pointer on:click="scroll faq">FAQ</text>
       </row>
       <row gap=12>
         <IconButton icon=sun-moon size=40 on:click="mode next"/>
@@ -153,8 +153,8 @@
             <text class=h2 align=center>Simple. Transparent.</text>
           </col>
           <row p=4 radius=full fill=$surface stroke="1 $border" gap=4>
-            <stack name=bill-m h=38 px=20 radius=full center fill={$yearly ? 'transparent' : $text} color={$yearly ? $muted : $bg} weight=600 on:click="set $yearly = false smart 350" cursor=pointer><text>Mensuel</text></stack>
-            <row name=bill-y h=38 px=20 gap=8 radius=full fill={$yearly ? $text : 'transparent'} color={$yearly ? $bg : $muted} weight=600 on:click="set $yearly = true smart 350" cursor=pointer><text>Annuel</text><row h=22 px=8 radius=full fill=$accent color=#16151A size=12 weight=700><text>-20 %</text></row></row>
+            <stack name=bill-m h=44 px=20 radius=full center fill={$yearly ? 'transparent' : $text} color={$yearly ? $muted : $bg} weight=600 on:click="set $yearly = false smart 350" cursor=pointer><text>Mensuel</text></stack>
+            <row name=bill-y h=44 px=20 gap=8 radius=full fill={$yearly ? $text : 'transparent'} color={$yearly ? $bg : $muted} weight=600 on:click="set $yearly = true smart 350" cursor=pointer><text>Annuel</text><row h=22 px=8 radius=full fill=$accent color=#16151A size=12 weight=700><text>-20 %</text></row></row>
           </row>
           <grid cols=1 md:cols=3 gap=16 w=fill align=stretch>
             <Plan each={$plans} as=p p={p}/>

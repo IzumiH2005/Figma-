@@ -9,6 +9,7 @@ import { parseSpec } from './anim.js';
 export const CATEGORIES = { a11y: 'Accessibilité', spacing: 'Espacement & grille', type: 'Typographie', color: 'Couleur', ux: 'Composants & UX', motion: 'Motion', proto: 'Prototype' };
 const CAT = {
   contrast: 'a11y', 'contrast-ui': 'a11y', 'tap-target': 'a11y', 'tiny-text': 'a11y', 'body-size': 'a11y', 'input-label': 'a11y', 'link-style': 'a11y',
+  'icon-gap': 'spacing', 'button-padding': 'spacing', 'nested-radius': 'spacing', 'icon-size': 'ux', 'no-feedback': 'motion', 'edge-stroke': 'color',
   'off-grid': 'spacing', 'edge-margin': 'spacing', crowded: 'spacing', bounds: 'spacing', overflow: 'spacing',
   'type-scale': 'type', 'type-count': 'type', 'line-length': 'type', 'caps-long': 'type',
   hardcoded: 'color', 'pure-color': 'color', 'gradient-muddy': 'color', 'color-count': 'color', 'shadow-light': 'color',
@@ -189,6 +190,52 @@ export function lintScreen(screenEl, project, screenNode) {
       }
     }
   }
+
+  // --- component anatomy (icon ↔ label, padding, nested radii, interactive feedback)
+  const px = (v) => parseFloat(v) || 0;
+  screenEl.querySelectorAll('.mq-icon, [data-tag="icon"]').forEach((ic) => {
+    if (!visible(ic)) return;
+    const row = ic.parentElement; if (!row) return;
+    const rcs = getComputedStyle(row); if (!(rcs.display.includes('flex') && rcs.flexDirection.startsWith('row'))) return;
+    const rr = rel(row, screenEl); if (rr.h > 72) return;
+    const sib = [ic.previousElementSibling, ic.nextElementSibling].find((x) => x && x.dataset && x.dataset.tag === 'text' && visible(x) && x.textContent.trim());
+    if (!sib) return;
+    // a text that stretches (w=fill / grow) pushes a trailing icon to the far end: not an icon + label pair
+    const scs = getComputedStyle(sib); if (parseFloat(scs.flexGrow) > 0 || rcs.justifyContent === 'space-between') return;
+    const a = rel(ic, screenEl), t = rel(sib, screenEl); const fs = px(getComputedStyle(sib).fontSize) || 14;
+    const gap = a.x < t.x ? t.x - (a.x + a.w) : a.x - (t.x + t.w);
+    const ideal = Math.max(4, Math.min(12, Math.round((fs * 0.5) / 2) * 2));
+    const node = row.dataset && row.dataset.id ? project.byId.get(row.dataset.id) : null;
+    const fix = node && node.attrs.gap !== undefined && !/[{$]/.test(String(node.attrs.gap)) ? { id: node.id, attrs: { gap: String(ideal) } } : undefined;
+    if (gap < 3.5) push('warn', 'icon-gap', `Icône collée au libellé (${Math.round(gap)}px) dans « ${short(sib.textContent, 24)} » : écart ≈ ${ideal}px (la moitié de la taille du texte)`, row, fix);
+    else if (gap > Math.max(14, fs * 0.95)) push('info', 'icon-gap', `Icône éloignée du libellé (${Math.round(gap)}px) dans « ${short(sib.textContent, 24)} » : ≈ ${ideal}px les lit comme un tout (loi de proximité)`, row, fix);
+    const ratio = a.h / fs;
+    if (ratio < 0.85 || ratio > 1.8) push('info', 'icon-size', `Icône de ${Math.round(a.h)}px pour un texte de ${fs}px (« ${short(sib.textContent, 20)} ») : vise 1–1,5× la taille du texte`, ic);
+  });
+  for (const el of hots) {
+    const cs = getComputedStyle(el); const r = rel(el, screenEl);
+    const filled = (parseColor(cs.backgroundColor) || [0, 0, 0, 0])[3] > 0.05 || (cs.borderTopStyle !== 'none' && px(cs.borderTopWidth) > 0);
+    const hasText = !!el.querySelector('[data-tag="text"]');
+    if (filled && hasText && r.h <= 64 && cs.display.includes('flex') && cs.flexDirection.startsWith('row')) {
+      const pl = px(cs.paddingLeft), pr = px(cs.paddingRight);
+      if (Math.min(pl, pr) < 10 && r.w > r.h * 1.4) push('warn', 'button-padding', `Padding horizontal ${Math.round(Math.min(pl, pr))}px sur « ${short(el.textContent, 24)} » : ≥ 12–16px (≈ 2× le padding vertical) pour que le libellé respire`, el);
+    }
+    // feedback: an interactive surface with no hover/press state and no transition feels dead
+    const hasStates = [...el.classList].some((c) => c.startsWith('mqs')) || el.querySelector('[class*="mqs"]');
+    if (filled && !hasStates && !el.dataset.proto && el.dataset.comp !== undefined) push('info', 'no-feedback', `« ${label(el)} » ne réagit ni au survol ni à l'appui : ajoute motion=press (ou press:scale=0.97, hover:fill=…)`, el);
+  }
+  // nested radii: inner radius ≈ outer radius − padding (otherwise the corners look uneven)
+  screenEl.querySelectorAll('[data-id], [data-comp]').forEach((el) => {
+    if (!visible(el)) return;
+    const cs = getComputedStyle(el); const R = px(cs.borderTopLeftRadius); const P = Math.min(px(cs.paddingTop), px(cs.paddingLeft));
+    if (R < 8 || P <= 0 || P >= R) return; // corners only nest visibly when the padding is smaller than the radius
+    const ch = [...el.children].find((c) => c.dataset && (c.dataset.id || c.dataset.comp) && visible(c));
+    if (!ch) return; const ccs = getComputedStyle(ch); const r = px(ccs.borderTopLeftRadius);
+    const a = rel(el, screenEl), b = rel(ch, screenEl);
+    if (Math.abs(b.x - a.x - P) > 2 || Math.abs(b.y - a.y - P) > 2 || r < 2 || (parseColor(ccs.backgroundColor) || [0, 0, 0, 0])[3] < 0.05) return;
+    const ideal = Math.max(0, R - P);
+    if (r > ideal + 4) push('info', 'nested-radius', `Rayons imbriqués : le parent a ${Math.round(R)}px et ${Math.round(P)}px de padding, l'enfant devrait avoir ≈ ${Math.round(ideal)}px (il a ${Math.round(r)}px)`, ch);
+  });
 
   // --- colors & shadows
   const colors = new Set(); const shadowX = new Set();

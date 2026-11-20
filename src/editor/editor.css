@@ -474,3 +474,7 @@ body[data-view="contrast-low"] .cv-world, body[data-view="contrast-low"] .play-h
 .fxhead { display: flex; align-items: center; gap: 4px; font-size: 12px; }
 .fxhead .mono { font-family: ui-monospace, monospace; color: var(--ui-muted); }
 .chip.ghost { background: transparent; }
+
+.st-audit { padding: 8px; border-radius: 8px; background: var(--ui-bg2, rgba(127,127,127,.06)); margin-top: 6px; cursor: pointer; display: grid; gap: 4px; }
+.st-audit:hover { background: rgba(91,140,255,.10); }
+.st-audit .issue { font-size: 11px; display: flex; gap: 6px; align-items: flex-start; }

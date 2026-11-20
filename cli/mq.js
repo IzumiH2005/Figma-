@@ -27,6 +27,7 @@ const HELP = `Maquette CLI
   mq export  <file.mq> [-o proto.html]                               prototype HTML autonome (lecture seule)
   mq fmt     <file.mq> [--write]                                     reformate le source
   mq kit     [préfixe]                                               liste les composants du kit + props (mq kit ui. : pack shadcn)
+  mq spec    <file.mq> <Composant> [--props "k=v"] [-o spec.png]   fiche technique : paddings, écarts, tailles, typo, tokens
   mq drive   <file.mq> <gestes.txt> [--write] [--video s.mp4]       pilote souris : gestes continus dans l'éditeur (points, plume, rigs, menus…)
   mq drive   <file.mq> --serve [port]  ·  mq drive send "cmd; cmd"   session persistante (navigateur gardé ouvert)
   mq shadcn  add <noms…|all> [--into f.mq] [--theme neutral|zinc|slate|stone|gray]   importe les composants du registre shadcn/ui (ui.*)
@@ -502,6 +503,38 @@ async function cmdKit(o) {
   await browser.close();
 }
 
+// spec sheet (redlines) of a component: paddings, gaps, sizes, typography, tokens — mq spec f.mq Button --props "kind=ghost icon=plus"
+async function cmdSpec(o) {
+  const src = readProject(o._[1]); const name = o._[2]; if (!name) throw new Error('usage : mq spec f.mq <Composant> [--props "k=v k2=v2"] [-o spec.png] [--mode dark]');
+  const out = o.o || `spec-${name.replace(/[^\w]+/g, '-')}.png`;
+  const { browser, page } = await browserPage({ scale: o.scale || 2 });
+  await loadInPage(page, src, o.mode);
+  const res = await page.evaluate(({ name, props }) => {
+    const p = window.__p; const c = p.components[name]; if (!c) return { error: 'composant introuvable : ' + name };
+    const attrs = {}; for (const m of String(props || '').matchAll(/(\w+)=("[^"]*"|\S+)/g)) attrs[m[1]] = m[2].replace(/^"|"$/g, '');
+    document.body.innerHTML = ''; document.body.style.cssText = 'margin:0;background:#F8FAFC;font-family:Inter,system-ui';
+    const wrap = document.createElement('div'); wrap.id = 'shot'; wrap.style.cssText = 'display:inline-flex;flex-direction:column;gap:28px;padding:56px 64px 40px;background:#F8FAFC';
+    const title = document.createElement('div'); title.innerHTML = `<div style="font:700 20px Inter">${name}</div><div style="font:400 12px Inter;color:#64748B;margin-top:4px;max-width:520px">${(c.desc || '').replace(/</g, '&lt;')}</div>`;
+    const ctx = MQ.makeCtx(p, { mode: window.__mode });
+    const el = MQ.renderStandalone({ id: 'spec', tag: name, attrs, children: [] }, ctx);
+    const stage = document.createElement('div'); stage.style.cssText = 'position:relative;display:inline-block;padding:28px;background:' + (p.token('bg', window.__mode) || '#fff') + ';border-radius:12px';
+    stage.appendChild(el); wrap.append(title, stage); document.body.appendChild(wrap);
+    const root = el.matches('[data-comp]') ? el : el.querySelector('[data-comp]') || el;
+    const tokens = [...new Set(JSON.stringify(c.node).match(/\$[\w.-]+/g) || [])].filter((t) => p.tokens[t.slice(1)]).slice(0, 14);
+    const sp = MQ.specOverlay(root, { tokens });
+    const sr = stage.getBoundingClientRect(), rr = root.getBoundingClientRect(); const holder = document.createElement('div'); holder.style.cssText = `position:absolute;left:${rr.left - sr.left}px;top:${rr.top - sr.top}px;width:${rr.width}px;height:${rr.height}px`; holder.appendChild(sp); stage.appendChild(holder);
+    const legend = document.createElement('div'); legend.style.cssText = 'font:500 12px/1.7 Inter;color:#334155;columns:2;column-gap:32px;max-width:640px';
+    legend.innerHTML = '<div style="font-weight:700;margin-bottom:4px">Anatomie</div>' + sp._legend.map((l) => `<div>${l.replace(/</g, '&lt;')}</div>`).join('') + '<div style="margin-top:6px;color:#DB2777">■ padding</div><div style="color:#2563EB">■ écart entre éléments</div>';
+    wrap.appendChild(legend);
+    return { ok: true, legend: sp._legend };
+  }, { name, props: o.props });
+  if (res.error) { await browser.close(); throw new Error(res.error); }
+  await waitFonts(page);
+  await page.locator('#shot').screenshot({ path: out });
+  await browser.close();
+  console.log(`✓ ${out}\n  ` + res.legend.join('\n  '));
+}
+
 // agent pointer: drive the real editor with continuous mouse gestures (see cli/drive.js)
 async function cmdDrive(o) {
   if (o._[1] === 'send') { // client of a persistent session (mq drive f.mq --serve)
@@ -583,6 +616,6 @@ async function cmdScenes() {
 
 const o = args(process.argv.slice(2));
 const cmd = o._[0];
-const table = { motion: cmdMotion, render: cmdRender, board: cmdBoard, inspect: cmdInspect, lint: (x) => cmdLint(x), audit: (x) => cmdLint(x, true), video: (x) => cmdVideo(x), anim: (x) => cmdVideo(x, true), build: cmdBuild, export: cmdExport, fmt: cmdFmt, kit: cmdKit, 'shadcn-theme': cmdShadcnTheme, shadcn: cmdShadcn, drive: cmdDrive, icons: cmdIcons, scenes: cmdScenes };
+const table = { motion: cmdMotion, render: cmdRender, board: cmdBoard, inspect: cmdInspect, lint: (x) => cmdLint(x), audit: (x) => cmdLint(x, true), video: (x) => cmdVideo(x), anim: (x) => cmdVideo(x, true), build: cmdBuild, export: cmdExport, fmt: cmdFmt, kit: cmdKit, 'shadcn-theme': cmdShadcnTheme, shadcn: cmdShadcn, drive: cmdDrive, spec: cmdSpec, icons: cmdIcons, scenes: cmdScenes };
 if (!cmd || !table[cmd]) { console.log(HELP); process.exit(cmd ? 1 : 0); }
 try { await table[cmd](o); } catch (e) { console.error('✖ ' + (e && e.message || e)); process.exit(1); }

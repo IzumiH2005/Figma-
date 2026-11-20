@@ -259,6 +259,20 @@ export function PillRow({ className, ...props }) { return <div className={cn("fl
   ok(/^\S+ \S+$/.test(r.name) && r.bars === 3 && r.conn && r.label === 'go' && r.shadow === 5 && new Set(r.list).size === 3, `Plugins intégrés : fake, chart, connector, ombre douce ${JSON.stringify(r)}`);
 }
 
+// component anatomy rules + motion recipes
+{
+  const r = await page.evaluate(() => {
+    const p = MQ.loadProject(`<project><component name="B" props="label='Envoyer'"><row h=40 px=6 gap=1 radius=10 fill=#5B5BF7 color=#fff on:click="go S"><icon name=send size=32/><text size=14>{label}</text></row></component>
+      <component name="G" props="label='Ok'"><row h=44 px=16 gap=8 radius=12 fill=#5B5BF7 color=#fff motion="press appear" on:click="go S"><icon name=check size=18/><text size=16>{label}</text></row></component>
+      <screen name="S" w=400 h=300><col p=24 gap=16><B/><G/></col></screen></project>`);
+    MQ.ensureStyles(); document.body.innerHTML = ''; const el = MQ.screenElement(p, 'S'); document.body.appendChild(el);
+    const iss = MQ.lintScreen(el, p, p.screen('S'));
+    const g = el.querySelector('[data-comp="G"]');
+    return { codes: [...new Set(iss.map((i) => i.code))], gStates: [...g.classList].some((c) => c.startsWith('mqs')), gAnim: el._mq.anims.some((a) => a.el === g) };
+  });
+  ok(['icon-gap', 'icon-size', 'button-padding', 'no-feedback'].every((c) => r.codes.includes(c)) && r.gStates && r.gAnim, `Anatomie des composants + recettes de motion ${JSON.stringify(r)}`);
+}
+
 // editor boots
 const html = await buildEditorHTML({ projects: examples });
 const tmp = path.join(ROOT, 'out', '_test-editor.html');

@@ -152,7 +152,7 @@
       on:swipe-left="if $slide < 2 then set $slide = $slide + 1 smart 450 spring" on:swipe-right="if $slide > 0 then set $slide = $slide - 1 smart 450 spring">
       <row h=44 gap=auto>
         <row gap=8><Logo size=28 name=logo/><text name=wordmark font=$display size=20 weight=700>orbit</text></row>
-        <text color=$muted weight=500 on:click="go Home ios" cursor=pointer>Passer</text>
+        <text color=$muted weight=500 px=8 py=12 m=-8 on:click="go Home ios" cursor=pointer>Passer</text>
       </row>
       <stack h=fill w=fill center>
         <ellipse name=halo size={300 + $slide * 30} fill={pick($slide, 'radial(#8B7BFF66, transparent 70)', 'radial(#FF6BB566, transparent 70)', 'radial(#3DD68C55, transparent 70)')}/>
@@ -198,7 +198,7 @@
       <col px=20 gap=8>
         <row gap=8 color=$muted>
           <text class=label>Solde total</text>
-          <icon name={$hideBalance ? 'eye-off' : 'eye'} size=16 on:click="toggle $hideBalance" cursor=pointer/>
+          <stack w=44 h=44 m=-14 center radius=full cursor=pointer press:scale=0.92 on:click="toggle $hideBalance" aria-label="Masquer le solde"><icon name={$hideBalance ? 'eye-off' : 'eye'} size=16/></stack>
         </row>
         <text name=balance class=h1 size=44 ls=-1.8 tabular anim="count 1400 expo">{$hideBalance ? '•••••• €' : '12 480,52 €'}</text>
         <row gap=8><Badge label="+ 3,2 % ce mois" tone=success/><text size=12 color=$muted>vs. octobre</text></row>

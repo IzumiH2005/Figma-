@@ -448,6 +448,8 @@ export class Studio {
       const targets = [...Object.keys(c.props).map((k) => [k, k]), ...Object.keys(p.vars).map((k) => ['$' + k, '$' + k])];
       side.appendChild(sec2('Rigs (contrôles à la souris)', ...rigEditor(app, live() || c.node, targets, namedIn(c.node), 'Un rig transforme un geste (glisser, tourner) en valeur de prop. « Zone » : l\'élément nommé qui sert de piste. Deux rigs du même groupe = pad 2D.')));
     }
+    // hygiene & motion: every variant rendered and linted, motion recipes on the root
+    side.appendChild(this.auditSection(model, ro));
     // interactions found in the tree
     const inter = [];
     const walk = (n, depth) => { if (!n || n.tag === '#text') return; for (const [k, v] of Object.entries(n.attrs || {})) if (k.startsWith('on:') || k.startsWith('hover:') || k.startsWith('press:')) inter.push([n.attrs.name || n.tag, k, String(v)]); (n.children || []).forEach((x) => walk(x, depth + 1)); };
@@ -455,6 +457,55 @@ export class Studio {
     side.appendChild(sec2('Interactions & états', inter.length ? inter.map(([who, k, v]) => h('div.st-inter', null, h('b', null, who), h('span.mono', null, k), h('span.mono.hint', null, v))) : h('div.hint', null, 'Aucune. Ex. on:click="change on={!on} smart 320 gentle" sur un enfant rend chaque instance interactive (état propre à l\'instance).'),
       ro ? null : h('div.chips', null, [['Bascule on/off', 'toggle'], ['Compteur +/-', 'counter'], ['Survol', 'hover']].map(([l, t]) => h('button.chip', { onclick: () => this.addInteraction(t) }, l)))));
     return side;
+  }
+
+  // ---- hygiene audit of every variant + motion recipes (the component is clean AND alive)
+  auditSection(model, ro) {
+    const c = this.comp; const app = this.app; const p = app.project;
+    const box = h('div');
+    const run = () => {
+      clear(box);
+      const dims = model.filter((m) => m.type === 'enum' || m.type === 'boolean').map((m) => ({ k: m.k, vals: m.type === 'boolean' ? [true, false] : m.opts }));
+      let combos = [{}];
+      for (const d of dims) { const next = []; for (const cmb of combos) for (const v of d.vals) next.push({ ...cmb, [d.k]: v }); combos = next; if (combos.length > 36) break; }
+      combos = combos.slice(0, 36);
+      const host = h('div', { style: { position: 'fixed', left: '-10000px', top: '0', width: '480px' } }); document.body.appendChild(host);
+      const ctx = MQ.makeCtx(p, { mode: app.mode });
+      const results = combos.map((extra, i) => {
+        const el = MQ.renderStandalone({ id: MQ.newId(), tag: 'col', attrs: { w: '480', p: '24', align: 'start', fill: this.bg() }, children: [this.instanceNode(extra)] }, ctx);
+        el.dataset.screen = 'variante ' + (i + 1); host.appendChild(el);
+        const issues = MQ.lintScreen(el, p, { attrs: { w: '480', name: 'audit' } }).filter((x) => !['bounds', 'edge-margin', 'type-count', 'multi-primary', 'thumb-zone'].includes(x.code));
+        return { extra, issues };
+      });
+      host.remove();
+      const all = results.flatMap((r) => r.issues);
+      const score = MQ.scoreIssues(all).score;
+      box.appendChild(h('div.kv', null, h('span', null, `${combos.length} variante(s) auditée(s)`), h('b', { style: { color: score >= 95 ? '#0E9F6E' : score >= 85 ? '#B7791F' : '#E5484D' } }, score + '/100')));
+      const bad = results.filter((r) => r.issues.length);
+      if (!bad.length) box.appendChild(h('div.okmsg', null, icon('check-circle-2', 14), 'Toutes les variantes passent : espacements, contrastes, cibles, anatomie, retour au toucher.'));
+      for (const r of bad.slice(0, 12)) {
+        const tag = Object.entries(r.extra).map(([k, v]) => `${k}=${v}`).join(' ') || 'défaut';
+        box.appendChild(h('div.st-audit', { onclick: () => { Object.assign(this.values, r.extra); this.render(); } },
+          h('b.mono', null, tag), ...r.issues.slice(0, 4).map((x) => h('div.issue.' + x.level, null, icon(x.level === 'error' ? 'circle-x' : x.level === 'warn' ? 'triangle-alert' : 'info', 12), h('span', null, x.msg)))));
+      }
+    };
+    // motion recipes on the component root (MOTION_RECIPES in the runtime)
+    const root = c.node.children && c.node.children.find((x) => x.tag !== '#text');
+    const cur = new Set(String((root && root.attrs.motion) || '').split(/[\s,]+/).filter(Boolean));
+    const RECIPES = [['press', 'Appui (squash)'], ['lift', 'Survol (élévation)'], ['glow', 'Focus doux'], ['appear', 'Apparition'], ['pop', 'Apparition rebond'], ['rise', 'Apparition en arc'], ['cascade', 'Enfants en cascade'], ['breathe', 'Respiration']];
+    const chips = h('div.chips', null, RECIPES.map(([k, l]) => h('button.chip' + (cur.has(k) ? '.on' : ''), { title: k, disabled: ro || !root, onclick: () => {
+      cur.has(k) ? cur.delete(k) : cur.add(k);
+      // exclusive groups: one entrance at a time
+      if (['appear', 'pop', 'rise'].includes(k) && cur.has(k)) ['appear', 'pop', 'rise'].filter((x) => x !== k).forEach((x) => cur.delete(x));
+      app.change(() => { const n = app.node(root.id); if (cur.size) n.attrs.motion = [...cur].join(' '); else delete n.attrs.motion; });
+      this.render();
+    } }, l)));
+    return sec2('Hygiène & motion',
+      h('div.hint', null, 'Audit de chaque combinaison de props (contraste, cibles tactiles, écart icône/libellé, padding, rayons imbriqués, grille, retour au toucher).'),
+      h('div.chips', null, h('button.chip', { onclick: run }, icon('scan-search', 12), ' Auditer toutes les variantes'), h('button.chip', { onclick: () => this.render() }, icon('rotate-ccw', 12), ' Rejouer l’apparition')),
+      box,
+      h('div.sectitle', { style: { marginTop: '10px' } }, 'Recettes de motion'), chips,
+      h('div.hint', null, 'Appui = press:scale 0.97 · Survol = ombre douce + 1,5 % · Apparition = fade-up amortie… Les attributs écrits à la main restent prioritaires.'));
   }
 
   addPropMenu(e) {

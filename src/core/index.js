@@ -7,6 +7,7 @@ import * as Vector from './vector.js';
 import * as PathOps from './pathops.js';
 import * as Guides from './guides.js';
 import { fake, fakeList, smoothShadow } from './plugins.js';
+import { specOverlay } from './spec.js';
 import * as Rig from './rig.js';
 import * as Fx from './fx.js';
 import * as Shader from './shader.js';
@@ -101,7 +102,7 @@ export function toStaticHTML(el) {
 
 export {
   parse, serialize, serializeNode, clone, textOf, newId, bumpIds, ParseError, fmtAttr, TEXT_TAGS,
-  Path, Vector, PathOps, Guides, fake, fakeList, smoothShadow, Rig, Fx, Shader,
+  Path, Vector, PathOps, Guides, fake, fakeList, smoothShadow, specOverlay, Rig, Fx, Shader,
   Project, DEVICES, parseAttrString, parseColor, withAlpha, splitTop, TYPESCALES, SPACING, Color,
   makeCtx, renderScreen, renderStandalone, renderNode, BASE_CSS, fontsHref, layoutOf, cssFor, resolveAttrs, imageSrc, fillToCss,
   Player, TRANSITIONS, parseTransition,

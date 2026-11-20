@@ -104,6 +104,26 @@ export function makeCtx(project, opts = {}) {
 
 // ------------------------------------------------------------------ attrs
 
+// Motion recipes for components: motion="press lift appear" expands into states and animations,
+// tuned with the principles of docs/MOTION-RULES.md (explicit attributes always win).
+export const MOTION_RECIPES = {
+  press: { 'press:scale': '0.97' },                                   // squash on contact, quick release
+  lift: { 'hover:shadow': 'smooth(18)', 'hover:scale': '1.015' },     // hover elevation (desktop)
+  sink: { 'press:scale': '0.985', 'press:shadow': 'none' },           // a card that is pressed into the page
+  glow: { 'focus:shadow': '0 0 0 3px rgba(91,91,247,.35)' },          // visible focus, softer than an outline
+  appear: { anim: 'fade-up 420 soft' },                               // entrance: settles, no bounce
+  pop: { anim: 'pop 380 hard' },                                      // entrance with a small overshoot
+  rise: { anim: 'fade-up 520 soft arc' },                             // longer travel on an arc
+  cascade: { stagger: '60 fade-up 420 drag=1.1' },                    // children enter one after another
+  'cascade-pop': { stagger: '50 pop 360 drag=1.08' },
+  breathe: { loop: 'breathe 2400' },                                  // one gentle visible loop (attention)
+  attention: { loop: 'heartbeat 1600' },
+};
+function expandMotion(raw) {
+  if (!raw.motion || raw.motion === true) return;
+  for (const name of String(raw.motion).split(/[\s,]+/)) { const r = MOTION_RECIPES[name]; if (r) for (const [k, v] of Object.entries(r)) if (raw[k] === undefined) raw[k] = v; }
+  delete raw.motion;
+}
 function mergeClasses(node, scope, ctx, out, seen = new Set()) {
   const cls = node.attrs && node.attrs.class;
   if (!cls) return;
@@ -125,6 +145,7 @@ export function resolveAttrs(node, scope, ctx, overrides) {
   const raw = {};
   mergeClasses(node, scope, ctx, raw);
   Object.assign(raw, node.attrs || {});
+  expandMotion(raw);
   const base = {}, states = {}, events = {};
   const apply = (k, v) => { base[k] = v; };
   const deferred = [];
@@ -663,7 +684,7 @@ function renderInstance(node, comp, scope, parentLayout, ctx, outerOverrides) {
   const instKey = node.id + (scope.lookup('__loop') || '');
   const rigAttrs = {};
   const base = {}, events = {}, states = {}, deferred = [];
-  const raw = {}; mergeClasses(node, scope, ctx, raw); Object.assign(raw, node.attrs);
+  const raw = {}; mergeClasses(node, scope, ctx, raw); Object.assign(raw, node.attrs); expandMotion(raw);
   for (const [k, v] of Object.entries(raw)) {
     if (k === 'class' || k === 'if' || k === 'repeat' || k === 'each' || k === 'as') continue;
     if (k.startsWith('rig:')) { rigAttrs[k] = v; continue; }
@@ -878,6 +899,8 @@ function decorate(el, node, a, states, events, scope, parentLayout, ctx) {
   if (a.transition) el.style.transition = String(a.transition) === 'true' ? 'all .25s cubic-bezier(.2,.8,.2,1)' : `all ${num(a.transition)}ms cubic-bezier(.2,.8,.2,1)`;
   // events
   if (Object.keys(events).length) {
+    // mark interactive surfaces even without a runtime (lint, inspect, editor): tap targets, feedback, focus
+    if (Object.keys(events).some((k) => /^on:(click|tap|press|dblclick|swipe|drag)/.test(k))) el.dataset.hot = '1';
     if (ctx.runtime) ctx.runtime.bind(el, events);
     else if (ctx.editor) {
       el.dataset.proto = '1';

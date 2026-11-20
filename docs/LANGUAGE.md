@@ -318,6 +318,27 @@ Les tokens acceptent des **modes nommés** (`sh-primary: light: #171717 | dark: 
 - Rigs, presets d'interaction (bascule, compteur, survol), utilisations, « Insérer » une instance, « Copier dans le projet » pour un composant du kit.
 - Le panneau de droite de l'éditeur propose aussi une section **Rig** sur tout calque : props, position, taille, rotation, paramètres de forme, variables.
 
+**Recettes de motion** pour les composants : `motion="press lift appear"` sur la racine (ou sur une instance) se déplie en états et animations réglés selon `docs/MOTION-RULES.md`. Les attributs écrits à la main restent prioritaires.
+- `press` : press:scale 0.97.
+- `lift` : ombre douce et +1,5 % au survol.
+- `sink` : la carte s'enfonce.
+- `glow` : focus doux.
+- `appear` : fade-up amorti.
+- `pop` : apparition avec léger rebond.
+- `rise` : trajet en arc.
+- `cascade` / `cascade-pop` : les enfants entrent décalés.
+- `breathe` / `attention` : une seule boucle visible.
+
+**Anatomie contrôlée par le lint** (dans les écrans comme dans le Studio) :
+- écart icône ↔ libellé ≈ la moitié de la taille du texte (`icon-gap`) ;
+- icône de 1 à 1,5× le texte (`icon-size`) ;
+- padding horizontal d'un bouton ≥ 12–16 px (`button-padding`) ;
+- rayon intérieur ≈ rayon extérieur − padding (`nested-radius`) ;
+- une surface cliquable réagit au survol ou à l'appui (`no-feedback`) ;
+- en plus des règles de contraste, de cibles tactiles et de grille.
+
+Dans le Studio, la section **Hygiène & motion** audite chaque combinaison de props (score et défauts par variante, un clic l'essaie) et active les recettes de motion. **Fiche technique** : `mq spec f.mq Button --props 'label="Envoyer" icon=send' -o spec.png` rend la redline du composant (paddings, écarts, taille, rayon, anatomie numérotée, tokens utilisés).
+
 **Instance swap** : `<instance of={done ? 'Badge' : 'Chip'} label="…"/>` affiche le composant nommé avec les mêmes props. Une prop déclarée `icon: swap(IconButton|FAB)` dans `desc` (ou dont la valeur par défaut est le nom d'un composant) propose une liste de remplacement, avec ses valeurs préférées en tête. Clic droit sur une instance › « Remplacer l'instance… ».
 
 ## Plugins intégrés
