@@ -185,12 +185,42 @@
   </stack>
 </component>
 
-<component name="Slider" props="value=0.5" desc="Curseur (visuel)">
-  <stack w=fill h=28 align=center>
+<component name="Slider" props="value=0.5 step=0" desc="Curseur interactif : appuyer saute à la position, glisser fait défiler la valeur (0..1). Lier à une variable : &lt;Slider value={$vol} on:scrub=&quot;set $vol = {px}&quot;/&gt;">
+  <stack w=fill h=44 align=center on:scrub="change value={step > 0 ? round(px / step) * step : px}" cursor=pointer>
     <frame w=fill h=6 radius=full fill=$surface-2/>
     <frame w={value * 100 + '%'} h=6 radius=full fill=$primary/>
-    <ellipse absolute x={'calc(' + value * 100 + '% - 13px)'} y=1 size=26 fill=#fff shadow=md/>
+    <ellipse name=thumb absolute x={'calc(' + value * 100 + '% - 13px)'} y=9 size=26 fill=#fff shadow=md/>
   </stack>
+</component>
+
+<component name="SwipeRow" props="title='Élément' subtitle='' open=false action='Supprimer'" desc="Ligne à balayer vers la gauche pour révéler une action (alternative : appui long ou bouton). open = état révélé.">
+  <stack w=fill h=64 fill=$danger radius=$radius-md clip>
+    <row absolute x=0 y=0 w=fill h=64 justify=end align=center pr=16 on:click="change open=false">
+      <text color=#fff weight=600 size=15>{action}</text>
+    </row>
+    <row name=face w=fill h=64 px=16 gap=12 align=center fill=$surface drag=x bounds="-104..0" snap="0, -104" drag-index=open on:longpress="change open={!open}">
+      <col w=fill gap=2>
+        <text class=t-body weight=600>{title}</text>
+        <text if={subtitle} class=t-caption color=$text-2>{subtitle}</text>
+      </col>
+      <icon name=chevron-left size=16 color=$text-3/>
+    </row>
+  </stack>
+</component>
+
+<component name="Carousel" props="page=0 count=3" desc="Carrousel paginé au doigt (snap=page, momentum) avec points cliquables. Enfants = pages, chacune w=fill.">
+  <col w=fill gap=12>
+    <stack w=fill clip radius=$radius-lg>
+      <row name=track w={count * 100 + '%'} drag=x snap=page drag-index=page>
+        <slot/>
+      </row>
+    </stack>
+    <row gap=0 justify=center w=fill>
+      <frame repeat={count} as=d w=44 h=44 center on:click="change page={i}">
+        <frame w={page == i ? 18 : 6} h=6 radius=full fill={page == i ? $primary : $border} transition=200/>
+      </frame>
+    </row>
+  </col>
 </component>
 
 <component name="Skeleton" props="w=120 h=14 r=6" desc="Placeholder de chargement animé">

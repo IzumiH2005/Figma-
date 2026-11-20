@@ -909,7 +909,8 @@ function decorate(el, node, a, states, events, scope, parentLayout, ctx) {
   // events
   if (Object.keys(events).length) {
     // mark interactive surfaces even without a runtime (lint, inspect, editor): tap targets, feedback, focus
-    if (Object.keys(events).some((k) => /^on:(click|tap|press|dblclick|swipe|drag)/.test(k))) el.dataset.hot = '1';
+    el.dataset.trig = Object.keys(events).map((k) => k.slice(3)).join(' ');
+    if (Object.keys(events).some((k) => /^on:(click|tap|press|dblclick|doubletap|swipe|drag|pan|scrub|hold|pinch|rotate)/.test(k))) el.dataset.hot = '1';
     if (ctx.runtime) ctx.runtime.bind(el, events);
     else if (ctx.editor) {
       el.dataset.proto = '1';
@@ -919,6 +920,17 @@ function decorate(el, node, a, states, events, scope, parentLayout, ctx) {
       }
     }
     if (events['on:click'] && !el.style.cursor) el.style.cursor = 'pointer';
+  }
+  // physical drag (gesture.js): the layer follows the finger, springs to snap points, writes progress / index
+  if (a.drag && a.drag !== 'false') {
+    el.dataset.hot = '1'; el.dataset.drag = String(a.drag);
+    el.dataset.gk = (ctx.instance ? ctx.instance.key + '/' : '') + (key || node.id) + (scope.lookup('__loop') || '');
+    if (ctx.runtime && ctx.runtime.bindDrag) {
+      const bindOf = (t) => (t != null && t !== true && t !== '' ? rigBinding(String(t).trim(), node.id, a, ctx) : null);
+      const raw = node.attrs || {}; const bind = { index: bindOf(raw['drag-index']), progress: bindOf(raw['drag-progress']) }; // raw: $var must stay a name
+      for (const k of ['index', 'progress']) if (bind[k] && bind[k].type === 'attr') bind[k] = { type: 'var', name: bind[k].name, value: undefined };
+      ctx.runtime.bindDrag(el, a, bind);
+    }
   }
   // animations
   if (a.anim && a.anim !== true) ctx.anims.push({ el, spec: String(a.anim), kind: 'in', id: ctx.owner || node.id });

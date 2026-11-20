@@ -456,6 +456,23 @@ async function cmdVideo(o, animOnly = false) {
         await page.evaluate(({ x, y }) => { const c = document.getElementById('cursor'); c.getAnimations().forEach(a => a.cancel()); c.style.left = x + 'px'; c.style.top = y + 'px'; c.dataset.x = x; c.dataset.y = y; }, { x: pos.x + d[0], y: pos.y + d[1] });
         break;
       }
+      case 'drag': { // drag "clé" by dx dy [ms] — a hand-like stroke released while moving, so momentum and snapping are exercised
+        const q = a[0]; const bi = a.indexOf('by'); const dx = +a[bi + 1] || 0, dy = +a[bi + 2] || 0; const ms = +a[bi + 3] || 450;
+        const pos = await page.evaluate((k) => window.__find(k), q);
+        if (!pos) throw new Error(`drag : élément introuvable « ${q} »`);
+        await page.evaluate(({ x, y }) => window.__cursor(x, y, false), pos);
+        await page.mouse.move(pos.x, pos.y); await page.mouse.down();
+        const n = Math.max(6, Math.round(ms / 16));
+        for (let i = 1; i <= n; i++) {
+          const t = i / n, e = 2 * t * t - t * t * t; // eases in, then releases while still moving (a flick)
+          const x = pos.x + dx * e, y = pos.y + dy * e;
+          await page.mouse.move(x, y);
+          await page.evaluate(({ x, y }) => { const c = document.getElementById('cursor'); if (c) { c.style.left = x + 'px'; c.style.top = y + 'px'; } }, { x, y });
+          await page.waitForTimeout(16);
+        }
+        await page.mouse.up();
+        break;
+      }
       case 'shot': { const f = a[0] || `shot-${shots.length + 1}.png`; await page.screenshot({ path: f }); shots.push(f); break; }
       case 'mode': await page.evaluate((m) => window.__player.exec('mode ' + (m || 'next'), window.__player.ctx().scope), a[0]); break;
       default: console.error(`  ? commande de flow inconnue: ${st.line}`);

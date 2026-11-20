@@ -4,6 +4,7 @@ import { evaluate, interp } from './expr.js';
 import { splitTop } from './project.js';
 import { playAnims, resolveEasing, EASINGS, prefersReducedMotion, easeFn } from './anim.js';
 import { morphBetween, liveBoolean } from './vector.js';
+import { GestureMixin } from './gesture.js';
 import { groupRigs, groupPos, groupValues, rigBox, toBox } from './rig.js';
 
 // identity of a keyed layer across re-renders: its key (or the nearest keyed ancestor's), scoped by component instance
@@ -34,7 +35,7 @@ export function parseTransition(words) {
 }
 
 // split "a; b; c" at top level
-function splitActions(s) { return splitTop(String(s).replace(/^\{|\}$/g, ''), ';').filter(Boolean); }
+function splitActions(s) { s = String(s).trim(); if (/^\{[\s\S]*\}$/.test(s)) { let d = 0, whole = true; for (let i = 0; i < s.length; i++) { if (s[i] === '{') d++; else if (s[i] === '}' && --d === 0 && i < s.length - 1) { whole = false; break; } } if (whole) s = s.slice(1, -1); } return splitTop(s, ';').filter(Boolean); }
 function words(s) { return (String(s).match(/"[^"]*"|'[^']*'|\S+/g) || []).map((w) => w.replace(/^["']|["']$/g, '')); }
 
 export class Player {
@@ -122,7 +123,7 @@ export class Player {
     for (const [trig, ev] of Object.entries(events)) {
       switch (trig) {
         case 'on:click': case 'on:tap': el.addEventListener('click', run(ev)); el.dataset.hot = '1'; if (!/^(INPUT|TEXTAREA)$/.test(el.tagName)) { el.tabIndex = 0; el.setAttribute('role', 'button'); el.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); el.click(); } }); } break;
-        case 'on:dblclick': el.addEventListener('dblclick', run(ev)); el.dataset.hot = '1'; break;
+        case 'on:dblclick': case 'on:doubletap': el.addEventListener('dblclick', run(ev)); el.dataset.hot = '1'; break;
         case 'on:press': el.addEventListener('pointerdown', run(ev)); el.dataset.hot = '1'; break;
         case 'on:release': el.addEventListener('pointerup', run(ev)); break;
         case 'on:enter': case 'on:hover': el.addEventListener('pointerenter', run(ev)); break;
@@ -135,12 +136,11 @@ export class Player {
           el.dataset.hot = '1'; break;
         }
         default: {
-          const sw = /^on:swipe-(left|right|up|down)$/.exec(trig);
-          if (sw) { this.bindSwipe(el, sw[1], run(ev)); el.dataset.hot = '1'; break; }
           if (/^on:(load|after|delay|key)/.test(trig)) el.dataset.lifecycle = '1';
         }
       }
     }
+    this.bindGestures(el, events);
     if (el.dataset.bind) {
       el.addEventListener('input', (e) => { this.vars[el.dataset.bind] = e.target.value; this.scheduleRerender(); });
     }
@@ -194,7 +194,7 @@ export class Player {
   }
 
   // ------------------------------------------------------------ actions
-  async exec(action, scope, el) {
+  async exec(action, scope, el, opts = {}) {
     const steps = splitActions(action);
     let dirty = null;
     // the instance's own state (change/inc/dec) as it is NOW: later steps of the chain see their effect
@@ -203,7 +203,7 @@ export class Player {
       // "change …; wait 1200; change …": show the pending change (with its transition) before waiting
       if (dirty && /^(wait|delay)\b/.test(step.trim())) { await this.rerender(dirty); dirty = null; }
       const r = await this.step(step.trim(), live(), el);
-      if (r && r.dirty) dirty = r.transition || dirty || { type: 'smart', duration: 260, easing: 'smooth' };
+      if (r && r.dirty) dirty = r.transition || dirty || (opts.instant ? { type: 'instant' } : { type: 'smart', duration: 260, easing: 'smooth' });
       if (r && r.navigated) dirty = null;
       if (r && r.stop) break;
     }
@@ -639,3 +639,5 @@ export class Player {
     return roots.flatMap((r) => [...r.querySelectorAll('[data-hot]')]);
   }
 }
+
+Object.assign(Player.prototype, GestureMixin);

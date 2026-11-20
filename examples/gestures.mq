@@ -1,0 +1,81 @@
+<project name="Gestes — interactions au doigt" modes="light dark" typescale=ui>
+  <!-- Tout ce qui se manipule au doigt (et à la souris) :
+       drag=x|y|xy  bounds="lo..hi"|parent  snap="0, -104"|page  elastic momentum  drag-index=… drag-progress=$…
+       on:scrub (curseurs), on:pan, on:hold (répétition), on:pinch / on:rotate, on:wheel, on:swipe-* (vitesse prise en compte).
+       Chaque geste a une alternative au simple appui (WCAG 2.5.1 / 2.5.7) : points du carrousel, bouton du sheet, appui long. -->
+  <system brand=#4F46E5 accent=#F97316 neutral=cool radius=round density=comfortable elevation=soft motion=calm type="Inter/Inter"/>
+
+  <vars>
+    volume: 0.6
+    qty: 2
+    sheet: 0
+    card: 0
+  </vars>
+
+  <screen name="Gestes" device=iphone-16 start statusbar homebar fill=$bg pt=safe px=16 pb=32 gap=24>
+    <col gap=4 pt=8>
+      <text class=t-h2>Gestes</text>
+      <text class=t-body color=$text-2>Glisse, balaie, maintiens.</text>
+    </col>
+
+    <col name=vol-card w=fill p=16 gap=8 fill=$surface radius=$radius-lg shadow=$shadow-1>
+      <row w=fill justify=between align=center>
+        <text class=t-body weight=600>Volume</text>
+        <text class=t-body color=$text-2>{round($volume * 100)} %</text>
+      </row>
+      <Slider name=volume value={$volume} on:scrub="set $volume = {round(px * 20) / 20}"/>
+    </col>
+
+    <col w=fill gap=8>
+      <SwipeRow name=mail1 title="Facture d'octobre" subtitle="Balaie vers la gauche" action="Supprimer"/>
+      <SwipeRow name=mail2 title="Réunion jeudi" subtitle="Ou appui long" action="Archiver"/>
+    </col>
+
+    <Carousel name=promo count=3>
+      <stack w=fill h=120 fill="linear(135deg, $primary, $accent)" center><text class=t-h3 color=#fff>Glisse →</text></stack>
+      <stack w=fill h=120 fill=$surface-2 center><text class=t-h3>Deuxième page</text></stack>
+      <stack w=fill h=120 fill=$primary-soft center><text class=t-h3>Troisième</text></stack>
+    </Carousel>
+
+    <row w=fill p=16 fill=$surface radius=$radius-lg shadow=$shadow-1 justify=between align=center>
+      <text class=t-body weight=600>Quantité</text>
+      <row gap=12 align=center>
+        <stack name=minus w=44 h=44 radius=full fill=$surface-2 center on:hold="set $qty = {max(0, $qty - 1)}"><icon name=minus size=20/></stack>
+        <text class=t-h3 w=32 align=center>{$qty}</text>
+        <stack name=plus w=44 h=44 radius=full fill=$primary color=$on-primary center on:hold="set $qty = {min(99, $qty + 1)}"><icon name=plus size=20/></stack>
+      </row>
+    </row>
+
+    <Button name=open-sheet label="Ouvrir le panneau" w=fill on:click="set $sheet = 1"/>
+
+    <frame absolute x=0 y=0 w=fill h=fill fill=#000 opacity={$sheet * 0.4} if={$sheet > 0.02} on:click="set $sheet = 0"/>
+    <col name=sheet absolute x=0 y=852 w=fill h=360 p=24 pb=40 gap=16 fill=$surface radius="24 24 0 0" shadow=$shadow-3
+            drag=y snap="0, -360" drag-progress=$sheet>
+      <frame w=40 h=4 radius=full fill=$surface-2 mx=auto/>
+      <text class=t-h3>Panneau</text>
+      <text class=t-body color=$text-2>Tire vers le bas pour le fermer, ou touche le fond.</text>
+      <Button label="Fermer" kind=secondary w=fill on:click="set $sheet = 0"/>
+    </col>
+  </screen>
+
+  <flow name=demo>
+    start Gestes
+    wait 500
+    drag "volume" by -90 0 500
+    wait 400
+    drag "volume" by 110 0 600
+    wait 500
+    drag "mail1" by -130 0 260
+    wait 700
+    drag "promo" by -240 0 200
+    wait 700
+    drag "promo" by -240 0 200
+    wait 700
+    click "plus"
+    wait 500
+    click "Ouvrir le panneau"
+    wait 900
+    drag "sheet" by 0 420 260
+    wait 900
+  </flow>
+</project>

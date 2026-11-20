@@ -9,7 +9,7 @@ import { parseSpec } from './anim.js';
 export const CATEGORIES = { a11y: 'Accessibilité', spacing: 'Espacement & grille', type: 'Typographie', color: 'Couleur', ux: 'Composants & UX', motion: 'Motion', proto: 'Prototype' };
 const CAT = {
   contrast: 'a11y', 'contrast-ui': 'a11y', 'tap-target': 'a11y', 'tiny-text': 'a11y', 'body-size': 'a11y', 'input-label': 'a11y', 'link-style': 'a11y',
-  'icon-gap': 'spacing', 'button-padding': 'spacing', misaligned: 'spacing', 'off-center': 'spacing', inset: 'spacing', escape: 'spacing', 'nested-radius': 'spacing', 'icon-size': 'ux', 'no-feedback': 'motion', 'edge-stroke': 'color',
+  'icon-gap': 'spacing', 'button-padding': 'spacing', misaligned: 'spacing', 'off-center': 'spacing', inset: 'spacing', escape: 'spacing', 'nested-radius': 'spacing', 'icon-size': 'ux', 'no-feedback': 'motion', 'gesture-alt': 'a11y', 'edge-stroke': 'color',
   'off-grid': 'spacing', 'edge-margin': 'spacing', crowded: 'spacing', bounds: 'spacing', overflow: 'spacing',
   'type-scale': 'type', 'type-count': 'type', 'line-length': 'type', 'caps-long': 'type',
   hardcoded: 'color', 'pure-color': 'color', 'gradient-muddy': 'color', 'color-count': 'color', 'shadow-light': 'color',
@@ -24,6 +24,7 @@ function rel(el, root) {
   return { x: (r.left - R.left) / s, y: (r.top - R.top) / s, w: r.width / s, h: r.height / s };
 }
 function insideHScroll(el, root) {
+  if (el.closest && el.closest('[data-drag]')) return true; // a draggable track (carousel, swipe row): off-frame pages are reachable by drag
   let n = el.parentElement;
   while (n && n !== root) { const cs = getComputedStyle(n); if (cs.overflowX === 'auto' || cs.overflowX === 'scroll') return true; n = n.parentElement; }
   return false;
@@ -286,6 +287,15 @@ export function lintScreen(screenEl, project, screenNode) {
       if (Math.abs(diff) >= 0.75 && Math.abs(diff) <= 10) push('warn', 'inset', `« ${label(el)} » : ${f(across1)}px de marge sur un axe mais ${f(near)}px côté ${axis === 'horizontal' ? (l < r ? 'gauche' : 'droit') : (t < b ? 'haut' : 'bas')} dans « ${label(host)} » — un curseur garde le même inset partout (calque absolu : le padding du parent ne s'applique pas)`, el);
       break;
     }
+  });
+  // WCAG 2.5.1 / 2.5.7: a swipe, a pan or a drag needs a single-pointer alternative (a tap, a button, a long press)
+  const TAPS = /\b(click|tap|press|longpress|hold|scrub|doubletap|dblclick)\b/;
+  screenEl.querySelectorAll('[data-drag], [data-trig*="swipe-"], [data-trig*="pan"]').forEach((el) => {
+    if (!visible(el) || layerIgnores(el, 'gesture-alt')) return;
+    if (TAPS.test(el.dataset.trig || '')) return;
+    const scope = el.closest('[data-comp]') || el.parentElement;
+    const alt = scope && [...scope.querySelectorAll('[data-trig]')].some((n) => n !== el && TAPS.test(n.dataset.trig));
+    if (!alt) push('warn', 'gesture-alt', `« ${label(el)} » ne se contrôle que par un geste (glisser / balayer) : ajoute une alternative au simple appui (bouton, points, appui long) — WCAG 2.5.1 / 2.5.7`, el);
   });
   // a layer that sticks out of the card / surface holding it (a long label pushing a switch out of its card…)
   const surfaceOf = (el) => { let n = el.parentElement; while (n && n !== screenEl) { const cs = getComputedStyle(n); if (/auto|scroll/.test(cs.overflowX + cs.overflowY) || n.classList.contains('mq-screen-body')) return null; if (filledEl(n) || cs.overflow !== 'visible') return n; n = n.parentElement; } return null; };
