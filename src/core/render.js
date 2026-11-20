@@ -5,7 +5,7 @@ import { twToAttrs } from './tailwind.js';
 import { patternFill, wrapClone, applyEffects, applyMaskGroup } from './effects.js';
 import { resolveColorFns, shade as shadeC, parseColor as parseC, toCss as toCssC } from './color.js';
 const shadeColor = (c, p) => { const v = parseC(c); if (!v) throw new Error('not a colour'); return toCssC(shadeC(v, p / 100)); };
-import { VECTOR_TAGS, nodePath, boxOf, booleanSubs, booleanParts, buildVector, buildTextPath, gooFilterSvg, maskCss, threeD, parseShapeSpec } from './vector.js';
+import { VECTOR_TAGS, nodePath, boxOf, booleanSubs, booleanParts, buildVector, ROUNDABLE, cornerOf, withCorners, buildTextPath, gooFilterSvg, maskCss, threeD, parseShapeSpec } from './vector.js';
 import { shapePath, serializePath } from './pathkit.js';
 import { textOf } from './parse.js';
 import { ICONS } from './icons.js';
@@ -438,7 +438,7 @@ export function cssFor(tag, a, parentLayout, ctx, isText) {
   }
   if (a.highlight) s.backgroundColor = a.highlight;
   if (a.opacity !== undefined) s.opacity = num(a.opacity, 1) > 1 ? num(a.opacity) / 100 : num(a.opacity, 1);
-  if (a.radius !== undefined) {
+  if (a.radius !== undefined && !ROUNDABLE(tag, a)) {
     s.borderRadius = a.radius === 'full' ? '9999px' : String(a.radius).split(/\s+/).map((x) => (x === 'full' ? '9999px' : px(x))).join(' ');
   }
   if (tag === 'ellipse') s.borderRadius = '50%';
@@ -747,9 +747,9 @@ function createElementFor(node, a, scope, parentLayout, ctx) {
       const box = boxOf(a, tag === 'textpath' ? 200 : 100);
       const attrsOf = (c) => resolveAttrs(c, scope, ctx).a;
       let subs;
-      if (tag === 'boolean') { subs = booleanSubs(node, attrsOf, a.op || 'union'); el._bool = { op: a.op || 'union', parts: booleanParts(node, attrsOf) }; }
+      if (tag === 'boolean') { subs = booleanSubs(node, attrsOf, a.op || 'union'); el._bool = { op: a.op || 'union', parts: booleanParts(node, attrsOf), ...cornerOf(a) }; }
       else if (tag === 'textpath') { const sp = parseShapeSpec(a.shape || 'ellipse'); subs = a.d ? nodePath({ tag: 'vector', children: [] }, a, box) : shapePath(sp.kind, box.w, box.h, sp.params); }
-      else subs = nodePath(node, a, box);
+      else subs = withCorners(nodePath(node, a, box), cornerOf(a));
       if (tag === 'textpath') buildTextPath(el, a, String(safeInterp(textOf(node), scope, ctx) ?? '').trim(), subs, box);
       else buildVector(el, node, a, subs, box, ctx, (v) => fillToCss(v, ctx));
       if (a.morph) el._morphTargets = String(a.morph).split('|').map((spec) => { const s = parseShapeSpec(spec.trim()); return serializePath(shapePath(s.kind, box.w, box.h, s.params)); });
@@ -759,7 +759,7 @@ function createElementFor(node, a, scope, parentLayout, ctx) {
       if ((a.d && !a.view) || a.vector || (a.w !== undefined && a.d && /^\d/.test(String(a.w)) && !a.view)) {
         el = document.createElement('div'); el.className = 'mq-vector';
         const box = boxOf(a, 100);
-        buildVector(el, node, a, nodePath(node, a, box), box, ctx, (v) => fillToCss(v, ctx));
+        buildVector(el, node, a, withCorners(nodePath(node, a, box), cornerOf(a)), box, ctx, (v) => fillToCss(v, ctx));
         break;
       }
       el = document.createElement('div'); el.className = 'mq-vector';

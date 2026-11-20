@@ -35,16 +35,20 @@ window.__D = {
   byName(n) { const all = [...app.project.byId.values()]; return all.find((x) => x.attrs && x.attrs.name === n) || all.find((x) => x.id === n) || all.find((x) => x.tag === 'screen' && x.attrs.name === n) || null; },
   need(n) { const x = this.byName(n); if (!x) throw new Error('calque introuvable : ' + n); return x; },
   rectOf(id) { const c = window.__canvas; const el = c.elOf(id) || (c.items && c.items.get(id)); if (el) { const r = el.getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; }
+    const or = c.operandClientRect && c.operandClientRect(id); if (or) return { x: or.left, y: or.top, w: or.width, h: or.height };
     // boolean operand / non-rendered child: derive from the parent
     const p = app.parent(id); const n = app.node(id); if (!p) return null; const pr = this.rectOf(p.id); if (!pr) return null; const z = app.zoom;
     return { x: pr.x + (parseFloat(n.attrs.x) || 0) * z, y: pr.y + (parseFloat(n.attrs.y) || 0) * z, w: (parseFloat(n.attrs.w) || 0) * z, h: (parseFloat(n.attrs.h) || 0) * z }; },
+  // an unselected boolean operand is grabbed with a deep click (⌘/Ctrl), like a hand would in Figma
+  needsDeep(n) { const x = this.byName(n); return !!(x && window.__canvas.operandInfo && window.__canvas.operandInfo(x.id) && !app.selection.includes(x.id)); },
   select(names) { const ids = [].concat(names).map((n) => this.need(n).id); app.select(ids); return ids; },
   ensureSel(n) { const x = this.need(n); if (app.selection.length !== 1 || app.selection[0] !== x.id) { app.select([x.id]); return { retry: true }; } return null; },
   zoom(n, pad) { const x = this.need(n); window.__canvas.zoomToFit([x.id]); if (pad) window.__canvas.zoomBy(pad); app.emit('view'); return app.zoom; },
   edit(n) { const id = n ? this.select(n)[0] : app.selection[0]; window.__canvas.vedit.enter(id); return !!window.__canvas.vedit.active; },
   frame() { const v = window.__canvas.vedit; if (!v.active) return null; const F = v.frame(); const R = window.__canvas.rect; return F && { x: R.left + F.r.x, y: R.top + F.r.y, sx: F.sx, sy: F.sy }; },
   center(el) { const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; },
-  visible(el) { const r = el.getBoundingClientRect(); if (!r.width || !r.height) return false; const s = getComputedStyle(el); return s.visibility !== 'hidden' && s.display !== 'none' && r.bottom > 0 && r.right > 0 && r.top < innerHeight && r.left < innerWidth; },
+  shown(el) { const r = el.getBoundingClientRect(); if (!r.width || !r.height) return false; const s = getComputedStyle(el); return s.visibility !== 'hidden' && s.display !== 'none'; },
+  visible(el) { if (!this.shown(el)) return false; const r = el.getBoundingClientRect(); return r.bottom > 0 && r.right > 0 && r.top < innerHeight && r.left < innerWidth; },
   // the live prototype that owns the mouse: the Component Studio playground first, then present mode
   playing() { for (const p of [window.__studio, window.__play]) if (p && p.root && p.root.isConnected && p.player) return p; return null; },
   studio(name) { const s = window.__studio; if (!s) throw new Error('Studio indisponible'); s.open(name || undefined); if (name && s.name !== name) throw new Error('composant introuvable : ' + name); return s.name; },
@@ -52,14 +56,16 @@ window.__D = {
   byText(scope, text, n) {
     const T = text.trim().toLowerCase(); const cands = [];
     for (const el of scope.querySelectorAll('*')) {
-      if (el.closest('#agent-cursor') || !this.visible(el)) continue;
+      if (el.closest('#agent-cursor') || !this.shown(el)) continue;
       const own = [...el.childNodes].filter((c) => c.nodeType === 3).map((c) => c.textContent).join('').trim().toLowerCase();
       const meta = [el.getAttribute('title'), el.getAttribute('aria-label'), el.getAttribute('placeholder'), el.tagName === 'INPUT' ? el.value : null].filter(Boolean).map((s) => s.trim().toLowerCase());
       const all = [own, ...meta]; const score = all.includes(T) ? 0 : all.some((s) => s && s.startsWith(T)) ? 1 : all.some((s) => s && s.includes(T)) ? 2 : -1;
-      if (score >= 0) { const r = el.getBoundingClientRect(); cands.push({ el, score, area: r.width * r.height }); }
+      if (score >= 0) { const r = el.getBoundingClientRect(); cands.push({ el, score, area: r.width * r.height, off: this.visible(el) ? 0 : 1 }); }
     }
-    cands.sort((a, b) => a.score - b.score || a.area - b.area);
-    const c = cands[n || 0]; if (!c) throw new Error('élément introuvable : "' + text + '"'); return c.el;
+    cands.sort((a, b) => a.score - b.score || a.off - b.off || a.area - b.area);
+    const c = cands[n || 0]; if (!c) throw new Error('élément introuvable : "' + text + '"');
+    if (c.off) c.el.scrollIntoView({ block: 'center', inline: 'nearest' }); // scrolled out of its panel: bring it into view first, like a hand on the wheel
+    return c.el;
   },
   ui(text, n) { const play = this.playing(); return this.byText(play ? play.root : document.body, text, n); },
   // every rig currently reachable by the mouse: editor handles (custom green + built-in shape rigs) or live prototype
@@ -114,10 +120,11 @@ window.__D = {
     if (k === 'corner' || k === 'rotate') { const r = this.ensureSel(q[1]); if (r) return r;
       const el = document.querySelector(k === 'corner' ? '.cv-handle[data-handle="' + (q[2] || 'se') + '"]' : '.cv-rotate'); if (!el) throw new Error((k === 'corner' ? 'poignée ' + (q[2] || 'se') : 'poignée de rotation') + ' introuvable'); return this.center(el); }
     if (k === 'layer') { const x = this.need(q[1]); const el = document.querySelector('.lrow[data-id="' + x.id + '"]'); if (!el) { app.select([x.id]); return { retry: true }; } el.scrollIntoView({ block: 'nearest' }); return this.center(el); }
-    if (k === 'ui') return this.center(this.ui(rest.replace(/\s+\d+$/, '').replace(/^"(.*)"$/, '$1'), +(/\s(\d+)$/.exec(rest) || [0, 0])[1]));
+    if (k === 'ui') { const raw = t.trim().slice(k.length).trim(); const m = /^"(.*)"(?:\s+(\d+))?$/.exec(raw); // ui "Goutte 80" keeps its digits; ui Ajouter 2 = 3rd match
+      return this.center(m ? this.ui(m[1], +(m[2] || 0)) : this.ui(raw.replace(/\s+\d+$/, ''), +(/\s(\d+)$/.exec(raw) || [0, 0])[1])); }
     if (k === 'css') { const m = /^(.*?)(?:\s+(\d+))?$/.exec(rest); const els = [...document.querySelectorAll(m[1])].filter((e) => this.visible(e)); const el = els[+(m[2] || 0)]; if (!el) throw new Error('aucun élément visible pour ' + m[1]); return this.center(el); }
     if (k === 'proto') { const play = this.playing(); if (!play) throw new Error('pas en mode présentation (present)');
-      const m = /^(.*?)(?:\s+(\d+))?$/.exec(rest); const key = m[1].replace(/^"(.*)"$/, '$1'); const n = +(m[2] || 0);
+      const raw = t.trim().slice(k.length).trim(); const m = /^"(.*)"(?:\s+(\d+))?$/.exec(raw) || /^(.*?)(?:\s+(\d+))?$/.exec(raw); const key = m[1]; const n = +(m[2] || 0);
       const byKey = [...play.player.host.querySelectorAll('[data-key="' + key + '"]')].filter((e) => this.visible(e));
       return this.center(byKey[n] || this.byText(play.player.host, key, n)); }
     if (k === 'local') { const F = this.frame(); if (F) return { x: F.x + +q[1] * F.sx, y: F.y + +q[2] * F.sy }; const o = this.origin(); return { x: o.x + +q[1] * app.zoom, y: o.y + +q[2] * app.zoom }; }
@@ -309,7 +316,10 @@ export async function drive({ file, script, write, video, shots, scale = 1, spee
       case 'drag': case 'marquee': {
         const ms = +opt(parts, 'ms', 650), arc = +opt(parts, 'arc', 0);
         const toIdx = args.indexOf('to'), byIdx = args.indexOf('by');
-        const a = await resolve(args.slice(0, Math.max(toIdx, byIdx)).join(' ')); await glide(a, 360);
+        const src = args.slice(0, Math.max(toIdx, byIdx)).join(' ');
+        const a = await resolve(src); await glide(a, 360);
+        const deep = /^node\s/.test(src) && cmd === 'drag' && await page.evaluate((n) => window.__D.needsDeep(n), args[1]);
+        if (deep) { await page.keyboard.down('Control'); await page.mouse.down(); await page.keyboard.up('Control'); await page.waitForTimeout(T(50)); await glide(byIdx >= 0 ? { x: a.x + +args[byIdx + 1] * (await page.evaluate(() => app.zoom)), y: a.y + +args[byIdx + 2] * (await page.evaluate(() => app.zoom)) } : await resolve(args.slice(toIdx + 1).join(' ')), ms, arc, parts.some((x) => x.startsWith('ms='))); await page.waitForTimeout(T(40)); await page.mouse.up(); await settle(60); break; }
         let b;
         if (byIdx >= 0) { const z = await page.evaluate(() => (window.__D.playing() ? 1 : app.zoom)); b = { x: a.x + +args[byIdx + 1] * z, y: a.y + +args[byIdx + 2] * z }; }
         else b = await resolve(args.slice(toIdx + 1).join(' '));

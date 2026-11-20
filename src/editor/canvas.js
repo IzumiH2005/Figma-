@@ -87,13 +87,19 @@ export class Canvas {
     }
     // hover
     if (app.hover && !app.selection.includes(app.hover) && !this.drag) {
-      const el = this.elOf(app.hover);
-      if (el) { const r = this.local(el.getBoundingClientRect()); this.overlay.appendChild(h('div.ov.cv-hover', { style: box(r) })); }
+      const cr = this.rectOf(app.hover);
+      if (cr) { const r = this.local(cr); this.overlay.appendChild(h('div.ov.cv-hover', { style: box(r) })); }
     }
     // selection
     const single = app.selection.length === 1;
     for (const id of (this.sbuild && this.sbuild.active ? [] : app.selection)) {
       const els = this.world.querySelectorAll(`[data-id="${CSS.escape(id)}"]`);
+      if (!els.length) { // boolean operand: outline + size, no resize handles
+        const cr = this.operandClientRect(id); if (!cr) continue;
+        const r = this.local(cr); this.overlay.appendChild(h('div.ov.cv-sel.operand', { style: box(r) }));
+        if (single) this.overlay.appendChild(h('div.ov.cv-size', { style: { left: r.x + r.w / 2 + 'px', top: r.y + r.h + 8 + 'px' } }, `${round(r.w / app.zoom)} × ${round(r.h / app.zoom)}`));
+        continue;
+      }
       els.forEach((el, k) => {
         const r = this.local(el.getBoundingClientRect());
         const b = h('div.ov.cv-sel' + (k > 0 ? '.ghost' : ''), { style: box(r) });
@@ -228,6 +234,82 @@ export class Canvas {
     return chain.length > 1 ? chain[1] : chain[0];
   }
 
+  // ------------------------------------------------------------ boolean operands
+  // Operands have no DOM of their own: their geometry lives in the parent boolean's recipe (el._bool). They are picked,
+  // outlined and dragged here, and the boolean is recomputed live (with its corner radius → metaball fusion).
+  operandInfo(id) {
+    const app = this.app; const n = app.node(id); const par = n && app.parent(id);
+    if (!par || par.tag !== 'boolean') return null;
+    const pel = this.elOf(par.id); if (!pel || !pel._bool) return null;
+    const index = par.children.filter((c) => c.tag !== '#text').indexOf(n);
+    const q = pel._bool.parts[index]; if (!q) return null;
+    return { n, par, pel, index, q };
+  }
+  operandClientRect(id) {
+    const o = this.operandInfo(id); if (!o) return null;
+    const R = o.pel.getBoundingClientRect(); const sx = R.width / +o.pel.dataset.vw, sy = R.height / +o.pel.dataset.vh;
+    const b = MQ.Path.bbox(o.q.local); const d = this.drag && this.drag.operand && this.drag.operand.par.id === o.par.id && this.drag.operand.indices.includes(o.index) ? this.drag : null;
+    const x = o.q.x + (d ? d.mx || 0 : 0), y = o.q.y + (d ? d.my || 0 : 0);
+    return { left: R.left + (x + b.x) * sx, top: R.top + (y + b.y) * sy, width: b.w * sx, height: b.h * sy };
+  }
+  rectOf(id) { const el = this.elOf(id); return el ? el.getBoundingClientRect() : this.operandClientRect(id); }
+  operandAt(boolId, cx, cy) {
+    const app = this.app; const pel = this.elOf(boolId); const par = app.node(boolId);
+    if (!pel || !pel._bool || !par) return null;
+    const R = pel.getBoundingClientRect(); const sx = R.width / +pel.dataset.vw, sy = R.height / +pel.dataset.vh;
+    const lx = (cx - R.left) / sx, ly = (cy - R.top) / sy;
+    const kids = par.children.filter((c) => c.tag !== '#text');
+    const inside = (subs) => { let w = 0; for (const p of MQ.Path.flatten(subs, 1)) { const pts = p.pts; for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) { const [xi, yi] = pts[i], [xj, yj] = pts[j]; if ((yi > ly) !== (yj > ly) && lx < ((xj - xi) * (ly - yi)) / (yj - yi) + xi) w++; } } return w % 2 === 1; };
+    let best = null, bestD = Infinity;
+    for (let i = pel._bool.parts.length - 1; i >= 0; i--) { // topmost first
+      const q = pel._bool.parts[i]; const sub = MQ.Path.translatePath(q.local, q.x, q.y);
+      if (inside(sub)) return kids[i] && kids[i].id;
+      const b = MQ.Path.bbox(sub); const dd = Math.hypot(Math.max(b.x - lx, 0, lx - b.x - b.w), Math.max(b.y - ly, 0, ly - b.y - b.h));
+      if (dd < bestD) { bestD = dd; best = kids[i] && kids[i].id; }
+    }
+    return bestD < 12 / sx ? best : null;
+  }
+  // chain-based pick, refined inside a boolean: deep click (⌘/Ctrl) or a selected sibling operand → the operand under the pointer
+  pickAt(chain, deep, cx, cy) {
+    const app = this.app; let pick = this.pickFromChain(chain, deep);
+    const last = chain[chain.length - 1]; const ln = last && app.node(last);
+    if (ln && ln.tag === 'boolean' && cx !== undefined) {
+      const sel = app.selection[0]; const sp = sel && app.parent(sel);
+      if (deep || (sp && sp.id === last)) { const op = this.operandAt(last, cx, cy); if (op) pick = op; }
+    }
+    return pick;
+  }
+  // boolean bounds follow the result (Figma): operands are shifted so the outline starts at 0,0
+  normalizeBoolean(id) {
+    const app = this.app; const par = app.node(id); const pel = this.elOf(id);
+    if (!par || !pel || !pel._bool) return;
+    const kids = par.children.filter((c) => c.tag !== '#text');
+    const b0 = pel._bool;
+    const numeric = (v) => v === undefined || /^-?\d+(\.\d+)?$/.test(String(v));
+    const pos = (k, q, a) => (numeric(k.attrs[a]) ? +k.attrs[a] || 0 : q[a]); // expression-driven operands: their evaluated value
+    const res = MQ.Vector.booleanResult(b0.parts.map((q, i) => MQ.Path.translatePath(q.local, pos(kids[i], q, 'x'), pos(kids[i], q, 'y'))), b0.op, b0);
+    const bb = MQ.Path.bbox(res); if (!bb.w || !bb.h) return;
+    const canShift = kids.every((k) => numeric(k.attrs.x) && numeric(k.attrs.y));
+    if (!canShift) return; // operands animated by expressions: keep the authored box (other states have other extents)
+    const ox = canShift ? Math.round(bb.x) : 0, oy = canShift ? Math.round(bb.y) : 0;
+    if (ox || oy) for (const k of kids) { app.setAttr(k.id, 'x', round((+k.attrs.x || 0) - ox)); app.setAttr(k.id, 'y', round((+k.attrs.y || 0) - oy)); }
+    if (numeric(par.attrs.x) && par.attrs.x !== undefined) app.setAttr(id, 'x', round(+par.attrs.x + ox));
+    if (numeric(par.attrs.y) && par.attrs.y !== undefined) app.setAttr(id, 'y', round(+par.attrs.y + oy));
+    app.setAttr(id, 'w', Math.ceil(bb.x + bb.w - ox)); app.setAttr(id, 'h', Math.ceil(bb.y + bb.h - oy));
+  }
+  moveOperand(e, d) {
+    const o = d.operand; const dx = e.clientX - d.sx, dy = e.clientY - d.sy;
+    if (!d.started) { if (Math.abs(dx) + Math.abs(dy) < 3) return; d.started = true; o.pel._clipLive = true; }
+    const R = o.pel.getBoundingClientRect(); const sx = R.width / +o.pel.dataset.vw, sy = R.height / +o.pel.dataset.vh;
+    let mx = dx / sx, my = dy / sy;
+    if (e.shiftKey) { if (Math.abs(mx) > Math.abs(my)) my = 0; else mx = 0; }
+    d.mx = Math.round(mx); d.my = Math.round(my);
+    const b = o.pel._bool;
+    const parts = b.parts.map((q, i) => MQ.Path.translatePath(q.local, q.x + (o.indices.includes(i) ? d.mx : 0), q.y + (o.indices.includes(i) ? d.my : 0)));
+    MQ.Vector.setVectorD(o.pel, MQ.Path.serializePath(MQ.Vector.booleanResult(parts, b.op, b)));
+    this.drawOverlay();
+  }
+
   containerAt(cx, cy, exclude) {
     const els = document.elementsFromPoint(cx, cy);
     for (const e of els) {
@@ -300,7 +382,7 @@ export class Canvas {
       this.drag = { marquee: { x: p.x, y: p.y, w: 0, h: 0 }, sx: p.x, sy: p.y, scope: null };
       return;
     }
-    const pick = this.pickFromChain(chain, e.metaKey || e.ctrlKey);
+    const pick = this.pickAt(chain, e.metaKey || e.ctrlKey, e.clientX, e.clientY);
     const node = app.node(pick);
     if (node && node.tag === 'screen' && !app.selection.includes(pick) && !e.shiftKey) {
       // marquee inside screen
@@ -318,6 +400,8 @@ export class Canvas {
     const app = this.app;
     const first = app.node(ids[0]);
     if (!first) return;
+    { const ops = ids.map((id) => this.operandInfo(id)); // dragging operands of one boolean: live recompute
+      if (ops.every(Boolean) && ops.every((o) => o.par.id === ops[0].par.id)) { this.drag = { move: true, ids, sx: e.clientX, sy: e.clientY, started: false, operand: { par: ops[0].par, pel: ops[0].pel, indices: ops.map((o) => o.index), ids } }; return; } }
     const el = this.elOf(ids[0]);
     const topLevel = ids.every((id) => app.page.children.includes(app.node(id)));
     const abs = el && getComputedStyle(el).position === 'absolute';
@@ -351,7 +435,7 @@ export class Canvas {
     if (!d) {
       if (this.editing || !this.root.contains(e.target) && !this.overlay.contains(e.target)) return;
       const chain = this.chainAt(e.target);
-      const hov = chain.length ? this.pickFromChain(chain, e.metaKey || e.ctrlKey) : null;
+      const hov = chain.length ? this.pickAt(chain, e.metaKey || e.ctrlKey, e.clientX, e.clientY) : null;
       const measure = e.altKey && app.selection.length === 1 && hov && hov !== app.selection[0];
       if (hov !== app.hover || measure || this.measure) {
         app.hover = hov;
@@ -385,6 +469,7 @@ export class Canvas {
       const n = app.node(d.id); if (ang) n.attrs.rotate = String(ang); else delete n.attrs.rotate;
       app.emit('doc'); return;
     }
+    if (d.move && d.operand) return this.moveOperand(e, d);
     if (d.move) {
       const dx = (e.clientX - d.sx) / app.zoom, dy = (e.clientY - d.sy) / app.zoom;
       if (!d.started) {
@@ -549,9 +634,22 @@ export class Canvas {
       });
       return;
     }
+    if (d.move && d.operand) {
+      const o = d.operand; o.pel._clipLive = false;
+      if (!d.started) { if (!e.shiftKey && app.selection.length > 1) { const pick = this.operandAt(o.par.id, e.clientX, e.clientY); if (pick) app.select(pick); } return; }
+      if (!d.mx && !d.my) { app.emit('doc'); return; }
+      app.change(() => {
+        // start from the evaluated position: an operand placed by an expression ({$on ? 0 : 40}) becomes a literal where it was dropped
+        const kids = o.par.children.filter((c) => c.tag !== '#text'); const parts = o.pel._bool.parts;
+        o.ids.forEach((id) => { const n = app.node(id); const q = parts[kids.findIndex((k) => k.id === id)]; const x0 = q ? q.x : +n.attrs.x || 0, y0 = q ? q.y : +n.attrs.y || 0; app.setAttr(id, 'x', round(x0 + d.mx)); app.setAttr(id, 'y', round(y0 + d.my)); });
+        // refresh the recipe so normalisation sees the new positions
+        this.normalizeBoolean(o.par.id);
+      });
+      return;
+    }
     if (d.move) {
       if (!d.started) {
-        if (!e.shiftKey) { const chain = this.chainAt(e.target); const pick = this.pickFromChain(chain, e.metaKey || e.ctrlKey); if (pick && app.selection.length > 1) app.select(pick); }
+        if (!e.shiftKey) { const chain = this.chainAt(e.target); const pick = this.pickAt(chain, e.metaKey || e.ctrlKey, e.clientX, e.clientY); if (pick && app.selection.length > 1) app.select(pick); }
         return;
       }
       if (d.reorder) {
@@ -625,7 +723,12 @@ export class Canvas {
   dbl(e) {
     const app = this.app;
     if (this.vedit.dbl(e)) return;
-    { const s0 = app.selNodes[0]; const ch0 = this.chainAt(e.target); if (s0 && ['vector', 'shape', 'boolean', 'path'].includes(s0.tag) && ch0.includes(s0.id)) { this.vedit.enter(s0.id); return; } }
+    { const s0 = app.selNodes[0]; const ch0 = this.chainAt(e.target);
+      // double-click a boolean → select the operand under the pointer (Figma enters the group); again → edit its points
+      if (s0 && s0.tag === 'boolean' && ch0.includes(s0.id)) { const op = this.operandAt(s0.id, e.clientX, e.clientY); if (op) { app.select(op); return; } this.vedit.enter(s0.id); return; }
+      const sp = s0 && this.operandInfo(s0.id);
+      if (sp && ch0.includes(sp.par.id)) { const op = this.operandAt(sp.par.id, e.clientX, e.clientY); if (op && op !== s0.id) { app.select(op); return; } this.vedit.enter(s0.id); return; }
+      if (s0 && ['vector', 'shape', 'path'].includes(s0.tag) && ch0.includes(s0.id)) { this.vedit.enter(s0.id); return; } }
     if (e.target.dataset && e.target.dataset.screenLabel) return this.renameScreen(e.target.dataset.screenLabel, e.target);
     const chain = this.chainAt(e.target);
     if (!chain.length) return;
@@ -680,7 +783,8 @@ export class Canvas {
     const app = this.app;
     const chain = this.chainAt(e.target);
     // right-click inside the current selection keeps it (Figma): the menu acts on what is selected
-    if (chain.length && !chain.some((id) => app.selection.includes(id))) { const pick = this.pickFromChain(chain, e.metaKey || e.ctrlKey); app.select(pick); }
+    const opSel = app.selection.some((id) => { const o = this.operandInfo(id); return o && chain.includes(o.par.id); });
+    if (chain.length && !opSel && !chain.some((id) => app.selection.includes(id))) { const pick = this.pickAt(chain, e.metaKey || e.ctrlKey, e.clientX, e.clientY); app.select(pick); }
     this.hooks.onContext && this.hooks.onContext(e.clientX, e.clientY);
   }
 

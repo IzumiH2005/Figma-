@@ -1,5 +1,5 @@
 // Vector layers: <shape>, <vector>, <boolean>, <textpath>, masks, goo (shape fusion), morphing, pseudo-3D.
-import { parsePath, serializePath, shapePath, booleanPaths, scalePath, translatePath, rotatePath, bbox, SHAPES } from './pathkit.js';
+import { parsePath, serializePath, shapePath, booleanPaths, scalePath, translatePath, rotatePath, bbox, SHAPES, roundCorners } from './pathkit.js';
 import { offsetPath, widthProfile, scatterBrush } from './pathops.js';
 import { splitTop } from './project.js';
 import { interpolate as flubberInterpolate } from 'flubber';
@@ -48,12 +48,18 @@ export function nodePath(node, a, box) {
 
 // children of <boolean>: each child positioned by its x/y (and rotate) inside the boolean's box
 // boolean recipe: each operand's local geometry + position (kept on the element for live re-evaluation)
+// corner radius applied to a whole outline (boolean result, vector, path): Figma's "radius" on non-primitive layers
+export const ROUNDABLE = (tag, a) => tag === 'boolean' || tag === 'path' || ((tag === 'vector' || tag === 'svg') && !!a.d && !a.view);
+export function cornerOf(a) { const r = a.radius === 'full' ? 9999 : num(String(a.radius ?? '').split(/\s+/)[0]); return { radius: r > 0 ? r : 0, smoothing: Math.max(0, Math.min(1, num(a.smoothing) > 1 ? num(a.smoothing) / 100 : num(a.smoothing))) }; }
+export function withCorners(subs, c) { return c && c.radius > 0 ? roundCorners(subs, c.radius, c.smoothing) : subs; }
+export function booleanResult(list, op, c) { return withCorners(booleanPaths(list, op || 'union'), c); }
 export function booleanParts(node, attrsOf) {
   const parts = [];
   for (const c of node.children || []) {
     if (c.tag === '#text') continue;
     const ca = attrsOf(c); const b = boxOf(ca, 100);
     let local = c.tag === 'boolean' ? booleanSubs(c, attrsOf, ca.op || 'union') : nodePath(c, ca, b);
+    if (c.tag !== 'boolean' && ROUNDABLE(c.tag, ca)) local = withCorners(local, cornerOf(ca));
     if (ca.rotate) local = rotatePath(local, num(ca.rotate), b.w / 2, b.h / 2);
     parts.push({ local, x: num(ca.x), y: num(ca.y), sig: serializePath(local) });
   }
@@ -64,7 +70,7 @@ export function booleanParts(node, attrsOf) {
 export function liveBoolean(el, from, to, duration, ease, delay = 0) {
   if (!from || !to || from.op !== to.op || from.parts.length !== to.parts.length || from.parts.some((p, i) => p.sig !== to.parts[i].sig)) return false;
   const lerp = (a, b, t) => a + (b - a) * t;
-  const frame = (k) => serializePath(booleanPaths(to.parts.map((q, i) => translatePath(q.local, lerp(from.parts[i].x, q.x, k), lerp(from.parts[i].y, q.y, k))), to.op));
+  const frame = (k) => serializePath(booleanResult(to.parts.map((q, i) => translatePath(q.local, lerp(from.parts[i].x, q.x, k), lerp(from.parts[i].y, q.y, k))), to.op, { radius: lerp(from.radius || 0, to.radius || 0, k), smoothing: to.smoothing || 0 }));
   const finalD = el.dataset.d; let t0 = null;
   const tick = (now) => {
     if (t0 === null) t0 = now + delay;
@@ -82,17 +88,19 @@ export function booleanSubs(node, attrsOf, op) {
     const ca = attrsOf(c);
     const b = boxOf(ca, 100);
     let subs = c.tag === 'boolean' ? booleanSubs(c, attrsOf, ca.op || 'union') : nodePath(c, ca, b);
+    if (c.tag !== 'boolean' && ROUNDABLE(c.tag, ca)) subs = withCorners(subs, cornerOf(ca));
     if (ca.rotate) subs = rotatePath(subs, num(ca.rotate), b.w / 2, b.h / 2);
     subs = translatePath(subs, num(ca.x), num(ca.y));
     list.push(subs);
   }
-  return booleanPaths(list, op || 'union');
+  return booleanResult(list, op || 'union', cornerOf(node.attrs ? attrsOfSafe(node, attrsOf) : {}));
 }
+const attrsOfSafe = (node, attrsOf) => { try { return attrsOf(node); } catch { return node.attrs || {}; } };
 
 // ---------------------------------------------------------------- SVG fills
 function svgUrl(svg) { return `url("data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}")`; }
-export function maskImageFor(d, w, h, evenodd) {
-  return svgUrl(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"><path d="${d}" fill="#000"${evenodd ? ' fill-rule="evenodd"' : ''}/></svg>`);
+export function maskImageFor(d, w, h, evenodd, vb) {
+  return svgUrl(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="${vb || `0 0 ${w} ${h}`}" preserveAspectRatio="none"><path d="${d}" fill="#000"${evenodd ? ' fill-rule="evenodd"' : ''}/></svg>`);
 }
 
 function strokeSpec(v) {
@@ -123,8 +131,10 @@ export function buildVector(el, node, a, subs, box, ctx, fillCss) {
     const fl = document.createElement('div'); fl.className = 'mq-vec-fill';
     const f = fillCss(fillV);
     if (f) { if (f.image) { fl.style.backgroundImage = f.image; fl.style.backgroundSize = f.size || 'cover'; fl.style.backgroundPosition = 'center'; } if (f.color) fl.style.backgroundColor = f.color; if (f.anim) { fl.style.backgroundSize = '200% 200%'; fl.style.animation = 'mq-aurora 12s ease-in-out infinite alternate'; } }
-    const m = maskImageFor(d, w, h, evenodd);
+    const ext = node.tag === 'boolean' ? pathExt(d, w, h) : null; // operands may sit outside the boolean's box (expression-driven states)
+    const m = maskImageFor(d, w, h, evenodd, ext ? `${ext.x0} ${ext.y0} ${ext.x1 - ext.x0} ${ext.y1 - ext.y0}` : null);
     fl.style.cssText += `;position:absolute;inset:0;-webkit-mask-image:${m};mask-image:${m};-webkit-mask-size:100% 100%;mask-size:100% 100%;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat`;
+    placeExt(fl, ext, w, h);
     el.appendChild(fl);
   }
   // stroke layer
@@ -222,15 +232,42 @@ export function threeD(a, s) {
   return null;
 }
 
+// paint layers grow to the path's extent when the outline leaves the layer box (percentages: zoom/scale independent)
+function pathExt(d, w, h) {
+  try { const b = bbox(parsePath(d)); if (b.w && (b.x < -0.5 || b.y < -0.5 || b.x + b.w > w + 0.5 || b.y + b.h > h + 0.5)) return { x0: Math.min(0, b.x), y0: Math.min(0, b.y), x1: Math.max(w, b.x + b.w), y1: Math.max(h, b.y + b.h) }; } catch { /* malformed d */ }
+  return null;
+}
+function placeExt(n, ext, w, h) {
+  if (!n) return;
+  if (ext) Object.assign(n.style, { inset: 'auto', left: (ext.x0 / w) * 100 + '%', top: (ext.y0 / h) * 100 + '%', width: ((ext.x1 - ext.x0) / w) * 100 + '%', height: ((ext.y1 - ext.y0) / h) * 100 + '%' });
+  else { Object.assign(n.style, { left: '', top: '', width: '', height: '' }); n.style.inset = '0'; } // inset last: clearing left/top after it would erase its longhands (0×0 layer)
+}
+
 // ---------------------------------------------------------------- morphing
 // update a vector element in place with a new path (fill mask + stroke)
 export function setVectorD(el, d) {
   const w = +el.dataset.vw, h = +el.dataset.vh;
   const fl = el.querySelector(':scope > .mq-vec-fill');
+  const st = el.querySelector(':scope > .mq-vec-stroke');
   const live = el._live;
-  if (live) live.path.setAttribute('d', d); // during a live animation: plain SVG path, no per-frame mask decoding (no flicker)
-  else if (fl) { const m = maskImageFor(d, w, h, false); fl.style.webkitMaskImage = m; fl.style.maskImage = m; }
-  const p = el.querySelector(':scope > .mq-vec-stroke path'); if (p) p.setAttribute('d', d);
+  // the outline may leave the layer box while an operand is dragged: grow the paint layers to the path's extent
+  const ext = pathExt(d, w, h);
+  const sx = (el.clientWidth || w) / w, sy = (el.clientHeight || h) / h;
+  const vb = ext ? `${ext.x0} ${ext.y0} ${ext.x1 - ext.x0} ${ext.y1 - ext.y0}` : `0 0 ${w} ${h}`;
+  const place = (n) => placeExt(n, ext, w, h);
+  if (live) { live.path.setAttribute('d', d); live.svg.setAttribute('viewBox', vb); place(live.svg); } // during a live animation: plain SVG path, no per-frame mask decoding (no flicker)
+  else if (fl) {
+    const layers = [fl, ...el.querySelectorAll(':scope > .mq-grain')]; // grain follows the outline too
+    let px = null, m = null;
+    if (el._clipLive) px = serializePath(scalePath(translatePath(parsePath(d), -(ext ? ext.x0 : 0), -(ext ? ext.y0 : 0)), sx, sy));
+    else m = maskImageFor(d, w, h, false, vb);
+    for (const L of layers) {
+      place(L);
+      if (px) { L.style.webkitMaskImage = L.style.maskImage = 'none'; L.style.clipPath = `path('${px}')`; } // editor drag: synchronous clip-path (a data-URL mask decodes asynchronously and flickers)
+      else { L.style.webkitMaskImage = m; L.style.maskImage = m; L.style.clipPath = ''; L.style.webkitMaskSize = L.style.maskSize = '100% 100%'; L.style.webkitMaskRepeat = L.style.maskRepeat = 'no-repeat'; }
+    }
+  }
+  if (st) { st.setAttribute('viewBox', vb); place(st); const p = st.querySelector('path'); if (p) p.setAttribute('d', d); }
   el.dataset.d = d;
 }
 const interpCache = new Map();
@@ -259,7 +296,8 @@ export function attachMorph(el, anim, duration, iterations) {
 // asynchronously, swapping them every frame makes the shape blink); the mask comes back once the motion ends
 function beginLive(el) {
   const fl = el.querySelector(':scope > .mq-vec-fill'); if (!fl || el._live) return;
-  const cs = getComputedStyle(fl); if (cs.backgroundImage && cs.backgroundImage !== 'none') return;
+  const cs = getComputedStyle(fl);
+  if (cs.backgroundImage && cs.backgroundImage !== 'none') { el._clipLive = 'anim'; return; } // gradient / image fill: synchronous clip-path frames (grain included)
   const NS = 'http://www.w3.org/2000/svg'; const svg = document.createElementNS(NS, 'svg');
   svg.setAttribute('viewBox', `0 0 ${el.dataset.vw} ${el.dataset.vh}`); svg.setAttribute('preserveAspectRatio', 'none'); svg.setAttribute('class', 'mq-vec-live');
   svg.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none';
@@ -267,7 +305,13 @@ function beginLive(el) {
   fl.style.visibility = 'hidden'; fl.after(svg); el._live = { svg, path, fl };
 }
 function endLive(el, finalD) {
-  const L = el._live; if (!L) { setVectorD(el, finalD); return; }
+  const L = el._live;
+  if (!L && el._clipLive === 'anim') { // keep the exact clip until the final mask image has decoded, then swap (no blink)
+    setVectorD(el, finalD); const img = new Image(); let swapped = false;
+    const swap = () => { if (swapped || el._clipLive !== 'anim') return; swapped = true; el._clipLive = null; setVectorD(el, finalD); };
+    img.onload = () => requestAnimationFrame(swap); img.onerror = swap; img.src = maskImageFor(finalD, +el.dataset.vw, +el.dataset.vh, false).slice(5, -2).replace(/^"|"$/g, ''); setTimeout(swap, 400); return;
+  }
+  if (!L) { setVectorD(el, finalD); return; }
   el._live = null; setVectorD(el, finalD);
   const m = maskImageFor(finalD, +el.dataset.vw, +el.dataset.vh, false);
   const img = new Image(); const done = () => { L.fl.style.visibility = ''; L.svg.remove(); };

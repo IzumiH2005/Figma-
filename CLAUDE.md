@@ -48,6 +48,7 @@ Playwright et Chromium sont préinstallés dans l'environnement ; ffmpeg sert po
 - Préfère les tokens (`$primary`) aux couleurs en dur, et vérifie le contraste avec `lint` (les boutons pleins demandent un `primary` assez foncé pour du texte blanc).
 - Les annotations pour l'humain passent par `<note x= y= w=>` au niveau de la page.
 - shadcn/ui : `node cli/mq.js shadcn add button card … --into f.mq` importe les vrais composants du registre (`ui.Button variant=outline`, `ui.Card` + `ui.CardHeader`…, états via `state=`), stylés par `tw="…"` (Tailwind) et les tokens `$sh-*`. `mq kit ui.` liste leurs props.
+- Métaballes vectorielles (affiches à la Figma) : `<boolean op=union radius=140 smoothing=0.4>` arrondit le résultat, creux compris ; glisser une opérande (`drag node slab by …`) refond la forme en direct ; `toggle $var smart` interpole positions et rayon. Modèle : `examples/cluster.mq`.
 - Images : `gen:<scène>/<graine>` (`mq scenes`) et `avatar:Nom` fonctionnent hors ligne et dans les artifacts.
 
 ## Architecture

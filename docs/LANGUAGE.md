@@ -170,6 +170,15 @@ Tout ce qui se dessine dans Figma (formes, plume, booléens, texte sur chemin) e
 
 - **Contour** : `stroke="2 $primary inside|outside"`, `dash="6 4"`, `cap=round|square`, `join=round|bevel`, `start=`/`end=` `arrow|triangle|circle|square|bar`, `fill-rule=evenodd` pour les contre-formes.
 - **Masques** (tout élément) : `mask="star points=6"`, `mask="blob seed=3"`, `mask="fade bottom|edges"`.
+- **Arrondir un résultat (métaballes vectorielles)** : `radius=` sur un `<boolean>` (ou un `<path>`/`<vector d=…>`) arrondit les coins **du résultat**, creux compris : les jonctions entre formes deviennent des congés liquides, comme le « corner radius » appliqué à une union dans Figma. `radius=full` donne la goutte maximale, `smoothing=0..1` étire les congés (lissage continu). Les opérandes restent éditables : double-clic (ou ⌘/Ctrl-clic) dans le booléen pour en saisir une, glisser pour la déplacer : le résultat se recalcule en direct et la boîte du booléen suit son contour. Les opérandes pilotés par une expression (`x={$fused ? 230 : 290}`) deviennent littéraux là où on les lâche. `grain=` suit le contour, pas la boîte. Smart animate interpole positions des opérandes **et** rayon (`toggle $fused smart 600 hard`). Inspecteur : champs « Arrondi des coins » / « Lissage » + préréglages Net · Doux 24 · Goutte 80 · Métaballe. Exemple : `examples/cluster.mq`.
+  ```xml
+  <boolean name=cluster op=union radius=140 smoothing=0.4 w=680 h=640 fill=$blob grain=0.16>
+    <ellipse name=sun y=20 w=320 h=320/>
+    <rect name=slab x=230 y=70 w=300 h=260/>
+    <ellipse name=drop x=430 y=400 w=220 h=220/>
+  </boolean>
+  ```
+- **Sélectionner les calques correspondants** (menu contextuel) : même type, remplissage, contour, classe, taille, rayon dans la même maquette, comme dans Figma.
 - **Fusion de formes** : `goo=10` sur un conteneur fond les enfants qui se touchent (métaballes ; à animer pour un effet liquide).
 - **Morphing** : `morph="heart"` (forme cible) + `loop="morph 2s"`, ou deux écrans dont un vecteur nommé change de `d` (smart animate interpole le tracé).
 - **Modificateurs de tracé (non destructifs)** :

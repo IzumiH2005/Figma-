@@ -144,6 +144,25 @@ export function PillRow({ className, ...props }) { return <div className={cn("fl
   fs.rmSync(tmpMq);
 }
 
+// metaball booleans: radius rounds the result's corners (a square becomes a circle), operands driven by expressions
+// become literals where the hand drops them, the inspector presets write radius
+{
+  const geo = await page.evaluate(() => {
+    const P = MQ.Path; const sq = P.parsePath('M0 0H100V100H0Z');
+    const r = P.flatten(MQ.Vector.booleanResult([sq], 'union', MQ.Vector.cornerOf({ radius: 'full' })), 1)[0].pts;
+    const d = r.map(([x, y]) => Math.hypot(x - 50, y - 50)); return { min: Math.min(...d), max: Math.max(...d) };
+  });
+  ok(geo.min > 44 && geo.max < 56, `radius=full sur un carré ≈ cercle (rayon ${geo.min.toFixed(1)}…${geo.max.toFixed(1)})`);
+  const tmpMq = path.join(ROOT, 'out', '_cluster.mq');
+  fs.writeFileSync(tmpMq, examples.find((e) => e.file === 'cluster.mq').source.replace('fused: true', 'fused: false'));
+  const log = console.log; console.log = () => {};
+  await drive({ file: tmpMq, script: 'zoom cluster; drag node slab by -60 90 ms=300; key Escape; select cluster; click ui "Goutte 80"', write: true, buildEditorHTML, chromium });
+  console.log = log;
+  const src = fs.readFileSync(tmpMq, 'utf8');
+  ok(/name=slab x=230 y=70/.test(src) && /name=sun x=\{\$fused/.test(src) && /name=cluster[^>]*radius=80/.test(src), 'mq drive : opérande piloté par expression glissé → littéral ; préréglage « Goutte 80 »');
+  fs.rmSync(tmpMq);
+}
+
 // Component Studio: rename a prop (expressions + instances follow), add a rig, matrix with an instance-swap axis
 {
   const tmpMq = path.join(ROOT, 'out', '_studio.mq');

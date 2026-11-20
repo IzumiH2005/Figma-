@@ -261,6 +261,7 @@ function boot() {
       { label: 'Coller', key: 'Ctrl+V', icon: 'clipboard', disabled: !app.clipboard, run: () => paste() },
       { label: 'Dupliquer', key: 'Ctrl+D', icon: 'copy-plus', disabled: !n, run: () => duplicate() },
       { label: 'Supprimer', key: 'Suppr', icon: 'trash-2', disabled: !n, run: () => del() },
+      n && n.tag !== 'screen' ? { label: 'Sélectionner les calques correspondants', icon: 'scan-search', run: () => selectMatching(n) } : null,
       '-',
       { label: 'Grouper (stack)', key: 'Ctrl+G', icon: 'group', disabled: !n || n.tag === 'screen', run: () => wrap('stack') },
       { label: 'Envelopper en ligne', icon: 'columns-3', disabled: !n || n.tag === 'screen', run: () => wrap('row', { gap: '8' }) },
@@ -343,6 +344,14 @@ function boot() {
       app.change(() => { const keep = {}; for (const [k, v] of Object.entries(n.attrs)) if (k in props || !(k in (app.project.components[n.tag]?.props || {}))) keep[k] = v; n.tag = c; n.attrs = keep; });
       toast(`Instance remplacée par ${c}`);
     } })));
+  }
+  // Figma "Select matching layers": same type + same look (fill, stroke, size, text style) in the same screen
+  function selectMatching(n) {
+    const key = (x) => [x.tag, x.attrs.fill ?? x.attrs.bg ?? '', x.attrs.stroke ?? '', x.attrs.class ?? '', x.attrs.size ?? '', x.attrs.radius ?? '', x.tag === 'boolean' ? x.attrs.op || 'union' : ''].join('|');
+    let root = n; for (let p = app.parent(n.id); p && p.tag !== 'page' && p.tag !== 'project'; p = app.parent(p.id)) root = p;
+    const k = key(n); const out = [];
+    const walk = (x) => { if (!x || x.tag === '#text') return; if (x.attrs && key(x) === k) out.push(x.id); (x.children || []).forEach(walk); };
+    walk(root); app.select(out); toast(`${out.length} calque${out.length > 1 ? 's' : ''} correspondant${out.length > 1 ? 's' : ''}`);
   }
   function useAsMask() {
     const nodes = app.selNodes.filter((n) => n.tag !== 'screen'); if (nodes.length < 2) { toast('Sélectionne le masque et les calques à masquer'); return; }

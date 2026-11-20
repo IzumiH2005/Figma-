@@ -1,0 +1,55 @@
+<project name="Cluster — affiche métaballe" typescale=web fonts="Inter:400;500;700;800">
+  <!-- Recréation de la technique « blob » de Figma : plusieurs formes réunies par une union booléenne,
+       puis un rayon d'angle très grand sur le RÉSULTAT (radius=…) : les coins convexes s'arrondissent
+       et les creux entre deux formes se comblent comme des métaballes. Dégradé + grain par-dessus.
+       Dans l'éditeur : double-clic sur le blob pour attraper une forme, glisse-la, la fusion se recalcule
+       en direct. Le bouton bascule $fused : smart animate interpole positions ET rayon du booléen. -->
+  <tokens>
+    brand: ramp(#FF5A36)
+    gray: neutrals(#FF5A36, 0.02)
+    primary: $brand-600
+    bg: #121014
+    text: $gray-50
+    muted: $gray-400
+    border: alpha(#FFFFFF, 10)
+    blob: linear(150deg, #FF8A3D 0%, #FF4F6D 45%, #7B5CFF 100%)
+  </tokens>
+
+  <vars>
+    fused: true
+  </vars>
+
+  <screen name=Affiche device=desktop w=900 h=1200 fill=$bg>
+    <stack w=fill h=fill>
+      <boolean name=cluster op=union radius={$fused ? 140 : 24} smoothing=0.4 x=110 y=180 w=680 h=640 fill=$blob grain=0.16 anim="pop 700 hard">
+        <ellipse name=sun x={$fused ? 0 : -40} y={$fused ? 20 : 0} w=320 h=320/>
+        <rect name=slab x={$fused ? 230 : 290} y={$fused ? 70 : -20} w=300 h=260/>
+        <rect name=pill x={$fused ? 140 : 60} y={$fused ? 250 : 400} w=480 h=180/>
+        <ellipse name=drop x={$fused ? 430 : 520} y={$fused ? 400 : 470} w=220 h=220/>
+      </boolean>
+
+      <col x=72 y=72 gap=8 anim="fade-up 500 expo delay=200">
+        <text class=t-caption weight=500 color=$muted ls=0.16em>EXPOSITION · 2026</text>
+      </col>
+
+      <col x=72 y=880 w=756 gap=16 anim="fade-up 600 expo delay=320">
+        <text class=t-display weight=800 color=$text ls=-0.03em>CLUSTER</text>
+        <text class=t-body color=$muted maxw=520>Quatre formes, une seule union booléenne et un rayon d'angle appliqué au résultat. Les creux se remplissent comme des gouttes qui se touchent.</text>
+      </col>
+
+      <row x=72 y=1080 w=756 align=center justify=between anim="fade-up 600 expo delay=440">
+        <text class=t-small color=$muted>Galerie Nord · 12 → 28 mars</text>
+        <Button label={$fused ? 'Éclater' : 'Fusionner'} icon={$fused ? 'split' : 'merge'} on:click="toggle $fused smart 600 hard"/>
+      </row>
+    </stack>
+  </screen>
+
+  <flow name="demo">
+    start Affiche
+    wait 1400
+    click "Éclater"
+    wait 1500
+    click "Fusionner"
+    wait 1600
+  </flow>
+</project>

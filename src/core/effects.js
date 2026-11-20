@@ -84,6 +84,9 @@ export function applyEffects(el, a, ctx) {
     g.className = 'mq-grain';
     g.style.cssText = `position:absolute;inset:0;border-radius:inherit;pointer-events:none;mix-blend-mode:overlay;opacity:${Math.min(1, o * 4)};background-image:url("data:image/svg+xml,${encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='${num(a['grain-size'], 0.85)}' numOctaves='2' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='100%' height='100%' filter='url(#n)'/></svg>`)}");background-size:180px 180px`;
     if (getComputedStyle && !el.style.position) el.style.position = 'relative';
+    // a vector (path / boolean / metaball): the grain follows the outline, not the bounding box
+    const vf = el.querySelector(':scope > .mq-vec-fill');
+    if (vf) for (const k of ['webkitMaskImage', 'maskImage', 'webkitMaskSize', 'maskSize', 'webkitMaskRepeat', 'maskRepeat', 'inset', 'left', 'top', 'width', 'height']) if (vf.style[k]) g.style[k] = vf.style[k];
     el.appendChild(g);
   }
   // texture: rough, hand-cut edges (turbulence displacement)

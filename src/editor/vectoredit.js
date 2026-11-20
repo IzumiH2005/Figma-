@@ -314,7 +314,7 @@ export class VectorEditor {
     const F = this.frame(); if (!F) return;
     if (this.op) { // recompute the boolean with the edited operand → live result, like Figma
       const b = F.el._bool; const parts = b.parts.map((q, i) => P().translatePath(i === this.op.index ? this.subs : q.local, q.x, q.y));
-      MQ.Vector.setVectorD(F.el, P().serializePath(P().booleanPaths(parts, b.op)));
+      MQ.Vector.setVectorD(F.el, P().serializePath(MQ.Vector.booleanResult(parts, b.op, b)));
     } else MQ.Vector.setVectorD(F.el, P().serializePath(this.subs));
     this.canvas.drawOverlay();
   }

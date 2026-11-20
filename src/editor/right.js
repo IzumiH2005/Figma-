@@ -158,6 +158,8 @@ export class RightPanel {
         n.tag === 'vector' ? h('button.chip', { onclick: () => this.hooks.pathOp(n.id, 'simplify') }, icon('minimize-2', 12), ' Simplifier') : null,
         n.tag === 'vector' ? h('button.chip', { onclick: () => this.hooks.pathOp(n.id, 'flipx') }, icon('flip-horizontal-2', 12), ' Miroir H') : null,
         n.tag === 'vector' ? h('button.chip', { onclick: () => this.hooks.pathOp(n.id, 'flipy') }, icon('flip-vertical-2', 12), ' Miroir V') : null)];
+      if (MQ.Vector.ROUNDABLE(n.tag, a)) rows.push(h('div.grid2', null, numOpt('Arrondi des coins', a.radius, (v) => set('radius', v), null, 'radius'), numOpt('Lissage', a.smoothing, (v) => set('smoothing', v), '%')),
+        h('div.chips', null, [['Net', null], ['Doux 24', 24], ['Goutte 80', 80], ['Métaballe', 'full']].map(([l, v]) => h('button.chip', { onclick: () => set('radius', v) }, l))));
       if (n.tag === 'boolean') rows.unshift(seg([['union', 'squares-unite', 'Union'], ['subtract', 'squares-subtract', 'Soustraire'], ['intersect', 'squares-intersect', 'Intersection'], ['exclude', 'squares-exclude', 'Exclure']], a.op || 'union', (v) => set('op', v)));
       rows.push(h('div.prow', null, h('label', null, 'Règle de remplissage'), select([['', 'nonzero'], ['evenodd', 'evenodd (contre-formes)']], a['fill-rule'] || '', (v) => set('fill-rule', v || null))));
       rows.push(h('div.grid2', null,

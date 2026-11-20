@@ -277,3 +277,78 @@ export function shapePath(kind, w, h, params = {}) {
 
 // even-odd aware: subpaths inside others become holes (counter-forms)
 export function isClosed(subs) { return subs.every((s) => s.closed); }
+
+// ------------------------------------------------------------------ corner radius on any path (Figma: radius on a vector / boolean)
+// Every true corner of the outline (convex AND concave) becomes a fillet of radius r, clamped to half of the run to the
+// neighbouring corners (like Figma). Curved runs (flattened arcs from a boolean) are detected and left smooth, so a union
+// of two rounded blobs gets a smooth "metaball" bridge where they meet.
+export function roundCorners(subs, r = 0, smoothing = 0) {
+  r = +r || 0; if (r <= 0) return subs;
+  const out = [];
+  for (const s of subs) {
+    if (!s.closed || s.nodes.length < 3) { out.push(s); continue; }
+    const curved = s.nodes.some((n) => n.in || n.out);
+    let pts = curved ? flatten([s], 0.3)[0].pts : s.nodes.map((n) => [n.x, n.y]);
+    pts = pts.filter((p, i, a) => { const q = a[(i + 1) % a.length]; return i === a.length - 1 && a.length > 1 ? Math.hypot(p[0] - a[0][0], p[1] - a[0][1]) > 0.5 && Math.hypot(p[0] - a[i - 1][0], p[1] - a[i - 1][1]) > 0.5 : Math.hypot(p[0] - q[0], p[1] - q[1]) > 0.5; });
+    const N = pts.length; if (N < 3) { out.push(s); continue; }
+    const dir = (a, b) => { const dx = b[0] - a[0], dy = b[1] - a[1], l = Math.hypot(dx, dy) || 1; return [dx / l, dy / l]; };
+    const turn = pts.map((p, i) => { const a = dir(pts[(i - 1 + N) % N], p), b = dir(p, pts[(i + 1) % N]); return Math.atan2(a[0] * b[1] - a[1] * b[0], a[0] * b[0] + a[1] * b[1]); });
+    const D = Math.PI / 180;
+    // a corner turns sharply compared with its neighbours (curve samples turn evenly); polygons: every real vertex
+    let corners = [];
+    // (flattened curves — circles in a boolean result — turn by small, uneven steps on short segments: never corners)
+    const seg = (i) => Math.hypot(pts[(i + 1) % N][0] - pts[i][0], pts[(i + 1) % N][1] - pts[i][1]);
+    for (let i = 0; i < N; i++) {
+      const t = Math.abs(turn[i]); if (t < 1 * D) continue;
+      const nb = Math.min(Math.abs(turn[(i - 1 + N) % N]), Math.abs(turn[(i + 1) % N]));
+      const long = Math.min(seg((i - 1 + N) % N), seg(i)) > 16; // both edges are real edges, not curve samples
+      if (t > 50 * D || (t > 12 * D && (t > 2.2 * nb || long)) || (!curved && long && nb < 0.2 * D)) corners.push(i);
+    }
+    if (!curved && !corners.length) corners = pts.map((_, i) => i).filter((i) => Math.abs(turn[i]) > 1 * D);
+    if (!corners.length) { out.push(s); continue; }
+    // corners closer than `thr` (a rect corner 4px from where a circle meets it) act as ONE corner whose angle is
+    // their summed turn: otherwise each clamps the other's fillet to nothing
+    const thr = Math.min(24, Math.max(2, r * 0.15));
+    const S0 = [0]; for (let i = 1; i <= N; i++) S0.push(S0[i - 1] + Math.hypot(pts[i % N][0] - pts[i - 1][0], pts[i % N][1] - pts[i - 1][1]));
+    const L = S0[N];
+    let st = corners[0];
+    if (corners.length > 1) { const k = corners.findIndex((c, j) => ((S0[c] - S0[corners[(j - 1 + corners.length) % corners.length]]) + L) % L >= thr); if (k >= 0) st = corners[k]; }
+    pts = pts.slice(st).concat(pts.slice(0, st)); const turnR = turn.slice(st).concat(turn.slice(0, st));
+    corners = corners.map((c) => (c - st + N) % N).sort((a, b) => a - b);
+    const S = [0]; for (let i = 1; i <= N; i++) S.push(S[i - 1] + Math.hypot(pts[i % N][0] - pts[i - 1][0], pts[i % N][1] - pts[i - 1][1]));
+    const groups = [];
+    for (const c of corners) { const g = groups[groups.length - 1]; if (g && S[c] - S[g.c1] < thr) { g.c1 = c; g.turn += turnR[c]; } else groups.push({ c0: c, c1: c, turn: turnR[c] }); }
+    const G = groups.filter((g) => Math.abs(g.turn) > 1 * D);
+    if (!G.length) { out.push(s); continue; }
+    const at = (s0) => { const s1 = ((s0 % L) + L) % L; let lo = 0, hi = N - 1; while (lo < hi) { const m = (lo + hi + 1) >> 1; if (S[m] <= s1) lo = m; else hi = m - 1; } const a = pts[lo], b = pts[(lo + 1) % N]; const seg = S[lo + 1] - S[lo] || 1; const u = (s1 - S[lo]) / seg; return { p: [a[0] + (b[0] - a[0]) * u, a[1] + (b[1] - a[1]) * u], t: dir(a, b) }; };
+    const M = G.length;
+    const fil = G.map((g, k) => {
+      const prev = G[(k - 1 + M) % M], next = G[(k + 1) % M];
+      const runP = M === 1 ? L : ((S[g.c0] - S[prev.c1]) + L) % L, runN = M === 1 ? L : ((S[next.c0] - S[g.c1]) + L) % L;
+      const span = S[g.c1] - S[g.c0];
+      const ang = Math.PI - Math.min(Math.PI - 1e-3, Math.abs(g.turn)); // interior angle of the (merged) corner
+      let cut = r / Math.tan(Math.max(1e-3, ang) / 2);
+      cut = Math.max(span / 2 + 0.5, Math.min(cut * (1 + smoothing * 0.6), runP / 2 + span / 2, runN / 2 + span / 2));
+      const mid = (S[g.c0] + S[g.c1]) / 2;
+      const A = at(Math.min(S[g.c0], mid - cut)), B = at(Math.max(S[g.c1], mid + cut));
+      const tA = A.t, tB = B.t;
+      const phi = Math.acos(Math.max(-1, Math.min(1, tA[0] * tB[0] + tA[1] * tB[1])));
+      const chord = Math.hypot(B.p[0] - A.p[0], B.p[1] - A.p[1]);
+      const rr = phi > 1e-3 ? chord / (2 * Math.sin(phi / 2)) : 0;
+      const hl = Math.min(chord * 0.75, (4 / 3) * Math.tan(phi / 4) * rr * (1 + smoothing * 0.9));
+      return { s0: Math.min(S[g.c0], mid - cut), s1: Math.max(S[g.c1], mid + cut), A: A.p, B: B.p, tA, tB, hl };
+    });
+    const nodes = [];
+    const push = (n) => { const last = nodes[nodes.length - 1]; if (last && Math.hypot(last.x - n.x, last.y - n.y) < 0.05) { last.out = n.out; if (n.in) last.in = n.in; return; } nodes.push(n); };
+    for (let k = 0; k < M; k++) {
+      const f = fil[k], g = fil[(k + 1) % M];
+      push({ x: f.A[0], y: f.A[1], in: null, out: { x: f.A[0] + f.tA[0] * f.hl, y: f.A[1] + f.tA[1] * f.hl } });
+      push({ x: f.B[0], y: f.B[1], in: { x: f.B[0] - f.tB[0] * f.hl, y: f.B[1] - f.tB[1] * f.hl }, out: null });
+      const a = f.s1, b = k + 1 < M ? g.s0 : g.s0 + L; // keep the original samples strictly between two fillets
+      for (let j = 0; j < 2 * N; j++) { const sj = S[j % N] + (j >= N ? L : 0); if (sj > a + 0.05 && sj < b - 0.05) push({ x: pts[j % N][0], y: pts[j % N][1], in: null, out: null }); }
+    }
+    if (nodes.length > 1) { const a = nodes[0], z = nodes[nodes.length - 1]; if (Math.hypot(a.x - z.x, a.y - z.y) < 0.05) { a.in = z.in; nodes.pop(); } }
+    out.push({ closed: true, nodes });
+  }
+  return out;
+}
