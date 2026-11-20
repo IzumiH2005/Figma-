@@ -85,7 +85,7 @@ export const PRESETS = {
   orbit: (d = 6) => [{ translate: T(d, 0) }, { translate: T(0, d) }, { translate: T(-d, 0) }, { translate: T(0, -d) }, { translate: T(d, 0) }],
 };
 export const ENTRANCE = ['fade', 'fade-up', 'fade-down', 'fade-left', 'fade-right', 'scale-in', 'zoom-in', 'pop', 'land', 'stretch-in', 'slide-up', 'slide-down', 'slide-left', 'slide-right', 'blur-in', 'rotate-in', 'flip-in', 'drop', 'reveal', 'reveal-up', 'reveal-down', 'typewriter', 'grow', 'grow-up', 'count'];
-export const LOOPS = ['moving-hold', 'pulse', 'breathe', 'spin', 'float', 'bounce', 'shake', 'wiggle', 'heartbeat', 'ping', 'blink', 'sway', 'shimmer', 'orbit'];
+export const LOOPS = ['morph', 'moving-hold', 'pulse', 'breathe', 'spin', 'float', 'bounce', 'shake', 'wiggle', 'heartbeat', 'ping', 'blink', 'sway', 'shimmer', 'orbit'];
 export const ACCENTS = ['squish', 'jelly', 'rubber', 'shake', 'wiggle', 'heartbeat', 'pulse'];
 export const MODIFIERS = ['anticipate', 'snap', 'overshoot', 'arc', 'hard', 'soft'];
 const LOOP_DEFAULT = { 'moving-hold': [3200, 'in-out'], spin: [1200, 'linear'], shimmer: [1600, 'linear'], ping: [1400, 'out'], float: [3000, 'in-out'], breathe: [2400, 'in-out'], pulse: [1600, 'in-out'], sway: [3000, 'in-out'], orbit: [4000, 'linear'] };
@@ -151,6 +151,7 @@ function customFrames(name, project) {
   });
 }
 
+import { attachMorph } from './vector.js';
 // play entrance/loop anims gathered by the renderer. returns timeline entries
 export function playAnims(list, { project, paused = false, offset = 0, ignoreReduced = false } = {}) {
   const entries = [];
@@ -163,11 +164,11 @@ export function playAnims(list, { project, paused = false, offset = 0, ignoreRed
     let duration = (/^spring|bouncy|snappy|gentle|wobbly|stiff/.test(sp.easing || '') ? ez.duration : sp.duration) * (a.durScale || 1);
     const delay = (sp.delay || 0) + (a.delay || 0) + offset;
     let frames;
-    if (sp.name === 'count') frames = [{ opacity: 1 }, { opacity: 1 }];
+    if (sp.name === 'count' || sp.name === 'morph') frames = [{ opacity: 1 }, { opacity: 1 }];
     else frames = customFrames(sp.name, project) || (PRESETS[sp.name] ? PRESETS[sp.name](sp.dist) : PRESETS.fade());
     let easing = sp.name === 'typewriter' ? `steps(${Math.max(4, (a.el.textContent || '').length)})` : ez.easing;
     if (reduce) { frames = [{ opacity: 0 }, { opacity: 1 }]; duration = Math.min(200, duration); easing = 'ease-out'; }
-    else if (sp.name !== 'count' && sp.name !== 'typewriter') {
+    else if (sp.name !== 'count' && sp.name !== 'typewriter' && sp.name !== 'morph') {
       const shaped = shapeFrames(frames, sp, easing);
       frames = shaped.frames; if (shaped.easing) easing = shaped.easing; duration *= shaped.durMul;
     }
@@ -177,6 +178,7 @@ export function playAnims(list, { project, paused = false, offset = 0, ignoreRed
         iterations: sp.iterations, direction: sp.direction, fill: a.kind === 'loop' ? 'none' : 'backwards',
       });
       if (sp.name === 'count') attachCounter(a.el, anim, duration, delay, sp.to);
+      if (sp.name === 'morph') attachMorph(a.el, anim, duration, sp.iterations);
       if (paused) anim.pause();
       entries.push({ id: a.id, el: a.el, name: sp.name, duration, delay, kind: a.kind, animation: anim, iterations: sp.iterations });
     } catch (e) { /* ignore bad keyframes */ }

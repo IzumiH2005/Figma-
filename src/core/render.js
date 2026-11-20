@@ -2,13 +2,15 @@
 import { Scope, interp, evaluate } from './expr.js';
 import { DEVICES, splitTop, withAlpha, parseColor, coerce } from './project.js';
 import { resolveColorFns } from './color.js';
+import { VECTOR_TAGS, nodePath, boxOf, booleanSubs, buildVector, buildTextPath, gooFilterSvg, maskCss, threeD, parseShapeSpec } from './vector.js';
+import { shapePath, serializePath } from './pathkit.js';
 import { textOf } from './parse.js';
 import { ICONS } from './icons.js';
 import { iconSvg, splitIconName, packLoaded } from './iconpacks.js';
 import { genImage } from './gen.js';
 import { makeStatusBar, makeHomeBar } from './chrome.js';
 
-export const FRAME_TAGS = new Set(['frame', 'row', 'col', 'grid', 'stack', 'box', 'screen', 'rect', 'ellipse', 'button', 'card', 'section', 'header', 'footer', 'nav', 'list']);
+export const FRAME_TAGS = new Set(['shape', 'boolean', 'textpath', 'path', 'frame', 'row', 'col', 'grid', 'stack', 'box', 'screen', 'rect', 'ellipse', 'button', 'card', 'section', 'header', 'footer', 'nav', 'list']);
 export const INLINE_TEXT = new Set(['span', 'b', 'i', 'u', 's', 'a', 'code', 'br']);
 const BP = { sm: 640, md: 768, lg: 1024, xl: 1280, '2xl': 1536 };
 const STATE_PREFIX = { hover: ':hover', press: ':active', active: ':active', focus: ':focus-within' };
@@ -455,6 +457,10 @@ export function cssFor(tag, a, parentLayout, ctx, isText) {
   if (a.flipx) tf.push('scaleX(-1)'); if (a.flipy) tf.push('scaleY(-1)');
   if (tf.length) s.transform = tf.join(' ');
   if (a.origin) s.transformOrigin = a.origin;
+  const depth = threeD(a, s);
+  if (depth) { if (isText) s.textShadow = [s.textShadow, depth].filter(Boolean).join(', '); else s.boxShadow = [s.boxShadow, depth].filter(Boolean).join(', '); }
+  if (a.tilt || a.preserve3d) s.transformStyle = 'preserve-3d';
+  if (a.mask && a.mask !== true) { const m = maskCss(a.mask); if (m) { s.webkitMaskImage = m.image; s.maskImage = m.image; s.webkitMaskSize = m.size; s.maskSize = m.size; s.webkitMaskRepeat = 'no-repeat'; s.maskRepeat = 'no-repeat'; } }
 
   // ---------- typography (cascades)
   if (a.font) s.fontFamily = fontStack(a.font);
@@ -494,6 +500,9 @@ function applyCss(el, s) {
     else if (k === 'webkitLineClamp') el.style.setProperty('-webkit-line-clamp', v);
     else if (k === 'webkitBoxOrient') el.style.setProperty('-webkit-box-orient', v);
     else if (k === 'webkitBackdropFilter') el.style.setProperty('-webkit-backdrop-filter', v);
+    else if (k === 'webkitMaskImage') el.style.setProperty('-webkit-mask-image', v);
+    else if (k === 'webkitMaskSize') el.style.setProperty('-webkit-mask-size', v);
+    else if (k === 'webkitMaskRepeat') el.style.setProperty('-webkit-mask-repeat', v);
     else el.style[k] = v;
   }
 }
@@ -642,7 +651,26 @@ function createElementFor(node, a, scope, parentLayout, ctx) {
       if (a.w === undefined && a.h === undefined && a.aspect === undefined && a.inset === undefined) { el.style.width = '100%'; el.style.aspectRatio = '4/3'; }
       break;
     }
+    case 'shape': case 'boolean': case 'textpath': case 'path': {
+      el = document.createElement('div'); el.className = 'mq-vector';
+      const box = boxOf(a, tag === 'textpath' ? 200 : 100);
+      const attrsOf = (c) => resolveAttrs(c, scope, ctx).a;
+      let subs;
+      if (tag === 'boolean') subs = booleanSubs(node, attrsOf, a.op || 'union');
+      else if (tag === 'textpath') { const sp = parseShapeSpec(a.shape || 'ellipse'); subs = a.d ? nodePath({ tag: 'vector', children: [] }, a, box) : shapePath(sp.kind, box.w, box.h, sp.params); }
+      else subs = nodePath(node, a, box);
+      if (tag === 'textpath') buildTextPath(el, a, String(safeInterp(textOf(node), scope, ctx) ?? '').trim(), subs, box);
+      else buildVector(el, node, a, subs, box, ctx, (v) => fillToCss(v, ctx));
+      if (a.morph) el._morphTargets = String(a.morph).split('|').map((spec) => { const s = parseShapeSpec(spec.trim()); return serializePath(shapePath(s.kind, box.w, box.h, s.params)); });
+      break;
+    }
     case 'vector': case 'svg': {
+      if ((a.d && !a.view) || a.vector || (a.w !== undefined && a.d && /^\d/.test(String(a.w)) && !a.view)) {
+        el = document.createElement('div'); el.className = 'mq-vector';
+        const box = boxOf(a, 100);
+        buildVector(el, node, a, nodePath(node, a, box), box, ctx, (v) => fillToCss(v, ctx));
+        break;
+      }
       el = document.createElement('div'); el.className = 'mq-vector';
       const view = a.view || '0 0 24 24';
       const paths = a.d ? [{ d: a.d, fill: a.fill, stroke: a.stroke }] : (node.children || []).filter((c) => c.tag === 'path').map((c) => ({ d: c.attrs.d, fill: resolveDollars(c.attrs.fill, ctx), stroke: resolveDollars(c.attrs.stroke, ctx), sw: c.attrs.sw }));
@@ -719,8 +747,17 @@ function decorate(el, node, a, states, events, scope, parentLayout, ctx) {
   const css = cssFor(tag, a, parentLayout, ctx, isText);
   if (tag === 'icon') { delete css.width; delete css.height; if (a.w) css.width = px(a.w); }
   if (tag === 'divider' || tag === 'line') { delete css.backgroundColor; delete css.color; }
+  if (el.classList.contains('mq-vec')) {
+    for (const k of ['backgroundColor', 'backgroundImage', 'backgroundSize', 'outline', 'outlineOffset', 'color', 'webkitBackgroundClip', 'backgroundClip', 'webkitTextFillColor', 'animation']) delete css[k];
+    if (css.boxShadow) { css.filter = [css.filter, ...splitTop(css.boxShadow, ',').filter((x) => !x.includes('inset')).map((x) => `drop-shadow(${x.replace(/(-?\d+(?:\.\d+)?px\s+-?\d+(?:\.\d+)?px\s+-?\d+(?:\.\d+)?px)\s+-?\d+(?:\.\d+)?px/, '$1')})`)].filter(Boolean).join(' '); delete css.boxShadow; }
+    if (!el.style.width) css.width = css.width || el._box?.w + 'px';
+  }
+  if (tag === 'textpath') { delete css.color; delete css.backgroundImage; }
   applyCss(el, css);
+  if (el.classList.contains('mq-vec') && !el.style.position) el.style.position = 'relative';
   if (a.css) el.style.cssText += ';' + a.css;
+  if (a.goo) { const g = gooFilterSvg(a.goo); (ctx.defs = ctx.defs || new Map()).set(g.id, g.svg); el.style.filter = `url(#${g.id})` + (el.style.filter ? ' ' + el.style.filter : ''); }
+  if (a.tilt === 'pointer' && ctx.runtime) bindTilt(el, num(a['tilt-max'], 12));
   if (!ctx.owner) el.dataset.id = node.id;
   el.dataset.tag = tag;
   const key = tag === 'icon' ? a.key : (a.key || a.name);
@@ -748,7 +785,7 @@ function decorate(el, node, a, states, events, scope, parentLayout, ctx) {
   if (a.anim && a.anim !== true) ctx.anims.push({ el, spec: String(a.anim), kind: 'in', id: ctx.owner || node.id });
   if (a.loop && a.loop !== true) ctx.anims.push({ el, spec: String(a.loop), kind: 'loop', id: ctx.owner || node.id });
   // children
-  if (!isText && !['icon', 'image', 'img', 'vector', 'svg', 'input', 'textarea', 'divider', 'line'].includes(tag)) {
+  if (!isText && !['icon', 'image', 'img', 'vector', 'svg', 'input', 'textarea', 'divider', 'line', 'shape', 'boolean', 'textpath', 'path'].includes(tag)) {
     const layout = layoutOf(tag, a);
     const kids = renderChildren(node.children, scope, layout, ctx, el);
     if (a.stagger) applyStagger(kids, a.stagger, ctx);
@@ -820,6 +857,7 @@ export function renderScreen(screen, ctx) {
   if (a.stagger) applyStagger([...inner.children].filter((k) => k.tagName !== 'STYLE'), a.stagger, ctx);
   if (Object.keys(events).length && ctx.runtime) ctx.runtime.bind(outer, events);
   else if (ctx.editor) for (const [trig, ev] of Object.entries(events)) { const m = /\b(?:go|overlay|swap)\s+([\w\-]+|"[^"]+")/.exec(String(ev.action)); ctx.links.push({ from: outer, owner: screen.id, trigger: trig, action: String(ev.action), target: m ? m[1].replace(/"/g, '') : null }); }
+  appendDefs(outer, ctx);
   if (ctx.rules.length || ctx.project.css) {
     const st = document.createElement('style');
     st.textContent = ctx.rules.join('\n') + '\n' + (ctx.project.css || '');
@@ -840,9 +878,27 @@ export function renderStandalone(node, ctx, layout = 'stack') {
   wrap.style.fontSize = '16px'; wrap.style.lineHeight = '1.45';
   if (node.attrs && (node.attrs.x !== undefined || node.attrs.y !== undefined)) { const at = { ...node.attrs }; delete at.x; delete at.y; node = { ...node, attrs: at }; }
   renderNode(node, ctx.scope, layout, ctx).forEach((e) => wrap.appendChild(e));
+  appendDefs(wrap, ctx);
   if (ctx.rules.length) { const st = document.createElement('style'); st.textContent = ctx.rules.join('\n'); wrap.appendChild(st); }
   wrap._mq = { anims: ctx.anims, errors: ctx.errors, links: ctx.links, events: {} };
   return wrap;
+}
+
+function appendDefs(host, ctx) {
+  if (!ctx.defs || !ctx.defs.size) return;
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('width', '0'); svg.setAttribute('height', '0'); svg.style.cssText = 'position:absolute;width:0;height:0;overflow:hidden';
+  svg.innerHTML = `<defs>${[...ctx.defs.values()].join('')}</defs>`;
+  host.appendChild(svg);
+  ctx.defs = new Map();
+}
+
+// tilt="pointer": the element leans toward the cursor (3D card effect)
+function bindTilt(el, max) {
+  el.style.transformStyle = 'preserve-3d'; el.style.transition = 'transform .25s cubic-bezier(.2,.8,.2,1)';
+  const base = el.style.transform || '';
+  el.addEventListener('pointermove', (e) => { const r = el.getBoundingClientRect(); const px = (e.clientX - r.left) / r.width - 0.5, py = (e.clientY - r.top) / r.height - 0.5; el.style.transform = `${base} perspective(800px) rotateX(${(-py * max).toFixed(2)}deg) rotateY(${(px * max).toFixed(2)}deg)`; });
+  el.addEventListener('pointerleave', () => { el.style.transform = base; });
 }
 
 export const BASE_CSS = `
@@ -850,6 +906,7 @@ export const BASE_CSS = `
 .mq-screen-body::-webkit-scrollbar,.mq-frame::-webkit-scrollbar{display:none}
 .mq-text{white-space:pre-line;overflow-wrap:break-word;min-width:0}
 .mq-note{white-space:pre-line;background:#FFE58F;color:#3d3200;padding:14px 16px;border-radius:4px;font:500 14px/1.45 Inter,system-ui,sans-serif;box-shadow:0 6px 18px rgba(0,0,0,.18);max-width:320px}
+.mq-vec{position:relative;flex-shrink:0}.mq-vec-fill{pointer-events:none}.mq-vec-stroke{position:absolute;inset:0;width:100%;height:100%;overflow:visible;pointer-events:none}
 .mq-input{font:inherit;color:inherit;background:transparent;border:0;outline:0;min-width:0;padding:0;margin:0}
 .mq-input::placeholder{color:currentColor;opacity:.45}
 [data-hot]:focus-visible{outline:2px solid #5B8CFF;outline-offset:2px}

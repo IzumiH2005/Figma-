@@ -3,6 +3,7 @@ import { makeCtx, renderScreen, renderStandalone } from './render.js';
 import { evaluate, interp } from './expr.js';
 import { splitTop } from './project.js';
 import { playAnims, resolveEasing, EASINGS, prefersReducedMotion } from './anim.js';
+import { morphBetween } from './vector.js';
 
 export const TRANSITIONS = ['instant', 'none', 'dissolve', 'fade', 'smart', 'push', 'push-left', 'push-right', 'push-up', 'push-down', 'slide', 'slide-left', 'slide-right', 'slide-up', 'slide-down', 'ios', 'scale', 'zoom', 'flip'];
 const EASE_NAMES = new Set([...Object.keys(EASINGS), 'spring', 'bouncy', 'snappy', 'gentle', 'wobbly', 'stiff', 'bounce']);
@@ -377,7 +378,7 @@ export class Player {
     // elements driven by a running animation (loops, entrances) have no stable geometry: never FLIP them
     const animated = new Set();
     for (const a of oldEl.getAnimations({ subtree: true })) { if (a.effect && a.effect.target && a.playState === 'running') { let n = a.effect.target; while (n && n !== oldEl) { animated.add(n); n = n.parentElement; } } }
-    for (const [k, els] of oldMap) oldInfo.set(k, els.map((el) => { const cs = getComputedStyle(el); return { el, r: rect(el), bg: cs.backgroundColor, color: cs.color, radius: cs.borderTopLeftRadius, opacity: cs.opacity, moving: animated.has(el) && !el.contains(oldEl), visible: cs.display !== 'none' && cs.visibility !== 'hidden' && el.getClientRects().length > 0 }; }));
+    for (const [k, els] of oldMap) oldInfo.set(k, els.map((el) => { const cs = getComputedStyle(el); return { el, d: el.dataset.d, r: rect(el), bg: cs.backgroundColor, color: cs.color, radius: cs.borderTopLeftRadius, opacity: cs.opacity, moving: animated.has(el) && !el.contains(oldEl), visible: cs.display !== 'none' && cs.visibility !== 'hidden' && el.getClientRects().length > 0 }; }));
     const oldBg = getComputedStyle(oldEl).backgroundColor;
 
     host.appendChild(newEl);
@@ -434,7 +435,8 @@ export class Player {
       if (o.color !== cs.color) { from.color = o.color; to.color = cs.color; }
       if (o.radius !== cs.borderTopLeftRadius) { from.borderRadius = o.radius; to.borderRadius = cs.borderRadius; }
       if (o.opacity !== cs.opacity) { from.opacity = o.opacity; to.opacity = cs.opacity; }
-      if (!Object.keys(from).length) continue;
+      if (!Object.keys(from).length && !(o.d && el.dataset.d && o.d !== el.dataset.d)) continue;
+      if (!Object.keys(from).length) { morphBetween(el, o.d, el.dataset.d, dur, (p) => 1 - Math.pow(1 - p, 3)); continue; }
       const prevOrigin = el.style.transformOrigin;
       if (changed) el.style.transformOrigin = '0 0';
       const frames = [from, to];
@@ -452,6 +454,7 @@ export class Player {
         frames.splice(1, 0, mid);
       }
       const lag = t.overlap && changed && dist > 2 && parentStill ? Math.min(180, (overlapIndex++) * 45) : 0;
+      if (o.d && el.dataset.d && o.d !== el.dataset.d) { const target = el.dataset.d; setTimeout(() => morphBetween(el, o.d, target, dur, (p) => 1 - Math.pow(1 - p, 3)), lag); }
       const a = el.animate(frames, { ...opts, delay: lag });
       a.finished.catch(() => {}).then(() => { el.style.transformOrigin = prevOrigin; });
       anims.push(a);

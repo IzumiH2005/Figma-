@@ -2,6 +2,8 @@
 import { parse, serialize, serializeNode, clone, textOf, newId, bumpIds, ParseError, fmtAttr, TEXT_TAGS, patchSource, patchStyle } from './parse.js';
 import { Project, DEVICES, parseAttrString, parseColor, withAlpha, splitTop, TYPESCALES, SPACING } from './project.js';
 import * as Color from './color.js';
+import * as Path from './pathkit.js';
+import * as Vector from './vector.js';
 import { makeCtx, renderScreen, renderStandalone, renderNode, BASE_CSS, fontsHref, layoutOf, cssFor, resolveAttrs, imageSrc, fillToCss } from './render.js';
 import { Player, TRANSITIONS, parseTransition } from './proto.js';
 import { playAnims, PRESETS, ENTRANCE, LOOPS, ACCENTS, MODIFIERS, EASINGS, parseSpec, totalDuration, springEasing, resolveEasing, shapeFrames, setTimeScale, getTimeScale, prefersReducedMotion } from './anim.js';
@@ -92,6 +94,7 @@ export function toStaticHTML(el) {
 
 export {
   parse, serialize, serializeNode, clone, textOf, newId, bumpIds, ParseError, fmtAttr, TEXT_TAGS,
+  Path, Vector,
   Project, DEVICES, parseAttrString, parseColor, withAlpha, splitTop, TYPESCALES, SPACING, Color,
   makeCtx, renderScreen, renderStandalone, renderNode, BASE_CSS, fontsHref, layoutOf, cssFor, resolveAttrs, imageSrc, fillToCss,
   Player, TRANSITIONS, parseTransition,

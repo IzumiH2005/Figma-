@@ -210,10 +210,12 @@ export function roundPoly(points, r = 0, smoothing = 0) {
     const ang = Math.acos(Math.max(-1, Math.min(1, (v1[0] * v2[0] + v1[1] * v2[1]) / (l1 * l2))));
     let rr = Math.min(Array.isArray(r) ? r[i] || 0 : r, (Math.min(l1, l2) / 2) * Math.tan(ang / 2));
     if (rr <= 0.01) { nodes.push(P(...p1)); continue; }
-    const cut = Math.min(rr / Math.tan(ang / 2) * (1 + smoothing), Math.min(l1, l2) / 2);
+    // corner smoothing (Figma/iOS): the curve starts further from the corner and its handles grow
+    const base = rr / Math.tan(ang / 2);
+    const cut = Math.min(base * (1 + smoothing * 0.6), Math.min(l1, l2) / 2);
     const a = [p1[0] + (v1[0] / l1) * cut, p1[1] + (v1[1] / l1) * cut], b = [p1[0] + (v2[0] / l2) * cut, p1[1] + (v2[1] / l2) * cut];
-    const kk = (4 / 3) * Math.tan((Math.PI - ang) / 4) * (1 + smoothing * 0.6) * (rr / Math.max(0.001, cut / Math.tan(ang / 2)) * (1 / (1 + smoothing)));
-    const h = Math.min(cut, cut * Math.max(0.3, kk));
+    const kappa = (4 / 3) * Math.tan((Math.PI - ang) / 4);
+    const h = Math.min(cut, base * kappa * (1 + smoothing * 0.9));
     nodes.push({ x: a[0], y: a[1], in: null, out: { x: a[0] - (v1[0] / l1) * h, y: a[1] - (v1[1] / l1) * h } });
     nodes.push({ x: b[0], y: b[1], in: { x: b[0] - (v2[0] / l2) * h, y: b[1] - (v2[1] / l2) * h }, out: null });
   }
@@ -245,7 +247,7 @@ function ellipseArc(w, h, start = 0, sweep = 360, ratio = 0) {
 
 export const SHAPES = {
   rect: { params: { radius: 0, smoothing: 0 }, make: (w, h, p) => roundPoly([[0, 0], [w, 0], [w, h], [0, h]], String(p.radius).includes(' ') ? String(p.radius).split(/\s+/).map(Number) : +p.radius || 0, +p.smoothing || 0) },
-  squircle: { params: { smoothing: 1 }, make: (w, h, p) => roundPoly([[0, 0], [w, 0], [w, h], [0, h]], Math.min(w, h) * 0.32, +p.smoothing || 1) },
+  squircle: { params: { n: 4.5 }, make: (w, h, p) => { const n = +p.n || 4.5, pts = []; for (let i = 0; i < 64; i++) { const t = (i / 64) * Math.PI * 2, c = Math.cos(t), s = Math.sin(t); pts.push([w / 2 + (w / 2) * Math.sign(c) * Math.pow(Math.abs(c), 2 / n), h / 2 + (h / 2) * Math.sign(s) * Math.pow(Math.abs(s), 2 / n)]); } return smoothPath(pts, true, 1); } },
   ellipse: { params: { start: 0, sweep: 360, ratio: 0 }, make: (w, h, p) => ellipseArc(w, h, +p.start || 0, p.sweep === undefined ? 360 : +p.sweep, +p.ratio || 0) },
   ring: { params: { ratio: 0.6, start: 0, sweep: 360 }, make: (w, h, p) => { if ((p.sweep === undefined ? 360 : +p.sweep) >= 360) { const o = ellipseArc(w, h), i = ellipseArc(w * (+p.ratio || 0.6), h * (+p.ratio || 0.6)); return [...o, ...translatePath(i, (w - w * (+p.ratio || 0.6)) / 2, (h - h * (+p.ratio || 0.6)) / 2)]; } return ellipseArc(w, h, +p.start || 0, +p.sweep, +p.ratio || 0.6); } },
   polygon: { params: { sides: 6, radius: 0, rotate: -90 }, make: (w, h, p) => roundPoly(regular(Math.max(3, +p.sides || 6), w, h, +p.rotate || -90), +p.radius || 0) },

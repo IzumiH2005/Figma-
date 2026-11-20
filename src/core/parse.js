@@ -4,7 +4,7 @@
 //   raw node (tokens/vars/styles/keyframes/data): { ..., raw: string }
 
 export const RAW_TAGS = new Set(['tokens', 'vars', 'styles', 'keyframes', 'script', 'css', 'flow']);
-export const TEXT_TAGS = new Set(['text', 'span', 'b', 'i', 'u', 's', 'a', 'code', 'note']);
+export const TEXT_TAGS = new Set(['text', 'span', 'b', 'i', 'u', 's', 'a', 'code', 'note', 'textpath']);
 const VOID_INLINE = new Set(['br']);
 
 let _id = 0;
