@@ -447,6 +447,23 @@ export function PillRow({ className, ...props }) { return <div className={cn("fl
     `Bibliothèques : publier avec dépendances, lier, rendre, propager, détacher, système hérité ${JSON.stringify(r)}`);
 }
 
+// mesh gradient (membrane de points)
+{
+  const r = await page.evaluate(() => {
+    const M = MQ.Mesh, src = 'meshgrid(elastic=0.6 radius=120, #ff0000 #00ff00 #0000ff, #ffffff #000000@40:60 #ffff00)';
+    const m = M.parseMesh(src); const back = M.parseMesh(M.serializeMesh(m));
+    const L = M.meshLayer('linear(#000, #fff) + ' + src); const m2 = L.mesh; m2.rows[1][1].x = 0.5; m2.rows[1][1].set = true;
+    const put = L.put(m2); const ins = M.meshInsert(M.parseMesh(src), 'col', (c) => c);
+    document.body.innerHTML = ''; const p = MQ.loadProject(`<screen name=S device=iphone-16><stack name=g w=200 h=120 fill="${src}"/></screen>`);
+    const el = MQ.screenElement(p, 'S'); document.body.appendChild(el);
+    return { R: m.R, C: m.C, el: m.opts.elastic, rad: m.opts.radius, rt: back.R === 2 && back.C === 3 && Math.abs(back.rows[1][1].x - 0.4) < 1e-6 && Math.abs(back.rows[1][1].y - 0.6) < 1e-6 && back.opts.elastic,
+      keeps: put.startsWith('linear(#000, #fff) + meshgrid(') && /@50:60/.test(put), ins: ins.C, bg: getComputedStyle(el.querySelector('[data-name="g"]') || el.querySelector('.mq-node[name="g"]') || el.querySelectorAll('div')[1]).backgroundImage.includes('data:image/png') };
+  });
+  ok(r.R === 2 && r.C === 3 && r.el && r.rad === 120 && r.rt, `meshgrid : analyse, options, aller-retour ${JSON.stringify(r)}`);
+  ok(r.keeps && r.ins === 4, `meshgrid : réécriture de la seule couche maillée, insertion de colonne ${JSON.stringify(r)}`);
+  ok(r.bg, 'meshgrid : rendu en image de fond');
+}
+
 // editor boots
 const html = await buildEditorHTML({ projects: examples });
 const tmp = path.join(ROOT, 'out', '_test-editor.html');

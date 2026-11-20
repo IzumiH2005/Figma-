@@ -1,0 +1,32 @@
+<project name="Membrane — mesh gradient" modes="dark light" typescale=ui>
+  <!-- Le mesh gradient de Figma, en mieux : une grille de points de couleur (n×m, pas seulement 4×4).
+       meshgrid(ligne, ligne, …) : les virgules séparent les lignes, les espaces séparent les points, couleur@x:y déplace un point.
+       Dans l'éditeur : sélectionne « aura » → chaque point est une pastille à glisser, double-clic = couleur,
+       barre « + Ligne / + Colonne / Réinitialiser ». En prototype, elastic=… fait suivre le pointeur à la membrane
+       (bords tenus, ressort amorti, immobile si l'utilisateur réduit les animations). -->
+  <system brand=#7C3AED accent=#EC4899 neutral=cool radius=round density=comfortable elevation=soft motion=calm type="Inter/Inter"/>
+
+  <screen name="Membrane" device=pixel-9 start statusbar homebar fill=$bg pt=safe px=16 pb=32 gap=24>
+    <col gap=4 pt=8>
+      <text class=t-h2>Ambiances</text>
+      <text class=t-body color=$text-2>Touche la carte : la couleur suit ton doigt.</text>
+    </col>
+
+    <stack name=aura w=fill h=360 radius=$radius-xl shadow=$shadow-2
+           fill="meshgrid(elastic=0.6 radius=160, #0F172A #312E81 #1E1B4B #0F172A, #4C1D95 #DB2777@40:42 #7C3AED #0E7490, #1E1B4B #F59E0B@30:72 #0891B2@66:66 #0F172A, #0F172A #1E1B4B #312E81 #0F172A)">
+      <col absolute x=24 y=272 w=280 gap=4>
+        <text class=t-label color=#FFFFFF opacity=0.85>Coucher de soleil</text>
+        <text class=t-h3 color=#FFFFFF>Aura n° 7</text>
+      </col>
+    </stack>
+
+    <row w=fill gap=12>
+      <stack name=s1 w=fill h=96 radius=$radius-lg fill="meshgrid(#FDE68A #F472B6, #A78BFA #38BDF8@60:70)"/>
+      <stack name=s2 w=fill h=96 radius=$radius-lg fill="meshgrid(#064E3B #10B981 #A7F3D0, #0F172A #22D3EE@50:40 #064E3B)"/>
+      <stack name=s3 w=fill h=96 radius=$radius-lg fill="meshgrid(#7F1D1D #F97316, #1C1917 #FACC15@35:65)"/>
+    </row>
+
+    <Button label="Appliquer l'ambiance" w=fill/>
+  </screen>
+
+</project>

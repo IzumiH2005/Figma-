@@ -401,6 +401,14 @@ body[data-view="contrast-low"] .cv-world, body[data-view="contrast-low"] .play-h
 .timeline.recording .tl-cursor { background: #E5484D; }
 .ve-rig.custom { background: #2BD9A0; border-radius: 50%; transform: none; width: 13px; height: 13px; margin: -6.5px 0 0 -6.5px; }
 .ve-rig.fx { background: #FF5FA2; border-radius: 50%; transform: none; width: 12px; height: 12px; margin: -6px 0 0 -6px; }
+.ve-rig.mesh { width: 14px; height: 14px; margin: -7px 0 0 -7px; border: 2.5px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.4), 0 2px 6px rgba(0,0,0,.35); }
+.ve-rig.mesh:hover { transform: scale(1.25); }
+.ve-mesh-line { fill: none; stroke: rgba(255,255,255,.85); stroke-width: 1; filter: drop-shadow(0 0 1px rgba(0,0,0,.6)); }
+.ve-gizmo { fill: none; stroke: #FF5FA2; stroke-width: 1.25; stroke-dasharray: 4 3; opacity: .9; }
+.ve-gizmo.arm { stroke-dasharray: none; }
+.ve-meshbar { position: absolute; display: flex; gap: 4px; padding: 4px; border-radius: 8px; background: var(--ui-panel); box-shadow: var(--shadow); pointer-events: auto; }
+.ve-meshbtn { font: 500 11px/16px Inter, system-ui, sans-serif; color: var(--ui-text); background: transparent; border: 0; border-radius: 5px; padding: 3px 8px; cursor: pointer; }
+.ve-meshbtn:hover { background: var(--ui-hover, rgba(127,127,127,.15)); }
 .ve-rig.custom:hover { box-shadow: 0 0 0 4px rgba(43,217,160,.3), 0 0 0 1px rgba(0,0,0,.35); }
 .ve-rig-track { fill: none; stroke: #2BD9A0; stroke-width: 1.5; stroke-dasharray: 3 3; opacity: .9; }
 .ve-rig-label { position: absolute; padding: 2px 6px; border-radius: 4px; background: #0E1512; color: #2BD9A0; font: 500 10px/14px Inter, system-ui, sans-serif; white-space: nowrap; pointer-events: none; }

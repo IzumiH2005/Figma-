@@ -6,6 +6,7 @@ import { smoothShadow, buildConnector, buildChart } from './plugins.js';
 import { patternFill, wrapClone, applyEffects, applyMaskGroup } from './effects.js';
 import { compileFx } from './fx.js';
 import { applyShader } from './shader.js';
+import { meshDataURL, bindElastic, parseMesh } from './meshgrad.js';
 import { resolveColorFns, shade as shadeC, parseColor as parseC, toCss as toCssC } from './color.js';
 const shadeColor = (c, p) => { const v = parseC(c); if (!v) throw new Error('not a colour'); return toCssC(shadeC(v, p / 100)); };
 import { VECTOR_TAGS, nodePath, boxOf, booleanSubs, booleanParts, buildVector, ROUNDABLE, cornerOf, withCorners, buildTextPath, gooFilterSvg, maskCss, threeD, parseShapeSpec } from './vector.js';
@@ -263,6 +264,7 @@ export function fillToCss(v, ctx) {
         if (name === 'aurora') anim = 'aurora';
         break;
       }
+      case 'meshgrid': { const src = ctx ? resolveDollars(layer.trim(), ctx) : layer.trim(); const u = meshDataURL(src, (c) => resolveColorFns(c)); if (u) { images.push(`url("${u}")`); sizes.push('100% 100%'); } break; }
       case 'noise': images.push(NOISE(num(args[0], 0.12), num(args[1], 0.9))); sizes.push('220px 220px'); break;
       case 'pattern': { const pf = patternFill(args, (name, size, color) => { try { return iconSvg(name, { size, sw: 2 }); } catch (e) { return ''; } }); images.push(pf.image); sizes.push(pf.size); break; }
       case 'dots': { const col = args[0] || 'rgba(127,127,127,.35)', s = num(args[1], 2), g = num(args[2], 16); images.push(`radial-gradient(${col} ${s / 2}px, transparent ${s / 2 + 0.5}px)`); sizes.push(`${g}px ${g}px`); break; }
@@ -894,6 +896,10 @@ function decorate(el, node, a, states, events, scope, parentLayout, ctx) {
   if (a.goo) { const g = gooFilterSvg(a.goo); (ctx.defs = ctx.defs || new Map()).set(g.id, g.svg); el.style.filter = `url(#${g.id})` + (el.style.filter ? ' ' + el.style.filter : ''); }
   if (a.fx && a.fx !== true) { const f = compileFx(resolveDollars(String(a.fx), ctx), ctx, { w: a.w, h: a.h }); if (f) el.style.filter = (el.style.filter ? el.style.filter + ' ' : '') + f; }
   if (a.shader && a.shader !== true) applyShader(el, resolveDollars(String(a.shader), ctx), ctx);
+  if (ctx.runtime && !ctx.editor && typeof a.fill === 'string' && a.fill.includes('meshgrid(')) {
+    const layer = splitTop(resolveDollars(a.fill, ctx), '+').map((l) => l.trim()).find((l) => /^meshgrid\s*\(/.test(l));
+    const m = layer && parseMesh(layer); if (m && m.opts.elastic) bindElastic(el, layer, typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches);
+  }
   if (a.tilt === 'pointer' && ctx.runtime) bindTilt(el, num(a['tilt-max'], 12));
   if (!ctx.owner) el.dataset.id = node.id;
   el.dataset.tag = tag;

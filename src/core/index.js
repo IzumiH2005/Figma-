@@ -13,6 +13,7 @@ import { styleGuideSource } from './styleguide.js';
 import * as Rig from './rig.js';
 import * as Fx from './fx.js';
 import * as Shader from './shader.js';
+import * as Mesh from './meshgrad.js';
 import { makeCtx, renderScreen, renderStandalone, renderNode, BASE_CSS, fontsHref, layoutOf, cssFor, resolveAttrs, imageSrc, fillToCss } from './render.js';
 import { Player, TRANSITIONS, parseTransition } from './proto.js';
 import { playAnims, PRESETS, ENTRANCE, LOOPS, ACCENTS, MODIFIERS, EASINGS, parseSpec, totalDuration, springEasing, resolveEasing, shapeFrames, setTimeScale, getTimeScale, prefersReducedMotion } from './anim.js';
@@ -106,7 +107,7 @@ import * as Images from './imagetools.js';
 import * as Library from './library.js';
 export {
   Images, Library, parse, serialize, serializeNode, clone, textOf, newId, bumpIds, ParseError, fmtAttr, TEXT_TAGS,
-  Path, Vector, PathOps, Guides, fake, fakeList, smoothShadow, specOverlay, System, styleGuideSource, Rig, Fx, Shader,
+  Path, Vector, PathOps, Guides, fake, fakeList, smoothShadow, specOverlay, System, styleGuideSource, Rig, Fx, Shader, Mesh,
   Project, DEVICES, platformOf, registerLibrary, registerLibraries, libraries, librarySource, libraryName, parseAttrString, parseColor, withAlpha, splitTop, TYPESCALES, SPACING, Color,
   makeCtx, renderScreen, renderStandalone, renderNode, BASE_CSS, fontsHref, layoutOf, cssFor, resolveAttrs, imageSrc, fillToCss,
   Player, TRANSITIONS, parseTransition,

@@ -122,7 +122,7 @@ Les images importées sont redimensionnées (2048 px au plus), converties en **W
 
 | Attribut | Valeurs |
 |---|---|
-| `fill` (`bg`) | couleur · `$token` · `linear(90, #a, #b 60, #c)` · `radial(at 30% 20%, …)` · `conic(…)` · `mesh(c1,c2,c3,c4)` · `aurora(…)` (animé) · `noise(.1)` · `dots(color,size,gap)` · `grid(color,size)` · `stripes(color,w,angle)` · `image(src)` — superposer avec ` + ` |
+| `fill` (`bg`) | couleur · `$token` · `linear(90, #a, #b 60, #c)` · `radial(at 30% 20%, …)` · `conic(…)` · `mesh(c1,c2,c3,c4)` · `meshgrid(…)` (membrane de points, voir plus bas) · `aurora(…)` (animé) · `noise(.1)` · `dots(color,size,gap)` · `grid(color,size)` · `stripes(color,w,angle)` · `image(src)` — superposer avec ` + ` |
 | `color` | Couleur du texte (hérite) — un dégradé donne un texte dégradé |
 | `stroke` | `"1 $border"`, `"2 #000 outside dashed"` ; `stroke-t|b|l|r` pour un seul côté |
 | `radius` | `12`, `full`, `"16 16 0 0"` |
@@ -258,6 +258,14 @@ Tout ce qui se dessine dans Figma (formes, plume, booléens, texte sur chemin) e
 - **Poignées d'effets** : quand un calque a `fx=` ou `shader=`, des pastilles roses apparaissent sur le canvas (centre de `lens`/`warp`/`vignette`, angle de `halftone`/`hatching`/`refract`/`metal`, taille de trame, position de `stretch`, centre/échelle/décalage des shaders). La souris les glisse ; le pilote aussi : `drive f.mq -e "select photo; rigs; drag rig halftone.angle by 30 0"`. L'inspecteur a une section **Effets avancés** : pile éditable (paramètres, réordonner, retirer, `+param`), ajout depuis la liste, presets (Risographie, Néon, Gravure, Rétro 1-bit, Verre cannelé, Chrome, Film) et réglages du shader.
 - **Groupes de masque** (Figma : Use as mask, Ctrl+Alt+M) : `<stack mask=first mask-type=alpha|vector|luminance>`. Le premier enfant masque les suivants. Un dégradé dans le masque alpha donne un fondu. En luminance, ce sont les zones claires qui révèlent.
 - **Pseudo-3D** : `tilt="20 -12"` (rotateX rotateY [rotateZ]), `perspective=900`, `skew="8 0"`, `depth=8` (extrusion de la vraie silhouette, `depth-color`, `depth-dir="1 1"`), `tilt=pointer` (suit le pointeur).
+
+- **Mesh gradient (membrane de points)** : `fill="meshgrid(#a #b #c, #d #e@55:40 #f, #g #h #i)"`. Les virgules séparent les lignes, les espaces séparent les points ; `couleur@x:y` déplace un point (en % du calque), sinon il reste sur la grille régulière. La grille fait de 2×2 à n×m points (Figma : 4×4). La surface est une interpolation Catmull-Rom des positions et des couleurs en OKLab, découpée en triangles (`tess=` règle la finesse, 10 par défaut). Ligne d'options en tête : `meshgrid(elastic=0.6 radius=160, …)`, et en prototype la membrane suit le pointeur. Elle reste tenue par les bords comme une peau de tambour, se tend plus fort à l'appui et revient en ressort ; elle reste immobile si l'utilisateur préfère réduire les animations.
+  - **Dans l'éditeur** : sélectionne le calque. Chaque point devient une pastille de sa couleur, reliée aux autres par les iso-courbes de la surface.
+    - Glisser un point déforme la membrane en direct.
+    - Double-cliquer un point ouvre le sélecteur de couleur.
+    - La barre sous le calque propose **+ Ligne**, **+ Colonne** (insérées au milieu de la cellule la plus large, sans bouger les autres points) et **Réinitialiser**.
+  - **Avec le pilote** : `drive f.mq -e "select fond; rigs; drag rig mesh.1,2 by 40 -20; click ui \"+ Colonne\""`.
+- **Gizmo Transform** : la poignée d'angle d'un effet (`halftone`, `hatching`, `refract`, `metal`…) tourne autour de l'origine de l'effet (`cx`/`cy`). Un cercle pointillé et un bras relient cette origine à la poignée, comme les contrôles de shader de Figma.
 
 **Dans l'éditeur** : outil Formes (S) avec un menu de 15 formes, Plume (P : clic = angle, glisser = courbe, clic sur le premier point = fermer), Crayon (Maj+P : tracé lissé automatiquement). Double-clic ou Entrée sur une forme = édition des points (glisser un point ou une poignée, Alt casse la symétrie, clic sur le tracé ajoute un point, double-clic bascule angle/courbe, Suppr retire). Les losanges orange sont les poignées de rig (branches d'étoile, arc, rayon…). Sélection multiple → Union / Soustraire / Intersection / Exclure ; Ctrl+E aplatit en vecteur. Panneaux Forme, Tracé (Lisser, Simplifier, Miroirs), 3D (presets Carte posée / Isométrique / Relief) et Masque & fusion.
 

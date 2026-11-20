@@ -107,7 +107,7 @@ window.__D = {
   },
   rigs() { const f = (v) => (typeof v === 'number' ? Math.round(v * 1000) / 1000 : v);
     const list = this.rigList(); if (!list.length) return 'aucun rig visible (sélectionne un calque riggé, ou present)';
-    return list.map((r, i) => '  [' + i + '] ' + (r.where === 'proto' ? '▶ ' : '') + (r.owner ? r.owner + '.' : '') + r.name + (r.builtin ? ' (forme)' : ' (' + r.grp.rigs.map((g) => g.r.mode + ' ' + g.r.min + '..' + g.r.max).join(' + ') + ')') + ' = ' + Object.values(r.values).map(f).join(', ')).join('\n'); },
+    return list.map((r, i) => '  [' + i + '] ' + (r.where === 'proto' ? '▶ ' : '') + (r.owner ? r.owner + '.' : '') + r.name + (r.builtin ? (/^mesh\./.test(r.name) ? ' (membrane)' : /\./.test(r.name) ? ' (effet)' : ' (forme)') : ' (' + r.grp.rigs.map((g) => g.r.mode + ' ' + g.r.min + '..' + g.r.max).join(' + ') + ')') + ' = ' + Object.values(r.values).map(f).join(', ')).join('\n'); },
   // positions along the control from the current value(s) to the target value(s): the mouse follows the track
   rigPath(spec, targets, steps) {
     const r = this.findRig(spec); if (r.retry) return r; if (r.builtin) throw new Error('rig de forme : utilise drag rig ' + r.name + ' by dx dy');

@@ -27,6 +27,16 @@ const RIGS = {
   // layer effects and shader fills: centre, angle, size, scale… handles on the layer itself
   fx: (w, h, p) => (p.fx && p.fx !== true && MQ.Fx ? MQ.Fx.handles(String(p.fx), w, h) : []),
   shader: (w, h, p) => (p.shader && p.shader !== true && MQ.Shader ? MQ.Shader.shaderHandles(String(p.shader), w, h) : []),
+  // mesh gradient: every colour point of the membrane is a handle (Figma's 4×4 mesh, any size here)
+  mesh: (w, h, p) => {
+    const L = MQ.Mesh && MQ.Mesh.meshLayer(p.fill); if (!L || !L.mesh) return [];
+    const out = [];
+    L.mesh.rows.forEach((row, i) => row.forEach((pt, j) => out.push({
+      param: 'fill', name: `mesh.${i},${j}`, mesh: true, color: pt.c, x: pt.x * w, y: pt.y * h,
+      map: (lx, ly) => { const M = MQ.Mesh.meshLayer(p.fill); const q = M.mesh.rows[i][j]; q.x = clamp(lx / w, -0.25, 1.25); q.y = clamp(ly / h, -0.25, 1.25); q.set = true; return M.put(M.mesh); },
+    })));
+    return out;
+  },
 };
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
@@ -136,17 +146,40 @@ export class VectorEditor {
     const el = this.canvas.elOf(id); if (!el) return;
     this.drawCustomRigs(overlay, svg, id, el);
     const kind = n.tag === 'shape' ? n.attrs.kind || 'rect' : n.tag === 'rect' ? 'rect' : n.tag === 'ellipse' ? 'ellipse' : null;
-    const kinds = [kind, n.attrs.fx ? 'fx' : null, n.attrs.shader ? 'shader' : null].filter((k) => k && RIGS[k]);
+    const isMesh = typeof n.attrs.fill === 'string' && n.attrs.fill.includes('meshgrid(');
+    const kinds = [kind, n.attrs.fx ? 'fx' : null, n.attrs.shader ? 'shader' : null, isMesh ? 'mesh' : null].filter((k) => k && RIGS[k]);
     if (!kinds.length) return;
     const r = this.canvas.local(el.getBoundingClientRect());
     const vw = +el.dataset.vw || el.offsetWidth, vh = +el.dataset.vh || el.offsetHeight;
+    const sx = r.w / vw, sy = r.h / vh;
+    const path = (d, cls) => { if (!svg) return; const t = document.createElementNS(NS, 'path'); t.setAttribute('d', d); t.setAttribute('class', cls); svg.appendChild(t); };
     for (const k of kinds) {
-      const params = n.tag === 'shape' || k === 'fx' || k === 'shader' ? n.attrs : { radius: n.attrs.radius, start: n.attrs.start, sweep: n.attrs.sweep, ratio: n.attrs.ratio };
-      RIGS[k](vw, vh, params).forEach((hd, i) => {
+      const params = n.tag === 'shape' || k === 'fx' || k === 'shader' || k === 'mesh' ? n.attrs : { radius: n.attrs.radius, start: n.attrs.start, sweep: n.attrs.sweep, ratio: n.attrs.ratio };
+      const hs = RIGS[k](vw, vh, params);
+      // the membrane: iso-curves of the surface between the points
+      if (k === 'mesh') { const L = MQ.Mesh.meshLayer(n.attrs.fill); for (const d of MQ.Mesh.meshCurves(L.mesh, r.w, r.h)) path(d.replace(/(-?[\d.]+) (-?[\d.]+)/g, (m0, x, y) => `${(+x + r.x).toFixed(1)} ${(+y + r.y).toFixed(1)}`), 've-mesh-line'); }
+      hs.forEach((hd, i) => {
         const name = hd.name || hd.param;
-        overlay.appendChild(h('div.ov.ve-rig' + (hd.name ? '.fx' : ''), { title: `${name} (glisser)`, style: { left: r.x + hd.x * (r.w / vw) + 'px', top: r.y + hd.y * (r.h / vh) + 'px' }, dataset: { rig: `${id}|${k}|${i}`, rigName: name } }));
+        const X = r.x + hd.x * sx, Y = r.y + hd.y * sy;
+        // transform gizmo (Figma's on-canvas shader controls): ring around the effect's origin + arm to the handle
+        if (hd.guide) { const g = hd.guide; const cx = r.x + g.cx * sx, cy = r.y + g.cy * sy; if (g.r) { const R = g.r * Math.min(sx, sy); path(`M${cx - R} ${cy}a${R} ${R} 0 1 0 ${2 * R} 0a${R} ${R} 0 1 0 ${-2 * R} 0`, 've-gizmo'); } path(`M${cx} ${cy}L${X} ${Y}`, 've-gizmo arm'); }
+        const cls = hd.mesh ? '.fx.mesh' : hd.name ? '.fx' : '';
+        const style = { left: X + 'px', top: Y + 'px' }; if (hd.mesh) style.background = this.colorOf(hd.color);
+        overlay.appendChild(h('div.ov.ve-rig' + cls, { title: hd.mesh ? `${name} · glisser · double-clic : couleur` : `${name} (glisser)`, style, dataset: { rig: `${id}|${k}|${i}`, rigName: name } }));
       });
+      if (k === 'mesh') {
+        const bar = h('div.ov.ve-meshbar', { style: { left: r.x + 'px', top: r.y + r.h + 12 + 'px' } });
+        for (const [op, label] of [['row', '+ Ligne'], ['col', '+ Colonne'], ['reset', 'Réinitialiser']]) bar.appendChild(h('button.ve-meshbtn', { dataset: { meshop: `${id}|${op}` } }, label));
+        overlay.appendChild(bar);
+      }
     }
+  }
+  colorOf(c) { const s = String(c || ''); if (s.startsWith('$')) { try { const v = this.app.project.token(s.slice(1)); if (v) return String(v); } catch (e) { /* unknown token */ } } return s; }
+  meshOp(id, op) {
+    const app = this.app; const n = app.node(id); const L = n && MQ.Mesh.meshLayer(n.attrs.fill); if (!L) return;
+    app.begin();
+    const m = op === 'reset' ? MQ.Mesh.meshReset(L.mesh) : MQ.Mesh.meshInsert(L.mesh, op, (c) => this.colorOf(c));
+    n.attrs.fill = L.put(m); app.emit('doc'); app.commit();
   }
 
   // custom rigs (rig:<target>="…") carried by the selected element or any element inside it
@@ -176,6 +209,17 @@ export class VectorEditor {
       overlay.appendChild(h('div.ov.ve-rig.custom', { title: label + ' (glisser · Maj = précis)', style: { left: p.x + 'px', top: p.y + 'px' }, dataset: { crig: String(gi), rigName: grp.rigs.map((g) => g.target).join(',') } }));
       overlay.appendChild(h('div.ov.ve-rig-label', { style: { left: p.x + 10 + 'px', top: p.y - 22 + 'px' } }, label));
     });
+  }
+  // double-click a membrane point: native colour picker, written back into the meshgrid token
+  pickMeshColor(key) {
+    const [id, , i] = key.split('|'); const app = this.app; const n = app.node(id); const L = n && MQ.Mesh.meshLayer(n.attrs.fill); if (!L) return;
+    const C = L.mesh.C; const pt = L.mesh.rows[Math.floor(+i / C)][+i % C];
+    const rgb = MQ.parseColor(this.colorOf(pt.c)); const hex = rgb ? MQ.Color.toHex(rgb).slice(0, 7) : '#888888';
+    const inp = h('input', { type: 'color', value: hex, style: { position: 'fixed', left: '-40px', top: '0', opacity: '0' } }); document.body.appendChild(inp);
+    let began = false;
+    inp.addEventListener('input', () => { if (!began) { app.begin(); began = true; } const M = MQ.Mesh.meshLayer(n.attrs.fill); M.mesh.rows[Math.floor(+i / C)][+i % C].c = inp.value; n.attrs.fill = M.put(M.mesh); app.emit('doc'); });
+    inp.addEventListener('change', () => { if (began) app.commit(); inp.remove(); });
+    inp.click();
   }
   rigValue(g) { const b = g.bind; const v = b.type === 'var' ? (this.app.project.initialVars?.() || {})[b.name] : b.value; return v === undefined || v === '' ? undefined : isNaN(+v) ? v : +v; }
   writeRig(g, v) {
@@ -209,6 +253,7 @@ export class VectorEditor {
       app.begin(); this.drag = { crig: true, grp: c.grp, box, sx: e.clientX, sy: e.clientY, start: MQ.Rig.groupPos(c.grp, Object.fromEntries(c.grp.rigs.map((g) => [g.target, this.rigValue(g)])), box) };
       e.preventDefault(); return true;
     }
+    if (t.dataset && t.dataset.meshop) { const [id, op] = t.dataset.meshop.split('|'); this.meshOp(id, op); e.preventDefault(); return true; }
     if (t.dataset && t.dataset.rig) {
       const [id, kind, i] = t.dataset.rig.split('|'); const n = app.node(id); const el = this.canvas.elOf(id);
       const r = el.getBoundingClientRect(); const vw = +el.dataset.vw || el.offsetWidth, vh = +el.dataset.vh || el.offsetHeight;
@@ -288,6 +333,7 @@ export class VectorEditor {
 
   dbl(e) {
     const t = e.target;
+    if (t.dataset && t.dataset.rig && t.dataset.rig.split('|')[1] === 'mesh') { this.pickMeshColor(t.dataset.rig); return true; }
     if (this.pen) { this.finishPen(false); return true; }
     if (this.id && t.dataset && t.dataset.va) {
       const [si, ni] = t.dataset.va.split(':').map(Number); const s = this.subs[si]; const nd = s.nodes[ni];

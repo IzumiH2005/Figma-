@@ -215,7 +215,7 @@ export function applyShader(el, spec, ctx) {
 export function shaderHandles(spec, w, h) {
   const s = parseShader(spec); const out = [];
   const ser = (o) => [s.raw, ...s.pos, ...Object.entries(o).map(([k, v]) => `${k}=${v}`)].join(' ');
-  if (s.type === 'concentric') { const cx = num(s.o.cx, 0.5), cy = num(s.o.cy, 0.5); out.push({ param: 'shader', name: 'shader.center', x: cx * w, y: cy * h, map: (lx, ly) => ser({ ...s.o, cx: +(Math.max(0, Math.min(1, lx / w))).toFixed(3), cy: +(Math.max(0, Math.min(1, ly / h))).toFixed(3) }) }); }
+  if (s.type === 'concentric') { const cx = num(s.o.cx, 0.5), cy = num(s.o.cy, 0.5); out.push({ param: 'shader', name: 'shader.center', x: cx * w, y: cy * h, guide: { cx: cx * w, cy: cy * h, r: Math.min(w, h) * 0.18 }, map: (lx, ly) => ser({ ...s.o, cx: +(Math.max(0, Math.min(1, lx / w))).toFixed(3), cy: +(Math.max(0, Math.min(1, ly / h))).toFixed(3) }) }); }
   if (s.type === 'moire') { const off = num(s.o.offset, 0.08); out.push({ param: 'shader', name: 'shader.offset', x: (0.5 + off) * w, y: h / 2, map: (lx) => ser({ ...s.o, offset: +Math.max(0, lx / w - 0.5).toFixed(3) }) }); }
   if (s.type === 'grid' || s.type === 'moire' || s.type === 'caustics' || s.type === 'clouds' || s.type === 'noise' || s.type === 'nebula') {
     const sc = num(s.o.scale, SH[s.type].scale); out.push({ param: 'shader', name: 'shader.scale', x: Math.min(w - 10, 10 + sc), y: h - 10, map: (lx) => ser({ ...s.o, scale: Math.max(2, Math.round(lx - 10)) }) });
