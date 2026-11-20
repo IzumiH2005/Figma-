@@ -105,7 +105,7 @@ function boot() {
   canvas = new Canvas(app, canvasEl, hooks);
   window.__canvas = canvas; // used by `mq drive` (agent pointer)
   window.__play = play;
-  left = new LeftPanel(app, leftEl, hooks);
+  left = new LeftPanel(app, leftEl, hooks); app.left = left;
   right = new RightPanel(app, rightEl, hooks);
   window.__right = right;
   const studio = new Studio(app, hooks);
@@ -518,7 +518,8 @@ function boot() {
     if (mod && k === 'y') { e.preventDefault(); app.redo(); return; }
     if (mod && k === 'c') { copy(); return; }
     if (mod && k === 'x') { copy(); del(); return; }
-    if (mod && k === 'v') { e.preventDefault(); if (navigator.clipboard && navigator.clipboard.readText) navigator.clipboard.readText().then((t2) => paste(t2 && t2.trim().startsWith('<') ? t2 : null)).catch(() => paste()); else paste(); return; }
+    // Ctrl+V: the native paste event (below) carries images and text; fall back to the internal clipboard if it never comes
+    if (mod && k === 'v') { pasteWait = setTimeout(() => { pasteWait = null; if (navigator.clipboard && navigator.clipboard.readText) navigator.clipboard.readText().then((t2) => paste(t2 && t2.trim().startsWith('<') ? t2 : null)).catch(() => paste()); else paste(); }, 80); return; }
     if (mod && k === 'd') { e.preventDefault(); duplicate(); return; }
     if (mod && k === 'a') { e.preventDefault(); const n = app.selNodes[0]; const par = n ? app.parent(n.id) : null; app.select(par && par.children ? par.children.filter((c) => c.tag !== '#text').map((c) => c.id) : (app.page ? app.page.children.map((c) => c.id) : [])); return; }
     if (mod && e.shiftKey && k === 'k') { e.preventDefault(); studio.open(); return; }
@@ -570,9 +571,30 @@ function boot() {
   });
   addEventListener('keyup', (e) => { if (e.key === ' ') { canvas.spaceDown = false; canvasEl.classList.remove('grab'); } if (e.key === 'Alt') { canvas.measure = null; canvas.drawOverlay(); } });
 
+  let pasteWait = null;
+  document.addEventListener('paste', (e) => {
+    const t = e.target; if (t && (t.closest && t.closest('input, textarea, [contenteditable], .cm-editor'))) return;
+    if (pasteWait) { clearTimeout(pasteWait); pasteWait = null; }
+    const cd = e.clipboardData; if (!cd) return;
+    const files = [...(cd.files || [])].filter((f) => /^image\//.test(f.type));
+    e.preventDefault();
+    if (files.length) { left.importImageFiles(files); return; }
+    const txt = cd.getData('text/plain');
+    paste(txt && txt.trim().startsWith('<') ? txt : null);
+  });
+
   // canvas drop of assets
-  canvasEl.addEventListener('dragover', (e) => { if (e.dataTransfer.types.includes('text/mq-insert')) e.preventDefault(); });
+  canvasEl.addEventListener('dragover', (e) => { if (e.dataTransfer.types.includes('text/mq-insert') || e.dataTransfer.types.includes('Files')) e.preventDefault(); });
   canvasEl.addEventListener('drop', (e) => {
+    // image files from the desktop: WebP, embedded, placed in the container under the pointer
+    if (e.dataTransfer.files && e.dataTransfer.files.length) {
+      e.preventDefault();
+      const cont = canvas.containerAt(e.clientX, e.clientY, []);
+      let drop = cont ? { cont: cont.node } : null;
+      if (cont) { const lel = canvas.layoutEl(cont.el, cont.node); if (canvas.layoutKind(lel) === 'stack') { const r = lel.getBoundingClientRect(); drop = { cont: cont.node, abs: true, x: Math.round((e.clientX - r.left) / app.zoom), y: Math.round((e.clientY - r.top) / app.zoom) }; } }
+      left.importImageFiles(e.dataTransfer.files, drop);
+      return;
+    }
     const name = e.dataTransfer.getData('text/mq-insert'); if (!name) return; e.preventDefault();
     const cont = canvas.containerAt(e.clientX, e.clientY, []); if (!cont) return;
     const node = { id: MQ.newId(), tag: name, attrs: {}, children: [] };

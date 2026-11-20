@@ -275,7 +275,8 @@ export function fillToCss(v, ctx) {
 export function imageSrc(src, ctx) {
   if (!src) return '';
   if (/^(gen|avatar|initials|photo):/.test(src)) return genImage(src);
-  if (ctx && ctx.project.assets && ctx.project.assets[src]) return ctx.project.assets[src];
+  const key = src.startsWith('asset:') ? src.slice(6) : src;
+  if (ctx && ctx.project.assets && ctx.project.assets[key]) return ctx.project.assets[key];
   return src;
 }
 

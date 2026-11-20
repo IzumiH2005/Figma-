@@ -344,6 +344,21 @@ export function PillRow({ className, ...props }) { return <div className={cn("fl
   ok(r.playing.join() === 'true,false' && r.after.every((o) => o === 0), `Re-rendu : entrée jouée pour le calque apparu, par instance, éclat qui reste éteint ${JSON.stringify(r)}`);
 }
 
+// images: <assets> block resolves by name, import → WebP (smaller, resized), names are slugged and unique
+{
+  const r = await page.evaluate(async () => {
+    const c = document.createElement('canvas'); c.width = 3000; c.height = 1500; const g = c.getContext('2d');
+    const gr = g.createLinearGradient(0, 0, 3000, 1500); gr.addColorStop(0, '#ff7a59'); gr.addColorStop(1, '#5b5bf7'); g.fillStyle = gr; g.fillRect(0, 0, 3000, 1500);
+    const png = c.toDataURL('image/png');
+    const out = await MQ.Images.importImage(png, { max: 2048 });
+    const p = MQ.loadProject(`<project><screen name="S" w=400 h=300><image name=a src=hero w=200 h=100/><image name=b src=asset:hero w=200 h=100/></screen>\n<assets>\n  hero: ${out.dataUrl}\n</assets>\n</project>`);
+    MQ.ensureStyles(); document.body.innerHTML = ''; const el = MQ.screenElement(p, 'S'); document.body.appendChild(el);
+    const srcOf = (k) => { const e = el.querySelector(`[data-key="${k}"]`); const im = e.tagName === 'IMG' ? e : e.querySelector('img'); return im ? im.src : getComputedStyle(e).backgroundImage; };
+    return { format: out.format, w: out.w, h: out.h, smaller: out.bytes < MQ.Images.dataBytes(png), a: srcOf('a').includes('image/webp'), b: srcOf('b').includes('image/webp'), name: MQ.Images.assetName('Photo Équipe 02.JPG', { 'photo-equipe-02': 1 }), back: MQ.parse(MQ.serialize(MQ.parse(`<assets>\n  x: data:image/webp;base64,AAAA\n</assets>`))).length };
+  });
+  ok(r.format === 'webp' && r.w === 2048 && r.h === 1024 && r.smaller && r.a && r.b && r.name === 'photo-equipe-02-2', `Images : <assets>, import WebP redimensionné, noms uniques ${JSON.stringify(r)}`);
+}
+
 // editor boots
 const html = await buildEditorHTML({ projects: examples });
 const tmp = path.join(ROOT, 'out', '_test-editor.html');

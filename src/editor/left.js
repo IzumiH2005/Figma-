@@ -185,6 +185,16 @@ export class LeftPanel {
     };
     q.addEventListener('input', debounce(fill, 120)); fill();
     wrap.append(q, ig);
+    // project images (imported files, embedded in <assets> as WebP)
+    const ownImgs = Object.entries(this.app.project.assets || {});
+    const picker = h('input', { type: 'file', accept: 'image/*', multiple: true, style: { display: 'none' }, onchange: (e) => { this.importImageFiles([...e.target.files]); e.target.value = ''; } });
+    wrap.appendChild(h('div.phead', null, h('span', null, 'Images du projet'), h('button.ibtn', { title: 'Importer des images (ou glisse-les sur le canevas, ou colle-les)', onclick: () => picker.click() }, icon('upload', 14))));
+    wrap.appendChild(picker);
+    if (ownImgs.length) {
+      const og = h('div.imgrid');
+      for (const [name, url] of ownImgs) og.appendChild(h('button.imbtn', { title: `${name} · ${String(url).startsWith('data:') ? MQ.Images.fmtBytes(MQ.Images.dataBytes(url)) + ' · ' + String(url).slice(11, String(url).indexOf(';')) : 'url'}`, style: { backgroundImage: `url("${url}")`, backgroundSize: 'contain', backgroundRepeat: 'no-repeat', backgroundPosition: 'center' }, onclick: () => this.insertNode(this.imageNode(name, url)), oncontextmenu: (e) => { e.preventDefault(); menu(e.clientX, e.clientY, [{ label: 'Insérer', icon: 'plus', run: () => this.insertNode(this.imageNode(name, url)) }, { label: 'Copier le nom', icon: 'copy', run: () => { try { navigator.clipboard.writeText(name); } catch (err) { /* */ } toast(name); } }, { label: 'Retirer du projet', icon: 'trash-2', run: () => this.setAssetLines([[name, null]]) }]); } }));
+      wrap.appendChild(og);
+    } else wrap.appendChild(h('div.empty', { style: { padding: '4px 12px 10px', fontSize: '12px', opacity: 0.7 } }, 'Glisse, colle ou importe une image : elle est convertie en WebP et intégrée au fichier.'));
     // images
     wrap.appendChild(h('div.phead', null, h('span', null, 'Images générées')));
     const imgs = h('div.imgrid');
@@ -328,6 +338,71 @@ export class LeftPanel {
       }
       tok.raw = '\n' + lines.map((l) => l.trim()).join('\n') + '\n';
     });
+  }
+
+  // merge `name: value` lines into the project's <assets> block, kept at the end of the file (base64 is long); null removes
+  setAssetLines(pairs, mutateOnly = false) {
+    const app = this.app; const p = app.project;
+    const run = () => {
+      const top = p.rootNode ? p.rootNode.children : p.nodes;
+      let blk = top.find((n) => n.tag === 'assets');
+      if (!blk) { blk = { id: MQ.newId(), tag: 'assets', attrs: {}, children: [], raw: '' }; top.push(blk); }
+      const lines = (blk.raw || '').split('\n').filter((l) => l.trim());
+      for (const [key, v] of pairs) {
+        const re = new RegExp(`^\\s*${key.replace(/[.\-]/g, '\\$&')}\\s*:`);
+        const i = lines.findIndex((l) => re.test(l));
+        if (v === null) { if (i >= 0) lines.splice(i, 1); continue; }
+        const line = `${key}: ${v}`; if (i >= 0) lines[i] = line; else lines.push(line);
+      }
+      if (!lines.length) top.splice(top.indexOf(blk), 1); else blk.raw = '\n' + lines.map((l) => l.trim()).join('\n') + '\n';
+    };
+    if (mutateOnly) run(); else app.change(run);
+  }
+
+  // an <image> sized to the asset (at most 360 wide, ratio kept)
+  imageNode(name, url, dims) {
+    const node = { id: MQ.newId(), tag: 'image', attrs: { src: name }, children: [] };
+    let w = dims && dims.w, hh = dims && dims.h;
+    if (!w && String(url).startsWith('data:')) { const img = new Image(); img.src = url; w = img.naturalWidth; hh = img.naturalHeight; }
+    if (w && hh) { const s = Math.min(1, 360 / w); node.attrs.w = String(Math.round(w * s)); node.attrs.h = String(Math.round(hh * s)); }
+    else { node.attrs.w = '240'; node.attrs.h = '160'; }
+    return node;
+  }
+
+  // files (drop, paste, picker) → WebP embedded in <assets> + <image> layers; `drop` = { cont, x, y } from the canvas
+  async importImageFiles(files, drop = null) {
+    const app = this.app;
+    const list = [...files].filter((f) => f && /^image\//.test(f.type));
+    if (!list.length) return;
+    const done = [];
+    for (const f of list) {
+      try {
+        const raw = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = () => rej(r.error); r.readAsDataURL(f); });
+        const out = await MQ.Images.importImage(raw, { max: 2048, quality: 0.86 });
+        done.push({ file: f, ...out });
+      } catch (e) { toast(`${f.name} : ${e.message}`, 'error'); }
+    }
+    if (!done.length) return;
+    const taken = { ...(app.project.assets || {}) };
+    const nodes = [];
+    app.change(() => {
+      const pairs = [];
+      for (const d of done) {
+        const name = MQ.Images.assetName(d.file.name, taken); taken[name] = d.dataUrl;
+        pairs.push([name, d.dataUrl]);
+        const node = this.imageNode(name, d.dataUrl, d.w ? { w: d.w, h: d.h } : null);
+        if (drop && drop.abs) { node.attrs.x = String(drop.x + nodes.length * 24); node.attrs.y = String(drop.y + nodes.length * 24); }
+        nodes.push(node);
+      }
+      this.setAssetLines(pairs, true);
+      let target = drop && drop.cont ? drop.cont : null;
+      if (!target) { target = app.selection[0] ? app.node(app.selection[0]) : null; while (target && !isContainer(target)) target = app.parent(target.id); }
+      if (!target) target = app.page && app.page.children.find((c) => c.tag === 'screen');
+      if (target) for (const n of nodes) app.insert(target.id, n);
+      app.selection = nodes.map((n) => n.id);
+    });
+    const saved = done.reduce((s, d) => s + (d.file.size - d.bytes), 0);
+    toast(`${done.length} image${done.length > 1 ? 's' : ''} importée${done.length > 1 ? 's' : ''} en ${done[0].format.toUpperCase()} (${MQ.Images.fmtBytes(done.reduce((s, d) => s + d.bytes, 0))}${saved > 1024 ? `, −${MQ.Images.fmtBytes(saved)}` : ''})`);
   }
 
   shadcnDialog() {

@@ -16,6 +16,22 @@ export class RightPanel {
     this.tab = 'design';
   }
 
+  // embedded image (<assets>): format, weight, size, replace in place (every layer using it follows)
+  assetInfo(n, a) {
+    const app = this.app; const key = String(a.src || '').replace(/^asset:/, '');
+    const url = app.project.assets && app.project.assets[key];
+    if (!url) return null;
+    const info = h('div.prow', { style: { fontSize: '11px', opacity: 0.8 } }, h('label', null, 'Fichier'), h('span', null, String(url).startsWith('data:') ? `${String(url).slice(11, String(url).indexOf(';')).toUpperCase()} · ${MQ.Images.fmtBytes(MQ.Images.dataBytes(url))}` : 'URL'));
+    const img = new Image(); img.onload = () => { info.lastChild.textContent += ` · ${img.naturalWidth}×${img.naturalHeight}`; }; img.src = url;
+    const picker = h('input', { type: 'file', accept: 'image/*', style: { display: 'none' }, onchange: async (e) => {
+      const f = e.target.files[0]; if (!f) return;
+      const raw = await new Promise((res) => { const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(f); });
+      const out = await MQ.Images.importImage(raw); this.app.left.setAssetLines([[key, out.dataUrl]]);
+      toast(`« ${key} » remplacée (${out.format.toUpperCase()}, ${MQ.Images.fmtBytes(out.bytes)})`);
+    } });
+    return h('div', null, info, picker, h('div.chips', null, h('button.chip', { onclick: () => picker.click() }, 'Remplacer…'), h('button.chip', { onclick: () => { const w = +a.w || img.naturalWidth, r = img.naturalHeight / img.naturalWidth; if (w && r) this.app.change(() => { n.attrs.h = String(Math.round(w * r)); }); } }, 'Proportions d\'origine')));
+  }
+
   render() {
     const app = this.app;
     const focus = document.activeElement && this.root.contains(document.activeElement) ? document.activeElement.dataset.f : null;
@@ -231,7 +247,7 @@ export class RightPanel {
       b.appendChild(sec('Texte', ...rows));
     }
     if (n.tag === 'icon') b.appendChild(sec('Icône', h('div.prow', null, h('label', null, 'Nom'), iconPicker(a.name || '', (v) => set('name', v))), h('div.grid2', null, num('Taille', a.size || 20, (v) => set('size', v)), num('Trait', a.stroke || 2, (v) => set('stroke', v === 2 ? null : v))), h('div.prow', null, h('label', null, 'Couleur'), colorField(app, a.color, (v) => set('color', v), 'color', true)), h('div.prow', null, h('label', null, 'Remplie'), toggle(!!a.fill, (v) => set('fill', v ? 'currentColor' : null)))));
-    if (n.tag === 'image') b.appendChild(sec('Image', h('div.prow', null, h('label', null, 'Source'), input('src', a.src || '', (v) => set('src', v), { placeholder: 'gen:mountains/3, avatar:Nom, url, data:', mono: true })), h('div.chips', null, MQ.SCENE_NAMES.slice(0, 12).map((s) => h('button.chip', { onclick: () => set('src', `gen:${s}/${Math.floor(Math.random() * 99)}`) }, s))), h('div.prow', null, h('label', null, 'Ajustement'), select([['', 'Couvrir'], ['contain', 'Contenir'], ['fill', 'Étirer']], a.fit || '', (v) => set('fit', v || null)))));
+    if (n.tag === 'image') b.appendChild(sec('Image', h('div.prow', null, h('label', null, 'Source'), input('src', a.src || '', (v) => set('src', v), { placeholder: 'gen:mountains/3, avatar:Nom, url, data:', mono: true })), h('div.chips', null, MQ.SCENE_NAMES.slice(0, 12).map((s) => h('button.chip', { onclick: () => set('src', `gen:${s}/${Math.floor(Math.random() * 99)}`) }, s))), h('div.prow', null, h('label', null, 'Ajustement'), select([['', 'Couvrir'], ['contain', 'Contenir'], ['fill', 'Étirer']], a.fit || '', (v) => set('fit', v || null))), this.assetInfo(n, a)));
 
     const alignSec = this.alignSection(nodes);
     if (alignSec) b.insertBefore(alignSec, b.children[1] || null);

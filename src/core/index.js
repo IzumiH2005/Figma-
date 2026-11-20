@@ -102,8 +102,9 @@ export function toStaticHTML(el) {
   return c.outerHTML;
 }
 
+import * as Images from './imagetools.js';
 export {
-  parse, serialize, serializeNode, clone, textOf, newId, bumpIds, ParseError, fmtAttr, TEXT_TAGS,
+  Images, parse, serialize, serializeNode, clone, textOf, newId, bumpIds, ParseError, fmtAttr, TEXT_TAGS,
   Path, Vector, PathOps, Guides, fake, fakeList, smoothShadow, specOverlay, System, styleGuideSource, Rig, Fx, Shader,
   Project, DEVICES, parseAttrString, parseColor, withAlpha, splitTop, TYPESCALES, SPACING, Color,
   makeCtx, renderScreen, renderStandalone, renderNode, BASE_CSS, fontsHref, layoutOf, cssFor, resolveAttrs, imageSrc, fillToCss,

@@ -29,6 +29,7 @@ const HELP = `Maquette CLI
   mq export  <file.mq> [-o proto.html]                               prototype HTML autonome (lecture seule)
   mq fmt     <file.mq> [--write]                                     reformate le source
   mq kit     [préfixe]                                               liste les composants du kit + props (mq kit ui. : pack shadcn)
+  mq image   add <file.mq> img.jpg [--name n] [--max 2048] [--quality 0.86] · list · rm   images intégrées (WebP)
   mq ds      <file.mq> [--init "brand=#hex"] [--export dtcg|css|tailwind] [--import t.json] [--guide -o g.png]   design system
   mq spec    <file.mq> <Composant> [--props "k=v"] [-o spec.png]   fiche technique : paddings, écarts, tailles, typo, tokens
   mq drive   <file.mq> <gestes.txt> [--write] [--video s.mp4]       pilote souris : gestes continus dans l'éditeur (points, plume, rigs, menus…)
@@ -590,6 +591,61 @@ async function cmdDs(o) {
   for (const role of ['primary', 'accent', 'danger']) if (sys.light[role]) console.log(`  ${role.padEnd(8)} clair ${sys.light[role]} / ${sys.light['on-' + role]} · sombre ${sys.dark[role]} / ${sys.dark['on-' + role]}`);
 }
 
+// images embedded in the project: mq image add f.mq photo.jpg [--name n] [--max 2048] [--quality 0.86] [--format webp|png]
+//                                    mq image list f.mq · mq image rm f.mq nom
+function setAssetLine(src, name, value) {
+  const m = /<assets>([\s\S]*?)<\/assets>/.exec(src);
+  if (!m) {
+    if (value === null) return src;
+    const block = `  <assets>\n    ${name}: ${value}\n  </assets>\n`;
+    return /<\/project>\s*$/.test(src) ? src.replace(/<\/project>\s*$/, block + '</project>\n') : src + '\n<assets>\n  ' + name + ': ' + value + '\n</assets>\n';
+  }
+  const lines = m[1].split('\n').filter((l) => l.trim());
+  const re = new RegExp(`^\\s*${name.replace(/[.\-]/g, '\\$&')}\\s*:`);
+  const i = lines.findIndex((l) => re.test(l));
+  if (value === null) { if (i >= 0) lines.splice(i, 1); } else if (i >= 0) lines[i] = `    ${name}: ${value}`; else lines.push(`    ${name}: ${value}`);
+  const body = lines.length ? '<assets>\n' + lines.map((l) => '    ' + l.trim()).join('\n') + '\n  </assets>' : '';
+  return src.slice(0, m.index) + body + src.slice(m.index + m[0].length);
+}
+async function cmdImage(o) {
+  const [, sub, file, ...rest] = o._;
+  if (!sub || !file) throw new Error('usage : mq image add f.mq image.jpg [--name nom] [--max 2048] [--quality 0.86] [--format webp|png] · mq image list f.mq · mq image rm f.mq nom');
+  let src = fs.readFileSync(file, 'utf8');
+  const fmt = (b) => (b >= 1048576 ? (b / 1048576).toFixed(1) + ' Mo' : Math.max(1, Math.round(b / 1024)) + ' ko');
+  if (sub === 'list') {
+    const m = /<assets>([\s\S]*?)<\/assets>/.exec(src);
+    const lines = m ? m[1].split('\n').map((l) => /^\s*([\w.\-]+)\s*:\s*(\S+)/.exec(l)).filter(Boolean) : [];
+    if (!lines.length) { console.log('Aucune image intégrée.'); return; }
+    let tot = 0;
+    for (const [, n, v] of lines) { const b = v.startsWith('data:') ? Math.round((v.length - v.indexOf(',') - 1) * 0.75) : 0; tot += b; console.log(`  ${n.padEnd(24)} ${v.startsWith('data:') ? v.slice(11, v.indexOf(';')).padEnd(6) + ' ' + fmt(b) : v}`); }
+    console.log(`  ${lines.length} image(s), ${fmt(tot)} intégrés`);
+    return;
+  }
+  if (sub === 'rm') { const name = rest[0]; if (!name) throw new Error('nom requis'); fs.writeFileSync(file, setAssetLine(src, name, null)); console.log(`✓ « ${name} » retirée de ${file}`); return; }
+  if (sub !== 'add') throw new Error(`sous-commande inconnue : ${sub}`);
+  const imgs = rest; if (!imgs.length) throw new Error('image requise');
+  const MIME = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: 'image/gif', avif: 'image/avif', svg: 'image/svg+xml', bmp: 'image/bmp' };
+  const { browser, page } = await browserPage();
+  try {
+    const taken = {};
+    { const m = /<assets>([\s\S]*?)<\/assets>/.exec(src); if (m) for (const l of m[1].split('\n')) { const k = /^\s*([\w.\-]+)\s*:/.exec(l); if (k) taken[k[1]] = 1; } }
+    for (const img of imgs) {
+      const ext = path.extname(img).slice(1).toLowerCase();
+      const mime = MIME[ext]; if (!mime) throw new Error(`format non reconnu : ${img}`);
+      const buf = fs.readFileSync(img);
+      const raw = `data:${mime};base64,${buf.toString('base64')}`;
+      const out = await page.evaluate(({ raw, opt }) => MQ.Images.importImage(raw, opt), { raw, opt: { max: +(o.max || 2048), quality: +(o.quality || 0.86), format: o.format || 'webp' } });
+      const name = imgs.length === 1 && o.name ? String(o.name) : await page.evaluate(({ f, t }) => MQ.Images.assetName(f, t), { f: path.basename(img), t: o.replace ? {} : taken });
+      taken[name] = 1;
+      src = setAssetLine(src, name, out.dataUrl);
+      const dims = out.w ? `${out.w}×${out.h}` : 'vectoriel';
+      console.log(`✓ ${name} : ${path.basename(img)} ${fmt(buf.length)} → ${out.format.toUpperCase()} ${fmt(out.bytes)} (${dims}${out.original && (out.original.w !== out.w) ? `, réduit de ${out.original.w}×${out.original.h}` : ''})`);
+      if (out.w) { const s = Math.min(1, 360 / out.w); console.log(`    <image src=${name} w=${Math.round(out.w * s)} h=${Math.round(out.h * s)}/>`); }
+    }
+    fs.writeFileSync(file, src);
+  } finally { await browser.close(); }
+}
+
 // agent pointer: drive the real editor with continuous mouse gestures (see cli/drive.js)
 async function cmdDrive(o) {
   if (o._[1] === 'send') { // client of a persistent session (mq drive f.mq --serve)
@@ -671,6 +727,6 @@ async function cmdScenes() {
 
 const o = args(process.argv.slice(2));
 const cmd = o._[0];
-const table = { motion: cmdMotion, render: cmdRender, board: cmdBoard, inspect: cmdInspect, lint: (x) => cmdLint(x), audit: (x) => cmdLint(x, true), video: (x) => cmdVideo(x), anim: (x) => cmdVideo(x, true), build: cmdBuild, export: cmdExport, fmt: cmdFmt, kit: cmdKit, 'shadcn-theme': cmdShadcnTheme, shadcn: cmdShadcn, drive: cmdDrive, spec: cmdSpec, ds: cmdDs, icons: cmdIcons, scenes: cmdScenes };
+const table = { motion: cmdMotion, render: cmdRender, board: cmdBoard, inspect: cmdInspect, lint: (x) => cmdLint(x), audit: (x) => cmdLint(x, true), video: (x) => cmdVideo(x), anim: (x) => cmdVideo(x, true), build: cmdBuild, export: cmdExport, fmt: cmdFmt, kit: cmdKit, 'shadcn-theme': cmdShadcnTheme, shadcn: cmdShadcn, drive: cmdDrive, spec: cmdSpec, ds: cmdDs, image: cmdImage, icons: cmdIcons, scenes: cmdScenes };
 if (!cmd || !table[cmd]) { console.log(HELP); process.exit(cmd ? 1 : 0); }
 try { await table[cmd](o); } catch (e) { console.error('✖ ' + (e && e.message || e)); process.exit(1); }

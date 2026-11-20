@@ -35,7 +35,7 @@ C'est la source de vérité : l'éditeur visuel le lit et le réécrit, la CLI l
 | `row` `col` `grid` `stack` | Raccourcis de conteneurs auto layout |
 | `text` | Texte ; enfants inline : `<b>`, `<i>`, `<u>`, `<s>`, `<code>`, `<span …>`, `<br/>`, `<icon>`. Sur un texte, `fill`/`color` = couleur du texte, `bg` = fond |
 | `icon name=heart` | 2 400 icônes Lucide (`mq icons cœur`) ; `size`, `color`, `stroke=1.5`, `fill=currentColor` |
-| `image src=…` | `gen:mountains/3`, `avatar:Nom`, `initials:Nom`, URL, `data:` ; `fit=cover|contain|fill` |
+| `image src=…` | `gen:mountains/3`, `avatar:Nom`, `initials:Nom`, nom d'une image intégrée (`<assets>`), URL, `data:` ; `fit=cover|contain|fill` |
 | `rect` `ellipse` | Formes (`size=` pour un carré / cercle) |
 | `vector d="M…" view="0 0 24 24"` | Chemin SVG (ou enfants `<path d fill stroke/>`) |
 | `input` `textarea` | Champ réellement saisissable en prototype ; `bind=$var`, `placeholder`, `type` |
@@ -46,6 +46,26 @@ C'est la source de vérité : l'éditeur visuel le lit et le réécrit, la CLI l
 | `slot` | Dans un composant : emplacement des enfants de l'instance |
 
 Écrans `device=` : `iphone-16`, `iphone-16-pro-max`, `iphone-se`, `iphone-mini`, `pixel-9`, `android`, `ipad`, `ipad-landscape`, `watch`, `desktop` (1440×900), `laptop`, `hd`, `tablet`, `mobile-web`, `square`, `story`, `og`.
+
+### Images intégrées (`<assets>`)
+
+Les images importées sont redimensionnées (2048 px au plus), converties en **WebP** et intégrées au fichier, qui reste autonome (artifact, CLI, hors ligne) :
+
+```
+<assets>
+  banniere-ete: data:image/webp;base64,UklGR…
+  logo: https://exemple.fr/logo.svg
+</assets>
+…
+<image src=banniere-ete w=360 h=240 radius=16/>      (ou src=asset:banniere-ete)
+```
+
+- **Éditeur** : glisser des fichiers sur le canevas (ils tombent dans le conteneur visé), coller (Ctrl+V), ou Assets → Images du projet → importer. L'inspecteur d'image affiche le format, le poids et la taille ; « Remplacer… » change le fichier pour toutes les instances, et « Proportions d'origine » remet le ratio d'origine.
+- **CLI** :
+  - `mq image add f.mq photo.jpg [--name hero] [--max 2048] [--quality 0.86] [--format webp|png]` affiche le gain et la balise `<image>` à coller ;
+  - `mq image list f.mq` liste les images et leur poids ;
+  - `mq image rm f.mq hero` retire une image.
+- Le SVG reste en SVG (vectoriel) ; la transparence est conservée.
 
 ## Layout (auto layout = flexbox/grid)
 

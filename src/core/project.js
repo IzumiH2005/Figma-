@@ -98,7 +98,7 @@ export class Project {
     this.meta = meta;
     this.name = meta.name || 'Sans titre';
     this.modes = (meta.modes || 'default').split(/[,\s|]+/).filter(Boolean);
-    this.tokens = {}; this.vars = {}; this.styles = {}; this.keyframes = {}; this.components = {}; this.pages = []; this.css = ''; this.flows = {};
+    this.tokens = {}; this.vars = {}; this.styles = {}; this.keyframes = {}; this.components = {}; this.pages = []; this.css = ''; this.flows = {}; this.assets = {};
     this.byId = new Map(); this.parentOf = new Map(); this.styleOrigin = {};
     const fonts = (meta.fonts || '').split(/\s*[|]\s*|\s*,\s*(?=[A-Z])/).map((s) => s.trim()).filter(Boolean);
     this.fonts = fonts;
@@ -171,6 +171,9 @@ export class Project {
           break;
         }
         case 'css': this.css += n.raw || ''; break;
+        case 'assets': // embedded images: `nom: data:image/webp;base64,…` (or a URL); used as <image src=nom/>
+          for (const [k, v] of parseKeyLines(n.raw || '')) this.assets[k] = unq(v);
+          break;
         case 'flow': this.flows[n.attrs.name || 'main'] = n.raw || ''; break;
         case 'component': {
           const name = n.attrs.name;

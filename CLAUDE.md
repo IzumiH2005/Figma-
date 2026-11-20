@@ -62,7 +62,7 @@ Playwright et Chromium sont préinstallés dans l'environnement ; ffmpeg sert po
 - shadcn/ui : `node cli/mq.js shadcn add button card … --into f.mq` importe les vrais composants du registre (`ui.Button variant=outline`, `ui.Card` + `ui.CardHeader`…, états via `state=`), stylés par `tw="…"` (Tailwind) et les tokens `$sh-*`. `mq kit ui.` liste leurs props.
 - Métaballes vectorielles (affiches à la Figma) : `<boolean op=union radius=140 smoothing=0.4>` arrondit le résultat, creux compris ; glisser une opérande (`drag node slab by …`) refond la forme en direct ; `toggle $var smart` interpole positions et rayon. Modèle : `examples/cluster.mq`.
 - Filtres et shaders : `fx="halftone size=6; gradmap colors=#102,#f06,#fe8"` (pile de filtres non destructifs : adjust, halftone, dither, refract, metal, rgb-split…) et `shader="mesh"` / `caustics` / `grid shape=hex` (fonds WebGL animables). Les pastilles roses se glissent : `drag rig halftone.angle by 30 0`. Liste complète : `docs/LANGUAGE.md` § Vecteurs, formes et 3D.
-- Images : `gen:<scène>/<graine>` (`mq scenes`) et `avatar:Nom` fonctionnent hors ligne et dans les artifacts.
+- Images : `gen:<scène>/<graine>` (`mq scenes`) et `avatar:Nom` fonctionnent hors ligne et dans les artifacts. Une vraie image s'intègre au fichier, convertie en WebP, avec `mq image add f.mq photo.jpg --name hero`, puis `<image src=hero …/>` (bloc `<assets>`).
 
 ## Architecture
 
