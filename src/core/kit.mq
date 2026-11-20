@@ -49,8 +49,8 @@
   </row>
 </component>
 
-<component name="IconButton" props="icon=plus kind=ghost size=44 badge=0" desc="Bouton icône. kind: ghost|filled|tonal|outline">
-  <stack w={size} h={size} radius=full center press:scale=0.92
+<component name="IconButton" props="icon=plus kind=ghost size=44 badge=0" desc="Bouton icône. kind: ghost|filled|tonal|outline. Sur Android, la taille par défaut passe à 48 (cible Material).">
+  <stack w={size == 44 && $platform == 'android' ? 48 : size} h={size == 44 && $platform == 'android' ? 48 : size} radius=full center press:scale=0.92
     fill={kind == 'filled' ? $primary : kind == 'tonal' ? $primary-soft : kind == 'glass' ? 'rgba(255,255,255,.16)' : 'transparent'}
     color={kind == 'filled' ? $on-primary : kind == 'tonal' ? $primary : 'inherit'}
     stroke={kind == 'outline' ? '1 ' + $border : 'none'} bgblur={kind == 'glass' ? 16 : 0}>
@@ -84,9 +84,12 @@
   </stack>
 </component>
 
-<component name="Toggle" props="value=false" desc="Interrupteur. Ex: &lt;Toggle value={$wifi} on:click=&quot;toggle $wifi&quot;/&gt;">
-  <stack w=52 h=32 radius=full p=3 fill={value ? $success : $surface-2} justify={value ? 'end' : 'start'} align=center transition=220>
-    <ellipse name=knob size=26 fill=#fff shadow="0 2 6 rgba(0,0,0,.18)"/>
+<component name="Toggle" props="value=false" desc="Interrupteur (iOS : piste verte et curseur blanc ; Android : interrupteur Material 3, curseur qui grossit et piste contournée à l'arrêt). Ex: &lt;Toggle value={$wifi} on:click=&quot;toggle $wifi&quot;/&gt;">
+  <stack w=52 h=32 radius=full transition=220
+         fill={value ? ($platform == 'android' ? $primary : $success) : $surface-2}
+         stroke={$platform == 'android' && !value ? '2 ' + $muted + ' inside' : 'none'}>
+    <ellipse if={$platform != 'android'} name=knob absolute x={value ? 23 : 3} y=3 size=26 fill=#fff shadow="0 2 6 rgba(0,0,0,.18)" transition=220/>
+    <ellipse if={$platform == 'android'} name=knob absolute x={value ? 24 : 8} y={value ? 4 : 8} size={value ? 24 : 16} fill={value ? $on-primary : $muted} transition=220/>
   </stack>
 </component>
 
@@ -148,9 +151,18 @@
   </col>
 </component>
 
-<component name="NavBar" props="title='' back=true action='' large=false" desc="Barre de navigation (back → action back)">
+<component name="NavBar" props="title='' back=true action='' large=false" desc="Barre de navigation (back → action back). iOS : titre centré, chevron ; Android : barre d'app Material (flèche, titre à gauche, 64 dp).">
   <col w=fill pt=safe>
-    <row h=48 px=8 gap=4>
+    <row if={$platform == 'android'} h=64 px=4 gap=4 align=center>
+      <IconButton if={back} icon=arrow-left on:click="back"/>
+      <spacer if={!back} size=12/>
+      <text if={!large} w=fill size=22 weight=400 lh=1.27 truncate>{title}</text>
+      <spacer if={large}/>
+      <IconButton if={action} icon={action}/>
+      <spacer if={!action} size=12/>
+    </row>
+    <text if={large && $platform == 'android'} px=16 pt=8 pb=16 size=28 weight=400 lh=1.29>{title}</text>
+    <row if={$platform != 'android'} h=48 px=8 gap=4>
       <IconButton if={back} icon=chevron-left on:click="back"/>
       <spacer if={!back} size=8/>
       <text if={!large} w=fill align=center weight=600 size=18 truncate>{title}</text>
@@ -158,17 +170,27 @@
       <IconButton if={action} icon={action}/>
       <spacer if={!action} size={back ? 44 : 8}/>
     </row>
-    <text if={large} px=20 pb=8 size=32 weight=800 ls=-0.5>{title}</text>
+    <text if={large && $platform != 'android'} px=20 pb=8 size=32 weight=800 ls=-0.5>{title}</text>
   </col>
 </component>
 
-<component name="TabBar" props="items={[]} active=0" desc="Barre d'onglets. items={[{icon:'house',label:'Accueil',to:'Home'}]}">
-  <row w=fill justify=evenly pt=10 pb=safe+4 fill=$bg/92 bgblur=20 stroke-t={'1 ' + $border}>
-    <col each={items} gap=4 align=center w=fill press:scale=0.92 color={i == active ? ($tab-active || $primary) : $muted} on:click="go {item.to} instant">
-      <icon name={item.icon} size=24 stroke={i == active ? 2.4 : 2}/>
-      <text size=12 weight={i == active ? 600 : 500}>{item.label}</text>
-    </col>
-  </row>
+<component name="TabBar" props="items={[]} active=0" desc="Barre d'onglets. items={[{icon:'house',label:'Accueil',to:'Home'}]}. Sur Android : barre de navigation Material 3 (pastille active derrière l'icône, 80 dp).">
+  <col w=fill>
+    <row if={$platform == 'android'} w=fill justify=evenly pt=12 pb=safe+12 fill=$surface-2>
+      <col each={items} gap=4 align=center w=fill press:scale=0.96 color={i == active ? $text : $muted} on:click="go {item.to} instant">
+        <stack name={'ind-' + i} w=64 h=32 radius=full center fill={i == active ? $primary-soft : 'transparent'} color={i == active ? $primary : 'inherit'} transition=200>
+          <icon name={item.icon} size=24 stroke={i == active ? 2.4 : 2}/>
+        </stack>
+        <text size=12 weight={i == active ? 700 : 500}>{item.label}</text>
+      </col>
+    </row>
+    <row if={$platform != 'android'} w=fill justify=evenly pt=10 pb=safe+4 fill=$bg/92 bgblur=20 stroke-t={'1 ' + $border}>
+      <col each={items} gap=4 align=center w=fill press:scale=0.92 color={i == active ? ($tab-active || $primary) : $muted} on:click="go {item.to} instant">
+        <icon name={item.icon} size=24 stroke={i == active ? 2.4 : 2}/>
+        <text size=12 weight={i == active ? 600 : 500}>{item.label}</text>
+      </col>
+    </row>
+  </col>
 </component>
 
 <component name="Segmented" props="items={['Jour','Semaine','Mois']} active=0 var=''" desc="Contrôle segmenté. var=nom de variable à mettre à jour">

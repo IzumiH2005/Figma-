@@ -1,6 +1,6 @@
 // DOM renderer: Maquette node tree -> live HTML elements.
 import { Scope, interp, evaluate } from './expr.js';
-import { DEVICES, splitTop, withAlpha, parseColor, coerce } from './project.js';
+import { DEVICES, platformOf, splitTop, withAlpha, parseColor, coerce } from './project.js';
 import { twToAttrs } from './tailwind.js';
 import { smoothShadow, buildConnector, buildChart } from './plugins.js';
 import { patternFill, wrapClone, applyEffects, applyMaskGroup } from './effects.js';
@@ -46,18 +46,21 @@ const SHADOWS = {
 };
 const EVENT_KEYS = (k) => k.startsWith('on:') || k.startsWith('@');
 const ANIM_KEYS = new Set(['anim', 'loop', 'stagger']);
-const NON_STYLE = new Set(['name', 'key', 'class', 'if', 'repeat', 'each', 'as', 'props', 'device', 'start', 'statusbar', 'homebar', 'src', 'bind', 'placeholder', 'type', 'd', 'view', 'value']);
+const NON_STYLE = new Set(['name', 'key', 'class', 'if', 'repeat', 'each', 'as', 'props', 'device', 'platform', 'start', 'statusbar', 'homebar', 'src', 'bind', 'placeholder', 'type', 'd', 'view', 'value']);
 
 let UID = 0;
 
 export function rootScope(project, state) {
-  return new Scope({}, null, {
+  const root = {
+    platform: null, // posée par renderScreen : $platform = ios | android | web
     dollar: (n) => {
       if (state.vars && n in state.vars) return state.vars[n];
+      if (n === 'platform') return root.platform || 'web';
       const t = project.token(n, state.mode || 0);
       return t === undefined ? undefined : coerce(t);
     },
-  });
+  };
+  return new Scope({}, null, root);
 }
 
 // resolve "$token" refs inside a plain attribute string
@@ -969,6 +972,11 @@ export function applyStagger(kids, spec, ctx) {
 export function renderScreen(screen, ctx) {
   const { w, h, device } = ctx.project.sizeOf(screen);
   ctx.device = device || { safeTop: 0, safeBottom: 0 };
+  // Android en navigation 3 boutons : la zone sûre du bas fait 48 dp
+  if (device && device.os === 'android' && /\bbuttons\b/.test(String(screen.attrs.homebar || ''))) ctx.device = { ...device, safeBottom: 48 };
+  ctx.platform = platformOf(screen, device);
+  const sroot = ctx.scope && ctx.scope.root; const prevPlatform = sroot ? sroot.platform : null;
+  if (sroot) sroot.platform = ctx.platform;
   ctx.screenW = w;
   ctx.rules = []; ctx.anims = []; ctx.links = []; ctx.errors = [];
   const { a, states, events } = resolveAttrs(screen, ctx.scope, ctx);
@@ -1005,8 +1013,8 @@ export function renderScreen(screen, ctx) {
   fixedLayer.className = 'mq-fixed'; fixedLayer.style.cssText = 'position:absolute;inset:0;pointer-events:none;display:grid;grid-template:minmax(0,1fr)/minmax(0,1fr);';
   for (const el of renderChildren(fixedKids, ctx.scope, 'stack', ctx)) { el.style.pointerEvents = 'auto'; fixedLayer.appendChild(el); }
   outer.appendChild(fixedLayer);
-  if (a.statusbar) outer.appendChild(makeStatusBar(a.statusbar === true ? 'auto' : a.statusbar, device, outer.style.color));
-  if (a.homebar) outer.appendChild(makeHomeBar(a.homebar === true ? 'auto' : a.homebar, outer.style.color));
+  if (a.statusbar) outer.appendChild(makeStatusBar(a.statusbar === true ? 'auto' : String(a.statusbar), device, outer.style.color));
+  if (a.homebar) outer.appendChild(makeHomeBar(a.homebar === true ? 'auto' : String(a.homebar), outer.style.color, ctx.device));
   if (a.stagger) applyStagger([...inner.children].filter((k) => k.tagName !== 'STYLE'), a.stagger, ctx);
   if (Object.keys(events).length && ctx.runtime) ctx.runtime.bind(outer, events);
   else if (ctx.editor) for (const [trig, ev] of Object.entries(events)) { const m = /\b(?:go|overlay|swap)\s+([\w\-]+|"[^"]+")/.exec(String(ev.action)); ctx.links.push({ from: outer, owner: screen.id, trigger: trig, action: String(ev.action), target: m ? m[1].replace(/"/g, '') : null }); }
@@ -1017,6 +1025,7 @@ export function renderScreen(screen, ctx) {
     outer.appendChild(st);
   }
   outer._mq = { anims: ctx.anims, links: ctx.links, errors: ctx.errors, events, w, h };
+  if (sroot) sroot.platform = prevPlatform;
   return outer;
 }
 

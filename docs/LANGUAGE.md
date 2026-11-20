@@ -45,7 +45,20 @@ C'est la source de vérité : l'éditeur visuel le lit et le réécrit, la CLI l
 | `<NomComposant …>` | Instance de composant (majuscule) |
 | `slot` | Dans un composant : emplacement des enfants de l'instance |
 
-Écrans `device=` : `iphone-16`, `iphone-16-pro-max`, `iphone-se`, `iphone-mini`, `pixel-9`, `android`, `ipad`, `ipad-landscape`, `watch`, `desktop` (1440×900), `laptop`, `hd`, `tablet`, `mobile-web`, `square`, `story`, `og`.
+Écrans `device=` :
+
+| Famille | Appareils |
+|---|---|
+| Apple | `iphone-16`, `iphone-16-pro-max`, `iphone-se`, `iphone-mini`, `ipad`, `ipad-landscape`, `watch` |
+| Samsung | `galaxy-s25` (360×780), `galaxy-s25-ultra` (412×891), `galaxy-a56` (412×915), `galaxy-z-flip` (412×1004), `galaxy-z-fold` (704×824, écran déplié), `galaxy-tab-s10`, `galaxy-watch` |
+| Google / Android | `pixel-9` (412×915), `pixel-9-pro-xl` (448×998), `android` (générique 412×915) |
+| Web et formats | `desktop` (1440×900), `laptop`, `hd`, `tablet`, `mobile-web`, `square`, `story`, `og` |
+
+**Plateforme.** Chaque appareil porte un système (`ios`, `android` ou `web` par défaut) ; `platform=ios|android|web` sur l'écran le force. Il est lisible partout via `$platform` (`if={$platform == 'android'}`, `size={$platform == 'android' ? 48 : 44}`).
+- Le chrome suit l'appareil : sur Android, barre d'état One UI (Samsung) ou Pixel, caméra poinçonnée et cadre fin ; `homebar` dessine la poignée de gestes, `homebar=buttons` la navigation à 3 boutons (récents · accueil · retour chez Samsung, ordre inverse sur Pixel). La zone sûre du bas passe alors à 48.
+- Le kit s'adapte seul : `NavBar` devient une barre d'app Material (64 dp, flèche ←, titre à gauche ; `large` = titre 28 sous la barre), `TabBar` une barre de navigation à pastille, `Toggle` un interrupteur Material 3 (piste contournée quand il est éteint), `IconButton` passe à 48 dp.
+- Le lint applique la cible tactile de la plateforme : 48 sur Android, 44 sur iOS.
+- Modèle : `examples/android.mq` (le même écran sur Galaxy S25, Pixel 9 et iPhone 16, et un écran Galaxy S25 Ultra en navigation 3 boutons).
 
 ### Images intégrées (`<assets>`)
 

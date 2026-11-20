@@ -4,17 +4,28 @@ import { evaluate, Scope } from './expr.js';
 import { parseColor, ramp, neutrals, resolveColorFns, toHex } from './color.js';
 import { generateSystem, systemTokens } from './system.js';
 
+// os: plateforme de l'appareil (ios | android) — exposée aux composants par $platform (le kit s'adapte : barre d'app
+// Material, barre de navigation à pastille, interrupteur M3, cibles 48 dp). punch = caméra poinçonnée (cam = diamètre,
+// camX = position horizontale 0..1), island / notch = découpes iPhone, oem = habillage de la barre d'état.
 export const DEVICES = {
-  'iphone-16': { w: 393, h: 852, safeTop: 59, safeBottom: 34, radius: 55, kind: 'phone', island: true },
-  'iphone-16-pro-max': { w: 440, h: 956, safeTop: 62, safeBottom: 34, radius: 60, kind: 'phone', island: true },
-  'iphone-15': { w: 393, h: 852, safeTop: 59, safeBottom: 34, radius: 55, kind: 'phone', island: true },
-  'iphone-se': { w: 375, h: 667, safeTop: 20, safeBottom: 0, radius: 0, kind: 'phone' },
-  'iphone-mini': { w: 375, h: 812, safeTop: 50, safeBottom: 34, radius: 44, kind: 'phone', notch: true },
-  'pixel-9': { w: 412, h: 915, safeTop: 40, safeBottom: 24, radius: 36, kind: 'phone', punch: true },
-  'android': { w: 360, h: 800, safeTop: 32, safeBottom: 24, radius: 28, kind: 'phone', punch: true },
-  'ipad': { w: 820, h: 1180, safeTop: 24, safeBottom: 20, radius: 24, kind: 'tablet' },
-  'ipad-landscape': { w: 1180, h: 820, safeTop: 24, safeBottom: 20, radius: 24, kind: 'tablet' },
-  'watch': { w: 205, h: 251, safeTop: 0, safeBottom: 0, radius: 54, kind: 'watch' },
+  'iphone-16': { w: 393, h: 852, safeTop: 59, safeBottom: 34, radius: 55, kind: 'phone', os: 'ios', island: true },
+  'iphone-16-pro-max': { w: 440, h: 956, safeTop: 62, safeBottom: 34, radius: 60, kind: 'phone', os: 'ios', island: true },
+  'iphone-15': { w: 393, h: 852, safeTop: 59, safeBottom: 34, radius: 55, kind: 'phone', os: 'ios', island: true },
+  'iphone-se': { w: 375, h: 667, safeTop: 20, safeBottom: 0, radius: 0, kind: 'phone', os: 'ios' },
+  'iphone-mini': { w: 375, h: 812, safeTop: 50, safeBottom: 34, radius: 44, kind: 'phone', os: 'ios', notch: true },
+  'galaxy-s25': { w: 360, h: 780, safeTop: 36, safeBottom: 24, radius: 34, kind: 'phone', os: 'android', oem: 'samsung', punch: true, cam: 11 },
+  'galaxy-s25-ultra': { w: 412, h: 891, safeTop: 36, safeBottom: 24, radius: 22, kind: 'phone', os: 'android', oem: 'samsung', punch: true, cam: 11 },
+  'galaxy-a56': { w: 412, h: 915, safeTop: 36, safeBottom: 24, radius: 34, kind: 'phone', os: 'android', oem: 'samsung', punch: true, cam: 12 },
+  'galaxy-z-flip': { w: 412, h: 1004, safeTop: 40, safeBottom: 24, radius: 36, kind: 'phone', os: 'android', oem: 'samsung', punch: true, cam: 12 },
+  'galaxy-z-fold': { w: 704, h: 824, safeTop: 36, safeBottom: 24, radius: 24, kind: 'phone', os: 'android', oem: 'samsung', punch: true, cam: 10, camX: 0.75 },
+  'pixel-9': { w: 412, h: 915, safeTop: 40, safeBottom: 24, radius: 36, kind: 'phone', os: 'android', punch: true, cam: 14 },
+  'pixel-9-pro-xl': { w: 448, h: 998, safeTop: 44, safeBottom: 24, radius: 40, kind: 'phone', os: 'android', punch: true, cam: 14 },
+  'android': { w: 360, h: 800, safeTop: 32, safeBottom: 24, radius: 28, kind: 'phone', os: 'android', punch: true, cam: 12 },
+  'ipad': { w: 820, h: 1180, safeTop: 24, safeBottom: 20, radius: 24, kind: 'tablet', os: 'ios' },
+  'ipad-landscape': { w: 1180, h: 820, safeTop: 24, safeBottom: 20, radius: 24, kind: 'tablet', os: 'ios' },
+  'galaxy-tab-s10': { w: 800, h: 1280, safeTop: 28, safeBottom: 24, radius: 20, kind: 'tablet', os: 'android', oem: 'samsung', punch: true, cam: 10 },
+  'watch': { w: 205, h: 251, safeTop: 0, safeBottom: 0, radius: 54, kind: 'watch', os: 'ios' },
+  'galaxy-watch': { w: 216, h: 216, safeTop: 0, safeBottom: 0, radius: 108, kind: 'watch', os: 'android', oem: 'samsung' },
   'desktop': { w: 1440, h: 900, safeTop: 0, safeBottom: 0, radius: 0, kind: 'desktop' },
   'laptop': { w: 1280, h: 800, safeTop: 0, safeBottom: 0, radius: 0, kind: 'desktop' },
   'hd': { w: 1920, h: 1080, safeTop: 0, safeBottom: 0, radius: 0, kind: 'desktop' },
@@ -24,6 +35,13 @@ export const DEVICES = {
   'story': { w: 1080, h: 1920, safeTop: 0, safeBottom: 0, radius: 0, kind: 'social' },
   'og': { w: 1200, h: 630, safeTop: 0, safeBottom: 0, radius: 0, kind: 'social' },
 };
+
+// plateforme d'un écran : attribut platform= (ios|android|web), sinon l'OS de l'appareil, sinon web
+export function platformOf(screen, device) {
+  const p = screen && screen.attrs && screen.attrs.platform;
+  if (p === 'ios' || p === 'android' || p === 'web') return p;
+  return (device && device.os) || 'web';
+}
 
 // split "a | b | c" at top level (not inside parens/quotes)
 export function splitTop(s, sep) {

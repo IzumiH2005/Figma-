@@ -1,0 +1,82 @@
+<project name="Multi-plateforme — Galaxy, Pixel, iPhone" modes="light dark" typescale=material>
+  <!-- Un seul composant d'écran, trois téléphones. Le kit lit $platform (ios | android | web, déduit de device=)
+       et s'adapte : barre d'app Material (flèche ←, titre à gauche, 64 dp) contre barre iOS centrée,
+       barre de navigation à pastille contre TabBar, interrupteur Material 3, cibles 48 dp sur Android (44 sur iOS).
+       Le chrome suit l'appareil : caméra poinçonnée, barre d'état One UI / Pixel, poignée de gestes ou
+       navigation 3 boutons (homebar=buttons, zone sûre du bas = 48). -->
+  <system brand=#0B57D0 accent=#0E7C66 neutral=cool radius=round density=comfortable elevation=soft motion=calm type="Roboto/Roboto"/>
+
+  <vars>
+    salon: true
+    cuisine: false
+    chambre: true
+    eco: true
+  </vars>
+
+  <component name="Piece" props="nom='Salon' detail='' icone=sofa on=false">
+    <row w=fill minh=72 px=16 py=12 gap=16 align=center fill=$surface radius=$radius-lg motion="press">
+      <stack w=48 h=48 radius=full center fill={on ? $primary-soft : $surface-2} color={on ? $primary : $muted} transition=200>
+        <icon name={icone} size=24/>
+      </stack>
+      <col w=fill gap=2>
+        <text class=t-title-sm>{nom}</text>
+        <text class=t-body-sm color=$text-2>{detail}</text>
+      </col>
+      <Toggle value={on}/>
+    </row>
+  </component>
+
+  <component name="Maison">
+    <col w=fill gap=24 px=16 pb=120>
+      <col w=fill p=24 gap=8 radius=$radius-xl fill="linear(135deg, $primary, $accent)" color=$on-primary>
+        <text class=t-label opacity=0.9>Ce soir</text>
+        <text class=t-h1>21 °C</text>
+        <text class=t-body-sm opacity=0.9>3 pièces allumées · 1,2 kWh aujourd'hui</text>
+      </col>
+      <col w=fill gap=8>
+        <text class=t-title-sm color=$text-2 px=4>Pièces</text>
+        <Piece nom="Salon" detail="Lampes · 60 %" icone=sofa on={$salon} on:click="toggle $salon"/>
+        <Piece nom="Cuisine" detail="Éteinte" icone=cooking-pot on={$cuisine} on:click="toggle $cuisine"/>
+        <Piece nom="Chambre" detail="Veilleuse · 20 %" icone=bed-double on={$chambre} on:click="toggle $chambre"/>
+        <Piece nom="Mode éco" detail="Chauffage à 19 °C la nuit" icone=leaf on={$eco} on:click="toggle $eco"/>
+      </col>
+    </col>
+  </component>
+
+  <page name="Plateformes">
+    <screen name="Galaxy S25" device=galaxy-s25 start statusbar homebar fill=$bg>
+      <NavBar title="Maison" back=false action=settings/>
+      <Maison/>
+      <FAB fixed place=bottom-right mr=16 mb=104 icon=plus label="Scène" on:click="go Scene"/>
+      <TabBar fixed place=bottom w=fill active=0 items={[{icon:'house',label:'Maison',to:'Galaxy S25'},{icon:'zap',label:'Énergie',to:'Galaxy S25'},{icon:'user',label:'Profil',to:'Galaxy S25'}]}/>
+    </screen>
+
+    <screen name="Pixel 9" device=pixel-9 lint-ignore=unreachable statusbar homebar fill=$bg>
+      <NavBar title="Maison" back=false action=settings/>
+      <Maison/>
+      <FAB fixed place=bottom-right mr=16 mb=104 icon=plus label="Scène" on:click="go Scene"/>
+      <TabBar fixed place=bottom w=fill active=0 items={[{icon:'house',label:'Maison',to:'Pixel 9'},{icon:'zap',label:'Énergie',to:'Pixel 9'},{icon:'user',label:'Profil',to:'Pixel 9'}]}/>
+    </screen>
+
+    <screen name="iPhone 16" device=iphone-16 lint-ignore=unreachable statusbar homebar fill=$bg>
+      <NavBar title="Maison" back=false action=settings large/>
+      <Maison/>
+      <TabBar fixed place=bottom w=fill active=0 items={[{icon:'house',label:'Maison',to:'iPhone 16'},{icon:'zap',label:'Énergie',to:'iPhone 16'},{icon:'user',label:'Profil',to:'iPhone 16'}]}/>
+    </screen>
+
+    <screen name="Scene" device=galaxy-s25-ultra statusbar homebar=buttons fill=$bg>
+      <NavBar title="Nouvelle scène"/>
+      <col w=fill px=16 pt=8 gap=16>
+        <Field label="Nom de la scène" placeholder="Soirée cinéma"/>
+        <col w=fill gap=8>
+          <Piece nom="Salon" detail="Lampes à 20 %" icone=sofa on={$salon} on:click="toggle $salon"/>
+          <Piece nom="Mode éco" detail="Pendant la scène" icone=leaf on={$eco} on:click="toggle $eco"/>
+        </col>
+      </col>
+      <row fixed place=bottom w=fill px=16 pt=12 pb=safe+16 gap=12 fill=$bg>
+        <Button label="Annuler" kind=outline w=fill on:click="back"/>
+        <Button label="Créer la scène" w=fill on:click="back"/>
+      </row>
+    </screen>
+  </page>
+</project>

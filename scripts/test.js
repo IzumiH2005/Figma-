@@ -143,6 +143,22 @@ const gl = await page.evaluate(() => {
 });
 ok(gl.bare.includes('gesture-alt') && !gl.kit.includes('gesture-alt'), `lint gesture-alt : drag sans alternative signalé, Carousel/SwipeRow (points, appui long) acceptés ${JSON.stringify(gl)}`);
 
+// platforms: Android devices drive the chrome, $platform and the kit
+const plat = await page.evaluate(() => {
+  const at = (dev, extra = '') => {
+    const p = MQ.loadProject(`<screen name=P start device=${dev} statusbar ${extra}><NavBar title=T/><text name=pf>{$platform}</text><frame name=pad w=fill h=10/><IconButton name=ib icon=x/><col name=low w=fill fixed place=bottom pb=safe/></screen>`);
+    document.body.innerHTML = ''; const el = MQ.screenElement(p, 'P'); document.body.appendChild(el);
+    const r = (k) => el.querySelector('[data-key="' + k + '"]').getBoundingClientRect(); const top = el.getBoundingClientRect();
+    return { pf: el.querySelector('[data-key=pf]').textContent, back: !!el.querySelector('[data-icon="arrow-left"], .lucide-arrow-left'), ib: Math.round(r('ib').width), low: Math.round(r('low').height), sb: !!el.querySelector('.mq-statusbar'), nav: !!el.querySelector('.mq-homebar') };
+  };
+  const tap = (dev) => { const p = MQ.loadProject(`<screen name=Q start device=${dev}><frame w=42 h=42 fill=#ccc on:click="back"/></screen>`); document.body.innerHTML = ''; const el = MQ.screenElement(p, 'Q'); document.body.appendChild(el); return MQ.lintScreen(el, p, p.screen('Q')).some((x) => x.code === 'tap-target'); };
+  return { g: at('galaxy-s25', 'homebar'), b: at('galaxy-s25-ultra', 'homebar=buttons'), i: at('iphone-16', 'homebar'), f: at('iphone-16', 'platform=android'), tapA: tap('galaxy-s25'), tapI: tap('iphone-16') };
+});
+ok(plat.g.pf === 'android' && plat.i.pf === 'ios' && plat.f.pf === 'android', `$platform déduit de l'appareil, forcé par platform= ${JSON.stringify([plat.g.pf, plat.i.pf, plat.f.pf])}`);
+ok(plat.g.sb && plat.g.nav && plat.g.ib === 48 && plat.i.ib === 44, `Android : barre d'état, navigation, IconButton 48 dp (iOS 44) ${JSON.stringify(plat.g)}`);
+ok(plat.b.low === 48 && plat.g.low === 24 && plat.i.low === 34, `homebar=buttons : zone sûre du bas à 48 (gestes 24, iPhone 34) ${[plat.b.low, plat.g.low, plat.i.low]}`);
+ok(plat.tapA && !plat.tapI, 'lint tap-target : 42 px refusé sur Android (48 dp), toléré sur iOS (44 pt)');
+
 // Tailwind → attributes, and TSX (shadcn conventions) → .mq components, offline
 {
   const t = twToAttrs('inline-flex items-center gap-2 px-4 h-9 rounded-md text-sm font-medium bg-primary/90 hover:bg-accent border dark:bg-input', { radius: 10 });

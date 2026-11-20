@@ -128,6 +128,21 @@ Repères, pour s'inspirer et non pour recopier :
 - **Ce qui ne change pas d'un système à l'autre** : marge constante entre le rail et l'indicateur, rayons imbriqués, cible tactile minimale (44 pt chez Apple, 48 dp chez Material), grille de 4/8.
 - **Ce qui appartient à ton système** : les valeurs exactes (hauteur, rayon, épaisseur, densité), au service du caractère du produit. Les règles de lint vérifient des relations (inset égal, R − p, contraste, grille), jamais une taille imposée.
 
+## Plateformes : iOS et Android
+
+On ne conçoit pas « pour téléphone » mais pour une plateforme. Le même produit garde son caractère (tokens, rayons, motion), mais respecte les conventions de navigation que l'utilisateur connaît :
+
+| | iOS (HIG) | Android (Material 3, One UI) |
+|---|---|---|
+| Cible minimale | 44 pt | 48 dp |
+| Barre du haut | titre centré, « ‹ Retour » | titre à gauche, flèche ←, 64 dp |
+| Navigation principale | TabBar, icône teintée | barre à pastille (indicateur 64 × 32) |
+| Action principale | dans la barre ou en bas | FAB possible, au-dessus de la navigation |
+| Bas de l'écran | indicateur d'accueil (34) | poignée de gestes, ou 3 boutons (48) |
+| Interrupteur | piste pleine, curseur fixe | piste contournée éteinte, curseur 16 → 24 |
+
+Le kit applique ces différences par `$platform` ; teste chaque écran sur un Galaxy (360 de large, l'écran le plus étroit courant) et sur un iPhone. Samsung représente une grosse part des téléphones Android : `galaxy-s25` est un bon défaut Android, `galaxy-z-fold` vérifie la mise en page large.
+
 ## Gestes et manipulation directe
 
 Le contenu suit le doigt, puis se pose de lui-même. Les principes viennent de la conférence WWDC 2018 « Designing Fluid Interfaces » et des guides de gestes de Material et de Compose.

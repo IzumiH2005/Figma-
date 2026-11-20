@@ -1,6 +1,6 @@
 // Design hygiene linter — rules distilled from UI design references (8-pt grid, WCAG, HIG/Material,
 // "How to Design Better UI Components"). Every issue may carry a `fix` the editor/CLI can apply.
-import { parseColor } from './project.js';
+import { parseColor, platformOf } from './project.js';
 import { TYPESCALES } from './project.js';
 import { contrast, deltaE, toOklch, hueDistance, mix, toHex } from './color.js';
 import { patchSource, patchStyle } from './parse.js';
@@ -18,6 +18,14 @@ const CAT = {
   'motion-linear': 'motion', 'motion-duration': 'motion', 'motion-settle': 'motion', 'motion-sync': 'motion', 'motion-loops': 'motion', 'motion-tempo': 'motion', 'motion-step': 'motion', 'transition-duration': 'motion',
 };
 
+// étendue réelle des glyphes (un texte w=fill aligné à gauche ou avec padding n'occupe pas toute sa boîte)
+function inkRect(el, root) {
+  try {
+    const rg = document.createRange(); rg.selectNodeContents(el); const r = rg.getBoundingClientRect();
+    if (r.width > 0) { const R = root.getBoundingClientRect(); const s = R.width / (root.offsetWidth || R.width) || 1; return { x: (r.left - R.left) / s, y: (r.top - R.top) / s, w: r.width / s, h: r.height / s }; }
+  } catch (e) { /* pas de Range : boîte */ }
+  return rel(el, root);
+}
 function rel(el, root) {
   const r = el.getBoundingClientRect(), R = root.getBoundingClientRect();
   const s = R.width / (root.offsetWidth || R.width) || 1;
@@ -64,7 +72,7 @@ export function lintScreen(screenEl, project, screenNode) {
   const dev = project.sizeOf(screenNode).device;
   const kind = dev ? dev.kind : 'phone';
   const touch = kind === 'phone' || kind === 'watch' || kind === 'tablet';
-  const minTap = !dev ? 44 : dev.punch ? 48 : kind === 'desktop' ? 32 : 44;
+  const minTap = platformOf(screenNode, dev) === 'android' ? 48 : !dev ? 44 : kind === 'desktop' ? 32 : 44; // Material : 48 dp, HIG : 44 pt
   const visible = (el) => { const cs = getComputedStyle(el); return cs.display !== 'none' && cs.visibility !== 'hidden' && el.getClientRects().length > 0; };
 
   // --- text
@@ -156,7 +164,7 @@ export function lintScreen(screenEl, project, screenNode) {
     if (r.w > 0 && r.x + r.w > W + 1 && !insideHScroll(el, screenEl)) push('warn', 'bounds', `Dépasse l'écran à droite de ${Math.round(r.x + r.w - W)}px (${label(el)})`, el);
   });
   if (kind === 'phone') {
-    const offenders = [...screenEl.querySelectorAll('[data-tag="text"]')].filter((el) => visible(el) && !insideHScroll(el, screenEl) && !el.closest('.mq-fixed') && !el.closest('.mq-statusbar')).filter((el) => { const r = rel(el, screenEl); return r.w > 0 && (r.x < 12 || r.x + r.w > W - 12) && el.textContent.trim().length > 2; });
+    const offenders = [...screenEl.querySelectorAll('[data-tag="text"]')].filter((el) => visible(el) && !insideHScroll(el, screenEl) && !el.closest('.mq-fixed') && !el.closest('.mq-statusbar')).filter((el) => { const r = inkRect(el, screenEl); return r.w > 0 && (r.x < 12 || r.x + r.w > W - 12) && el.textContent.trim().length > 2; });
     if (offenders.length) push('warn', 'edge-margin', `${offenders.length} texte(s) à moins de 12px du bord (ex. « ${short(offenders[0].textContent, 24)} ») : marge latérale ≥ 16px`, offenders[0]);
   }
   // crowded interactive siblings
@@ -165,7 +173,8 @@ export function lintScreen(screenEl, project, screenNode) {
     if (!nx || !nx.dataset || !nx.dataset.hot || !visible(nx)) continue;
     const a = rel(el, screenEl), b = rel(nx, screenEl);
     const gap = Math.max(b.x - (a.x + a.w), b.y - (a.y + a.h));
-    if (gap >= 0 && gap < 8 && touch) push('info', 'crowded', `Éléments cliquables collés (${Math.round(gap)}px) : ≥ 8px pour éviter les erreurs de tap (${label(el)})`, el);
+    const big = Math.min(a.w, a.h, b.w, b.h) >= minTap; // cibles déjà pleine taille (onglets, segments) : pas besoin d'écart
+    if (gap >= 0 && gap < 8 && touch && !big) push('info', 'crowded', `Éléments cliquables collés (${Math.round(gap)}px) : ≥ 8px pour éviter les erreurs de tap (${label(el)})`, el);
   }
   // repeated cards with unequal heights in a row/grid
   const groups = new Map();
@@ -447,7 +456,8 @@ export function lintProject(project) {
   if (start && [...graph.values()].some((x) => x.size)) {
     const seen = new Set([start.attrs.name]); const q = [start.attrs.name];
     while (q.length) { const s = q.shift(); for (const t of graph.get(s) || []) if (!seen.has(t) && names.has(t)) { seen.add(t); q.push(t); } }
-    for (const n of names) if (!seen.has(n)) push('info', 'unreachable', `Écran « ${n} » inaccessible depuis « ${start.attrs.name} »`, { screen: n });
+    const ign = (n) => { const sc = project.screen(n); return String((sc && sc.attrs['lint-ignore']) || '').split(/[\s,]+/).some((x) => x === 'unreachable' || x === 'proto' || x === '*'); };
+    for (const n of names) if (!seen.has(n) && !ign(n)) push('info', 'unreachable', `Écran « ${n} » inaccessible depuis « ${start.attrs.name} »`, { screen: n });
   }
 
   // transitions between screens/states: durations & spacing
