@@ -66,7 +66,7 @@
   <!-- téléchargement : repos → chargement (barre qui se remplit) → terminé (coche qui rebondit) -->
   <component name=DownloadButton props="phase=0" desc="Bouton en trois phases (0 repos, 1 chargement, 2 terminé)" group=Actions>
     <stack w=fill h=$button-h-md radius=$button-radius clip fill={phase == 2 ? $success : $primary} color={phase == 2 ? $on-success : $on-primary} motion=press cursor=pointer on:click="if {phase == 0} change phase=1 smart 260 snappy; wait 1300; if {phase == 1} change phase=2 smart 360 bouncy">
-      <frame if={phase == 1} name=dl-bar w=fill h=fill fill={alpha($on-primary, 20)} anim="reveal 1300 linear"/>
+      <frame if={phase == 1} name=dl-bar w=fill h=fill fill={shade($primary, 22)} anim="reveal 1300 linear"/>
       <row w=fill h=fill gap=8 justify=center>
         <icon if={phase == 0} name=download size=18/>
         <icon if={phase == 1} name=loader-circle size=18 loop="spin 900"/>

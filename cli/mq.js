@@ -363,7 +363,7 @@ window.__find = function(q) {
   for (const r of roots) {
     let el = r.querySelector('[data-key="' + CSS.escape(q) + '"]');
     if (!el) el = [...r.querySelectorAll('[data-key]')].find(e => e.dataset.key.split('#')[0] === q);
-    if (!el) { const t = [...r.querySelectorAll('.mq-text, input')].find(e => (e.textContent || e.placeholder || '').trim() === q) || [...r.querySelectorAll('.mq-text, input')].find(e => (e.textContent || e.placeholder || '').trim().toLowerCase().includes(q.toLowerCase())); if (t) el = t.closest('[data-hot]') || t; }
+    if (!el) { const t = [...r.querySelectorAll('.mq-text, input')].find(e => (e.textContent || e.placeholder || '').trim() === q) || [...r.querySelectorAll('.mq-text, input')].find(e => (e.textContent || e.placeholder || '').trim().toLowerCase().includes(q.toLowerCase())); if (t) el = t; } // a finger taps the label itself (its hot ancestor may be a whole rail or card)
     if (!el) el = r.querySelector('[data-comp="' + CSS.escape(q) + '"]');
     if (el) { const b = el.getBoundingClientRect(); return { x: b.left + b.width / 2, y: b.top + b.height / 2, w: b.width, h: b.height }; }
   }

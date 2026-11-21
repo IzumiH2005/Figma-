@@ -1009,7 +1009,15 @@ function decorate(el, node, a, states, events, scope, parentLayout, ctx) {
     if (a.stagger) applyStagger(kids, a.stagger, ctx);
   }
   if (a.grain || a.texture || a.glass || a.pblur) applyEffects(el, a, ctx);
-  if (a.mask === 'first' || a['mask-group']) { const run = (k) => { if (el.isConnected && el.offsetWidth) applyMaskGroup(el, a); else if (k < 30 && typeof requestAnimationFrame !== 'undefined') requestAnimationFrame(() => run(k + 1)); }; run(0); }
+  if (a.mask === 'first' || a['mask-group']) {
+    // a vector mask of explicit size is known right now: apply it before the first paint (no unmasked frame while a
+    // tween re-renders the screen every frame); otherwise wait for layout
+    const m0 = [...el.children].find((c) => c.tagName !== 'STYLE');
+    const sized = m0 && m0._path && parseFloat(m0.style.width) > 0 && parseFloat(m0.style.height) > 0;
+    if (sized) applyMaskGroup(el, a);
+    const run = (k) => { if (el.isConnected && el.offsetWidth) applyMaskGroup(el, a); else if (k < 30 && typeof requestAnimationFrame !== 'undefined') requestAnimationFrame(() => run(k + 1)); };
+    run(0);
+  }
 }
 
 // Cascade (overlapping action): "60 fade-up 450 from=center drag=1.1"

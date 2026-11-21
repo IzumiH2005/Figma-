@@ -38,16 +38,39 @@ function insideHScroll(el, root) {
   return false;
 }
 function blend(top, bottom) { const a = top[3]; return [top[0] * a + bottom[0] * (1 - a), top[1] * a + bottom[1] * (1 - a), top[2] * a + bottom[2] * (1 - a), 1]; }
+// colour of the topmost painted layer of `node` at (x, y): its children first, a vector by its exact fill, then its background
+function colorAtPoint(node, x, y) {
+  if (!node.getBoundingClientRect) return null;
+  const r = node.getBoundingClientRect(); if (x < r.left || x > r.right || y < r.top || y > r.bottom) return null;
+  const cs = getComputedStyle(node); if (cs.display === 'none' || cs.visibility === 'hidden' || +cs.opacity < 0.05) return null;
+  for (let k = node.children.length - 1; k >= 0; k--) { const c = colorAtPoint(node.children[k], x, y); if (c) return c; }
+  if (typeof SVGGeometryElement !== 'undefined' && node instanceof SVGGeometryElement) {
+    const m = node.getScreenCTM && node.getScreenCTM(); if (!m) return null;
+    const p = new DOMPoint(x, y).matrixTransform(m.inverse());
+    if (!node.isPointInFill(p)) return null;
+    const f = parseColor(cs.fill); return f && f[3] > 0.05 ? f : null;
+  }
+  const bg = parseColor(cs.backgroundColor); return bg && bg[3] > 0.05 ? bg : null;
+}
+// layers painted just below `child` (its earlier siblings: an indicator, a drop, a stacked shape) at (x, y)
+function underlayAt(child, x, y) {
+  for (let s = child.previousElementSibling; s; s = s.previousElementSibling) { if (s.tagName === 'STYLE') continue; const c = colorAtPoint(s, x, y); if (c) return c; }
+  return null;
+}
 export function effectiveBg(el, root, skipSelf = false) {
   const stack = [];
+  const rr = el.getBoundingClientRect(); const px = rr.left + rr.width / 2, py = rr.top + rr.height / 2;
+  let child = skipSelf ? el : null;
   let n = skipSelf ? el.parentElement : el;
   while (n) {
+    // siblings painted before `child` sit above n's own background and below the text
+    if (child && n !== el) { const u = underlayAt(child, px, py); if (u) { stack.push(u); if (u[3] >= 0.99) break; } }
     const cs = getComputedStyle(n);
     if (cs.backgroundImage && cs.backgroundImage !== 'none' && !cs.backgroundImage.startsWith('url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'220\'')) return null;
     const c = parseColor(cs.backgroundColor);
     if (c && c[3] > 0) { stack.push(c); if (c[3] >= 0.99) break; }
     if (n === root) break;
-    n = n.parentElement;
+    child = n; n = n.parentElement;
   }
   let bg = [255, 255, 255, 1];
   if (stack.length && stack[stack.length - 1][3] >= 0.99) bg = stack.pop();

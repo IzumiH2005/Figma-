@@ -1,0 +1,152 @@
+<project name="Segmenté liquide — composant" modes="light dark">
+  <!-- Un contrôle segmenté dont l'indicateur est une goutte : il ne glisse pas d'un bloc, il s'ÉTIRE.
+       · Forme : l'indicateur est une métaballe vectorielle, l'union arrondie (boolean op=union radius=…) de deux pilules,
+         la tête (lead) et la traîne (tail), reliées par un col dont l'épaisseur diminue quand elles s'éloignent.
+       · Motion : deux courbes distinctes lancées en parallèle (tween … &) : la tête part tout de suite et dépasse un peu
+         (snappy), la traîne démarre lentement puis rattrape (in-out) : la goutte s'étire, le col s'amincit, puis tout se
+         résorbe. Squash & stretch par le seul spacing des deux courbes, sans keyframe.
+       · Couleur : chaque libellé passe de $muted à $on-primary selon la distance au centre de la goutte (mix en OKLab),
+         donc le texte se « mouille » quand la goutte passe dessous. L'icône choisie rebondit (re-clé → entrée pop).
+       · Geste : glisser le doigt le long du rail (on:scrub) : la tête suit le doigt (120 ms), la traîne la poursuit (300 ms) ;
+         au lâcher, la goutte se pose sur l'option sous le doigt. Un simple appui marche aussi (alternative au geste).
+       · Liaison : bind=nom écrit l'option choisie dans une variable de l'écran (ici $mode). -->
+  <system brand=#0E7490 accent=#F59E0B neutral=cool radius=round density=comfortable elevation=soft motion=playful type="Inter/Sora"/>
+
+  <vars>
+    mode: 1
+  </vars>
+
+  <!-- ───────────── composant ─────────────
+       rail 344 × 56, padding 4 → piste 336 × 48 ; 4 cases de 84 ; goutte de 48 de haut, rayon 24.
+       Les ressorts dépassent leur cible, mais la goutte reste bornée au rail : au bout, elle s'écrase contre le bord. -->
+  <component name=SegmentLiquide props="sel=1 lead=1 tail=1 bind='' items={[['footprints', 'À pied'], ['bike', 'Vélo'], ['car', 'Voiture'], ['train-front', 'Train']]}"
+    desc="Segmenté liquide : l'indicateur s'étire comme une goutte. Toucher une option ou glisser le long du rail.">
+    <stack name=rail w=344 h=56 p=4 radius=full fill=$surface-2 hover:fill=$surface-3 transition=200 cursor=pointer role=radiogroup aria-label="Mode de transport"
+      on:scrub="change lead={clamp(px * 4 - 0.5, 0, 3)} tween 120 out &; change tail={clamp(px * 4 - 0.5, 0, 3)} tween 300 out &"
+      on:scrub-end="change sel={round(clamp(px * 4 - 0.5, 0, 3))} instant; set ${bind} = {round(clamp(px * 4 - 0.5, 0, 3))} instant; change lead={round(clamp(px * 4 - 0.5, 0, 3))} tween 360 snappy &; change tail={round(clamp(px * 4 - 0.5, 0, 3))} tween 600 in-out &">
+      <stack w=336 h=48>
+        <!-- la goutte : deux pilules + un col, unis et arrondis (métaballe) -->
+        <boolean name=drop op=union w=336 h=48 radius=20 smoothing=0.5 fill=$primary shadow={'tinted(' + $primary + ', 28)'} events=none>
+            <frame x={clamp(lead, 0, 3) * 84} y=0 w=84 h=48 radius=24/>
+            <frame x={clamp(tail, 0, 3) * 84} y=0 w=84 h=48 radius=24/>
+            <frame x={min(clamp(lead, 0, 3), clamp(tail, 0, 3)) * 84 + 42} y={24 - max(12, 40 - abs(clamp(lead, 0, 3) - clamp(tail, 0, 3)) * 26) / 2} w={max(1, abs(clamp(lead, 0, 3) - clamp(tail, 0, 3)) * 84)} h={max(12, 40 - abs(clamp(lead, 0, 3) - clamp(tail, 0, 3)) * 26)} radius=full/>
+        </boolean>
+        <!-- libellés en deux couches : gris dessous, blanc dessus découpé par la forme exacte de la goutte (masque alpha).
+             Le texte est blanc au pixel près là où passe la goutte, même à moitié. Pour l'audit, chaque copie se déclare
+             décorative là où son double la remplace (centre de la case sous la goutte, ou hors de la goutte). -->
+        <row w=336 h=48 events=none>
+          <col each={items} as=it w=84 h=48 gap=2 center color=$muted
+            lint-ignore={i + 0.5 >= min(lead, tail) && i + 0.5 <= max(lead, tail) + 1 ? 'contrast' : ''}>
+            <icon name={it[0]} size=20/>
+            <text size=$text-xs weight=600 nowrap>{it[1]}</text>
+          </col>
+        </row>
+        <stack w=336 h=48 mask=first mask-type=alpha events=none>
+          <boolean op=union w=336 h=48 radius=20 smoothing=0.5 fill=$primary>
+            <frame x={clamp(lead, 0, 3) * 84} y=0 w=84 h=48 radius=24/>
+            <frame x={clamp(tail, 0, 3) * 84} y=0 w=84 h=48 radius=24/>
+            <frame x={min(clamp(lead, 0, 3), clamp(tail, 0, 3)) * 84 + 42} y={24 - max(12, 40 - abs(clamp(lead, 0, 3) - clamp(tail, 0, 3)) * 26) / 2} w={max(1, abs(clamp(lead, 0, 3) - clamp(tail, 0, 3)) * 84)} h={max(12, 40 - abs(clamp(lead, 0, 3) - clamp(tail, 0, 3)) * 26)} radius=full/>
+          </boolean>
+          <row w=336 h=48>
+            <col each={items} as=it w=84 h=48 gap=2 center color=$on-primary
+              lint-ignore={i + 0.5 >= min(lead, tail) && i + 0.5 <= max(lead, tail) + 1 ? '' : 'contrast'}>
+              <icon key={'ic-' + i + (i == sel ? '-on' : '')} name={it[0]} size=20 anim={i == sel ? 'pop 380 hard' : ''}/>
+              <text size=$text-xs weight=600 nowrap>{it[1]}</text>
+            </col>
+          </row>
+        </stack>
+        <!-- zones d'appui : une par option (alternative au glissé), 84 × 48 -->
+        <row w=336 h=48>
+          <stack each={items} as=it w=84 h=48 cursor=pointer role=radio aria-label={it[1]} aria-checked={i == sel}
+            on:click="change sel={i} instant; set ${bind} = {i} instant; change lead={i} tween 360 snappy &; change tail={i} tween 600 in-out &"/>
+        </row>
+      </stack>
+    </stack>
+  </component>
+
+  <!-- ───────────── écrans ───────────── -->
+  <screen name="Itinéraire" device=iphone-16 start statusbar=blur homebar fill=$bg color=$text font=$font-sans pt=safe>
+    <col w=fill px=24 pt=8 pb=32 gap=24 align=center>
+      <row w=344 h=56 justify=between>
+        <col gap=2>
+          <text size=$text-sm color=$muted>Aujourd’hui, départ 8:40</text>
+          <text font=$font-display size=$text-xl weight=700>Aller au bureau</text>
+        </col>
+        <IconButton icon=sun-moon kind=tonal on:click="mode next" aria-label="Thème"/>
+      </row>
+
+      <!-- trajet : deux étapes reliées -->
+      <col w=344 gap=0 p=16 radius=$card-radius fill=$surface shadow=$shadow-1>
+        <row h=40 gap=12><stack w=24 h=24 center><ellipse w=12 h=12 fill=$primary/></stack><text weight=500>12 rue des Lilas</text></row>
+        <row w=24 h=16 justify=center><frame w=2 h=16 radius=full fill=$surface-3/></row>
+        <row h=40 gap=12><stack w=24 h=24 center color=$accent-text><icon name=map-pin size=20/></stack><text weight=500>Studio, 4 quai Rambaud</text></row>
+      </col>
+
+      <SegmentLiquide bind=mode motion=appear/>
+
+      <!-- résultat : suit $mode -->
+      <col w=344 gap=16 p=$card-pad radius=$card-radius fill=$surface shadow=$shadow-1>
+        <row justify=between align=end>
+          <col gap=4>
+            <text size=$text-sm color=$muted>{pick($mode, 'À pied', 'À vélo', 'En voiture', 'En train')}</text>
+            <row gap=8 align=baseline>
+              <text key={'eta-' + $mode} font=$font-display size=$text-3xl weight=700 tabular lh=1 anim="fade-up 360 out">{pick($mode, '38', '16', '14', '21')}</text>
+              <text color=$muted>min</text>
+            </row>
+          </col>
+          <col gap=4 align=end>
+            <text size=$text-sm color=$muted>Arrivée</text>
+            <text weight=600 tabular>{pick($mode, '9:18', '8:56', '8:54', '9:01')}</text>
+          </col>
+        </row>
+        <!-- répartition du trajet : la barre se recompose avec la goutte (smart) -->
+        <row w=fill h=8 gap=4>
+          <frame name=seg-a h=8 radius=full fill=$primary w={pick($mode, '100%', '88%', '70%', '30%')}/>
+          <frame name=seg-b h=8 radius=full fill=$accent w={pick($mode, '0%', '12%', '30%', '55%')} if={$mode > 0}/>
+          <frame name=seg-c h=8 radius=full fill=$surface-3 w=fill if={$mode == 3}/>
+        </row>
+        <row justify=between>
+          <row gap=8><frame w=8 h=8 radius=full fill=$success/><text size=$text-sm color=$muted>{pick($mode, '0 g CO₂', '0 g CO₂', '1,9 kg CO₂', '0,1 kg CO₂')}</text></row>
+          <text size=$text-sm color=$muted>{pick($mode, '3,1 km', '3,4 km', '4,2 km', '3,8 km · 1 changement')}</text>
+        </row>
+      </col>
+    </col>
+  </screen>
+
+  <!-- écran de contrôle : chaque option, et la goutte figée en plein vol -->
+  <screen name="États" device=desktop h=auto fill=$bg color=$text font=$font-sans x=480 y=0>
+    <col p=48 gap=24>
+      <text size=$text-sm weight=600 color=$muted>Au repos, sur chaque option</text>
+      <SegmentLiquide sel=0 lead=0 tail=0/>
+      <SegmentLiquide sel=3 lead=3 tail=3/>
+      <text size=$text-sm weight=600 color=$muted>En vol : la tête est arrivée, la traîne suit (col étiré)</text>
+      <SegmentLiquide sel=2 lead=2 tail=1.2/>
+      <SegmentLiquide sel=3 lead=2.6 tail=0.8/>
+    </col>
+  </screen>
+
+  <flow name="ralenti">
+    start Itinéraire
+    caption "Ralenti × 4 : la tête part, la traîne suit, le col s'étire puis se résorbe"
+    wait 1600
+    click Train
+    wait 4200
+    click "À pied"
+    wait 4200
+  </flow>
+
+  <flow name="demo">
+    start Itinéraire
+    caption "Segmenté liquide : la goutte s'étire d'une option à l'autre"
+    wait 1600
+    click Train
+    wait 1400
+    click "À pied"
+    wait 1500
+    caption "Glisser le long du rail : la traîne poursuit le doigt"
+    drag rail by 250 0 1400
+    wait 1500
+    click Voiture
+    wait 1600
+  </flow>
+</project>
