@@ -550,6 +550,17 @@ export function PillRow({ className, ...props }) { return <div className={cn("fl
   ok(!r.multi.length && r.caught, `Composants à racine unique (kit) et règle component-roots ${JSON.stringify(r)}`);
 }
 
+// a component rendered alone (spec sheet, Studio, asset preview) has the same box model as inside a screen
+{
+  const r = await page.evaluate(() => {
+    const p = MQ.loadProject('<project><component name="Fixe"><row w=200 px=24 h=40><text>x</text></row></component><screen name="S" w=300 h=100><Fixe/></screen></project>');
+    MQ.ensureStyles(); document.body.innerHTML = '';
+    const el = MQ.renderStandalone({ id: 'z', tag: 'Fixe', attrs: {}, children: [] }, MQ.makeCtx(p, { mode: 0 })); document.body.appendChild(el);
+    return Math.round(el.querySelector('[data-comp="Fixe"]').getBoundingClientRect().width);
+  });
+  ok(r === 200, `Rendu isolé : même modèle de boîte qu'à l'écran (w=200 px=24 → 200) ${r}`);
+}
+
 // editor boots
 const html = await buildEditorHTML({ projects: examples });
 const tmp = path.join(ROOT, 'out', '_test-editor.html');

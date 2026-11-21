@@ -231,10 +231,12 @@ export class Player {
     if (Object.keys(this._tw).length) this._twRaf = requestAnimationFrame((t) => this.tweenTick(t));
   }
 
+  // continuous inputs (drag, scrub, rig, typing) fire faster than the screen refreshes: coalesce to one re-render per frame
   scheduleRerender(t) {
     if (this._rr) return;
     this._rr = true;
-    queueMicrotask(() => { this._rr = false; this.rerender(t || { type: 'instant' }); });
+    const run = () => { this._rr = false; this.rerender(t || { type: 'instant' }); };
+    if (typeof requestAnimationFrame === 'function') requestAnimationFrame(run); else queueMicrotask(run);
   }
 
   // ------------------------------------------------------------ actions

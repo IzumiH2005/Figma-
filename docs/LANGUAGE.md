@@ -591,7 +591,7 @@ Boucles : `moving-hold pulse breathe spin float bounce shake wiggle heartbeat pi
   click cta            # clé (name/key), texte visible, ou nom de composant
   type email "ada@orbit.fr"
   swipe left
-  drag promo by -240 0 200   # geste continu (ms = durée)
+  drag promo by -240 0 200   # geste continu, en pixels du design (ms = durée ; relâché en mouvement : élan)
   scroll 400
   back
   key Enter

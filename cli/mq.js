@@ -425,7 +425,11 @@ async function cmdVideo(o, animOnly = false) {
   let started = false;
   const shots = [];
   for (const st of steps) {
-    const a = st.args;
+    const a = st.args; const tStep = Date.now();
+    await runStep(st, a);
+    if (process.env.MQ_DEBUG) console.error(`  ⏱ ${st.cmd} ${a.join(' ')} : ${Date.now() - tStep} ms`);
+  }
+  async function runStep(st, a) {
     switch (st.cmd) {
       case 'start': await page.evaluate(({ n, f, c }) => window.__stage(n, f, c), { n: a[0], f: frame, c: hasCaption ? '' : null }); await waitFonts(page); started = true; break;
       case 'wait': await page.waitForTimeout(+a[0] || 500); break;
@@ -464,7 +468,10 @@ async function cmdVideo(o, animOnly = false) {
         break;
       }
       case 'drag': { // drag "clé" by dx dy [ms] — a hand-like stroke released while moving, so momentum and snapping are exercised
-        const q = a[0]; const bi = a.indexOf('by'); const dx = +a[bi + 1] || 0, dy = +a[bi + 2] || 0; const ms = +a[bi + 3] || 450;
+        const q = a[0]; const bi = a.indexOf('by'); const ms = +a[bi + 3] || 450;
+        // distances are written in design pixels (like everything in a .mq): scale them by the on-screen size of the screen
+        const k = await page.evaluate(() => { const s = document.querySelector('.mq-screen'); if (!s || !s.offsetWidth) return 1; return s.getBoundingClientRect().width / s.offsetWidth; });
+        const dx = (+a[bi + 1] || 0) * k, dy = (+a[bi + 2] || 0) * k;
         const pos = await page.evaluate((k) => window.__find(k), q);
         if (!pos) throw new Error(`drag : élément introuvable « ${q} »`);
         await page.evaluate(({ x, y }) => window.__cursor(x, y, false), pos);

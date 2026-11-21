@@ -1,0 +1,184 @@
+<project name="Billet — composant" modes="light dark">
+  <!-- Billet d'embarquement à déchirer : un seul composant, qui mobilise l'éditeur entier.
+       · Formes : corps et talon sont de vrais vecteurs (booléen « soustraire ») : les encoches en demi-lune sont des trous,
+         le fond de l'écran passe au travers, quel qu'il soit. Perforation en pointillés vectoriels.
+       · Surface : en-tête en shader « mesh » qui réagit au doigt (reflet holographique), carte inclinée au pointeur (pseudo-3D).
+       · Geste : le talon a deux aimants (attaché 0 / détaché 240) ; l'élan du doigt choisit (un geste franc détache, un geste
+         timide revient en ressort). drag-progress=tear le fait pivoter en se décollant ; drag-index=torn bascule l'état.
+       · Motion : à l'embarquement, l'avion décolle le long de sa route (along= + tween), le talon tombe en fondu,
+         une coche rebondit, un éclat jaillit, les infos passent à l'état « à bord ». Alternative sans geste : « Embarquer ».
+       · Rig : dans l'éditeur comme en prototype, l'avion se glisse le long de la route (rig:fly).
+       · Hygiène : design system, AA clair et sombre, cibles ≥ 44, grille de 4, insets égaux. -->
+  <system brand=#3046D9 accent=#FF6A3D neutral=cool radius=round density=comfortable elevation=soft motion=playful type="Inter/Sora"/>
+
+  <keyframes name="nudge">
+    0 { x=0 }
+    50 { x=6 }
+    100 { x=0 }
+  </keyframes>
+  <keyframes name="spark">
+    0 { scale=0.2 opacity=1 }
+    60 { scale=1.1 opacity=1 }
+    100 { scale=1.3 opacity=0 }
+  </keyframes>
+
+  <!-- ───────────── composant ───────────── -->
+  <component name=Billet props="tear=0 torn=0 fly=0 passenger='Camille Martin' short='C. Martin' seat='14A' gate='B32' group=2 flight='CA 1824'"
+    desc="Billet d'embarquement : glisser le talon vers la droite (ou « Embarquer ») pour embarquer" rig:fly="x 0..1 in=route">
+    <col w=344 gap=0>
+
+      <!-- corps : 344 × 364 (104 + 24 + 68 + 24 + 48 + 24 + 48 + 24), coins hauts 24, encoches de rayon 12 sur la ligne de perforation -->
+      <stack name=body w=344 h=364 tilt=pointer tilt-max=4>
+        <boolean op=subtract w=344 h=364 fill=$surface shadow=$shadow-2>
+          <frame w=344 h=364 radius="24 24 0 0"/>
+          <ellipse x=-12 y=352 w=24 h=24/>
+          <ellipse x=332 y=352 w=24 h=24/>
+        </boolean>
+        <col w=344 h=364 gap=24>
+          <!-- en-tête : mesh animé au doigt (reflet), texte blanc AA sur la marque foncée -->
+          <row w=344 h=104 px=24 radius="24 24 0 0" fill=$brand-800 color=$on-dark justify=between
+            shader="mesh colors=$brand-950,$brand-700,$brand-500,$brand-800 warp=0.22 speed=0 pointer=glow reach=140">
+            <col gap=4>
+              <row gap=8>
+                <stack w=32 h=32 radius=full center fill=rgba(255,255,255,.18)><icon name=plane-takeoff size=18/></stack>
+                <text weight=600>Céleste Air</text>
+              </row>
+              <text size=$text-sm>Carte d’embarquement</text>
+            </col>
+            <row name=status h=32 px=12 gap=8 radius=full fill={torn ? $success : 'rgba(255,255,255,.18)'} color={torn ? $on-success : $on-dark}>
+              <icon if={torn} name=check size=16 anim="pop 360 hard"/>
+              <text size=$text-sm weight=600 nowrap>{torn ? 'À bord' : 'Groupe ' + group}</text>
+            </row>
+          </row>
+
+          <!-- route : codes et arc sur une ligne, villes et heures dessous ; l'avion est posé sur le tracé (along=) -->
+          <col w=344 px=24 gap=8>
+            <row w=fill gap=16>
+              <text w=80 font=$font-display size=$text-3xl weight=700 lh=1 nowrap>LYS</text>
+              <stack name=route w=104 h=40>
+                <vector name=path w=104 h=40 d="M6 34C32 2 72 2 98 34" stroke={'2 ' + $subtle} dash="2 6" cap=round fill=none/>
+                <ellipse w=8 h=8 absolute x=2 y=30 fill=$subtle/>
+                <ellipse w=8 h=8 absolute x=94 y=30 fill={fly > 0.98 ? $primary : $subtle}/>
+                <stack name=plane w=28 h=28 radius=full center fill=$primary color=$on-primary along=path at={0.05 + fly * 0.9} orient=45 shadow=$shadow-1>
+                  <icon name=plane size=16/>
+                </stack>
+              </stack>
+              <text w=80 font=$font-display size=$text-3xl weight=700 lh=1 talign=right nowrap>LIS</text>
+            </row>
+            <row w=fill justify=between>
+              <text size=$text-sm color=$muted>Lyon · 07:45</text>
+              <text size=$text-sm color=$muted>{fly > 0.02 && fly < 0.98 ? 'En vol · ' + round(fly * 100) + ' %' : '2 h 25'}</text>
+              <text size=$text-sm color=$muted>Lisbonne · 09:10</text>
+            </row>
+          </col>
+
+          <!-- infos : passager en large, siège et porte en colonnes de 72 -->
+          <row w=344 h=48 px=24 gap=16>
+            <col w=fill gap=4>
+              <text size=$text-xs weight=600 color=$muted upper ls=6%>Passager</text>
+              <text weight=600 truncate>{passenger}</text>
+            </col>
+            <col w=72 gap=4>
+              <text size=$text-xs weight=600 color=$muted upper ls=6%>Siège</text>
+              <text weight=600 tabular>{seat}</text>
+            </col>
+            <col w=72 gap=4>
+              <text size=$text-xs weight=600 color=$muted upper ls=6%>Porte</text>
+              <text weight=600 tabular>{gate}</text>
+            </col>
+          </row>
+
+          <row w=344 h=48 px=24 gap=16 align=end>
+            <col w=fill gap=4>
+              <text size=$text-xs weight=600 color=$muted upper ls=6%>Vol · embarquement</text>
+              <text weight=600 tabular>{flight} · 07:15</text>
+            </col>
+            <Badge label={torn ? 'Embarqué' : 'Dans 25 min'} tone={torn ? 'success' : 'warning'}/>
+          </row>
+        </col>
+        <!-- perforation : pointillés entre les deux encoches -->
+        <vector absolute x=20 y=363 w=304 h=2 d="M1 1H303" stroke={'2 ' + $border} dash="1 7" cap=round fill=none/>
+      </stack>
+
+      <!-- talon : en dessous, le message d'embarquement ; au-dessus, le talon qu'on arrache -->
+      <stack w=344 h=136>
+        <col if={torn} w=344 h=136 gap=4 center>
+          <stack w=48 h=48 center>
+            <ellipse if={torn} name=burst absolute x=21 y=-4 w=6 h=6 opacity=0 fill=$accent clone="radial 10 r=24" anim="spark 700 out delay=200"/>
+            <stack w=48 h=48 radius=full center fill=$success color=$on-success anim="pop 480 hard delay=120"><icon name=check size=24/></stack>
+          </stack>
+          <text weight=600 anim="fade-up 420 out delay=260">Bon vol, {passenger} !</text>
+          <stack h=44 px=12 center cursor=pointer anim="fade-up 420 out delay=360" on:click="change torn=0 tear=0 smart 520 snappy; change fly=0 tween 600 out" aria-label="Revoir le billet">
+            <text size=$text-sm weight=600 color=$primary-text>Revoir le billet</text>
+          </stack>
+        </col>
+        <stack name=stub w=344 h=136 drag=x bounds="0..240" snap="0, 240" elastic=0.2 drag-progress=tear drag-index=torn
+          rotate={tear * 14} origin="0% 0%" dy={torn ? 40 : 0} opacity={torn ? 0 : 1} events={torn ? 'none' : 'auto'} cursor=grab
+          on:drag-end="if {index == 1} change fly=1 tween 1800 in-out" aria-label="Talon à déchirer">
+          <boolean op=subtract w=344 h=136 fill=$surface shadow=$shadow-2>
+            <frame w=344 h=136 radius="0 0 24 24"/>
+            <ellipse x=-12 y=-12 w=24 h=24/>
+            <ellipse x=332 y=-12 w=24 h=24/>
+          </boolean>
+          <row w=344 h=136 p=24 gap=16>
+            <!-- code de bord : un seul tracé (modules de 4 px fusionnés), noir sur blanc dans les deux modes ($on-dark et $gray-950 ne changent pas) -->
+            <stack w=88 h=88 p=2 radius=8 fill=$on-dark>
+              <vector w=84 h=84 d="M32 0h4v4h-4ZM44 0h4v4h-4ZM36 4h4v4h-4ZM48 4h4v4h-4ZM40 8h4v4h-4ZM44 8h4v4h-4ZM32 12h4v4h-4ZM36 12h4v4h-4ZM48 12h4v4h-4ZM40 16h4v4h-4ZM32 20h4v4h-4ZM44 20h4v4h-4ZM48 20h4v4h-4ZM36 24h4v4h-4ZM40 24h4v4h-4ZM32 28h4v4h-4ZM44 28h4v4h-4ZM8 32h4v4h-4ZM20 32h4v4h-4ZM24 32h4v4h-4ZM36 32h4v4h-4ZM48 32h4v4h-4ZM52 32h4v4h-4ZM64 32h4v4h-4ZM76 32h4v4h-4ZM80 32h4v4h-4ZM0 36h4v4h-4ZM12 36h4v4h-4ZM16 36h4v4h-4ZM28 36h4v4h-4ZM40 36h4v4h-4ZM44 36h4v4h-4ZM56 36h4v4h-4ZM68 36h4v4h-4ZM72 36h4v4h-4ZM4 40h4v4h-4ZM8 40h4v4h-4ZM20 40h4v4h-4ZM32 40h4v4h-4ZM36 40h4v4h-4ZM48 40h4v4h-4ZM60 40h4v4h-4ZM64 40h4v4h-4ZM76 40h4v4h-4ZM0 44h4v4h-4ZM12 44h4v4h-4ZM24 44h4v4h-4ZM28 44h4v4h-4ZM40 44h4v4h-4ZM52 44h4v4h-4ZM56 44h4v4h-4ZM68 44h4v4h-4ZM80 44h4v4h-4ZM4 48h4v4h-4ZM16 48h4v4h-4ZM20 48h4v4h-4ZM32 48h4v4h-4ZM44 48h4v4h-4ZM48 48h4v4h-4ZM60 48h4v4h-4ZM72 48h4v4h-4ZM76 48h4v4h-4ZM36 52h4v4h-4ZM40 52h4v4h-4ZM52 52h4v4h-4ZM64 52h4v4h-4ZM68 52h4v4h-4ZM80 52h4v4h-4ZM32 56h4v4h-4ZM44 56h4v4h-4ZM56 56h4v4h-4ZM60 56h4v4h-4ZM72 56h4v4h-4ZM36 60h4v4h-4ZM48 60h4v4h-4ZM52 60h4v4h-4ZM64 60h4v4h-4ZM76 60h4v4h-4ZM80 60h4v4h-4ZM40 64h4v4h-4ZM44 64h4v4h-4ZM56 64h4v4h-4ZM68 64h4v4h-4ZM72 64h4v4h-4ZM32 68h4v4h-4ZM36 68h4v4h-4ZM48 68h4v4h-4ZM60 68h4v4h-4ZM64 68h4v4h-4ZM76 68h4v4h-4ZM40 72h4v4h-4ZM52 72h4v4h-4ZM56 72h4v4h-4ZM68 72h4v4h-4ZM80 72h4v4h-4ZM32 76h4v4h-4ZM44 76h4v4h-4ZM48 76h4v4h-4ZM60 76h4v4h-4ZM72 76h4v4h-4ZM76 76h4v4h-4ZM36 80h4v4h-4ZM40 80h4v4h-4ZM52 80h4v4h-4ZM64 80h4v4h-4ZM68 80h4v4h-4ZM80 80h4v4h-4Z" fill=$gray-950/>
+              <stack each={[[2, 2], [58, 2], [2, 58]]} as=q absolute x={q[0]} y={q[1]} w=28 h=28 fill=$gray-950 center>
+                <stack w=20 h=20 fill=$on-dark center><frame w=12 h=12 fill=$gray-950/></stack>
+              </stack>
+            </stack>
+            <col w=fill gap=8>
+              <text weight=600>Déchirer pour embarquer</text>
+              <row gap=8 color=$muted>
+                <text size=$text-sm>Glissez le talon</text>
+                <icon name=arrow-right size=16 loop={tear == 0 && !torn ? 'nudge 1400 smooth' : ''}/>
+              </row>
+              <Button label="Embarquer" kind=tonal size=sm on:click="change torn=1 tear=1 smart 560 snappy; change fly=1 tween 1800 in-out"/>
+            </col>
+          </row>
+        </stack>
+      </stack>
+    </col>
+  </component>
+
+  <!-- ───────────── écrans ───────────── -->
+  <screen name="Billet" device=iphone-16 start statusbar=blur homebar fill=$bg color=$text font=$font-sans pt=safe>
+    <col w=fill px=24 pt=8 pb=32 gap=24 align=center>
+      <row w=344 h=56 justify=between>
+        <col gap=2>
+          <text size=$text-sm color=$muted>Mardi 18 novembre</text>
+          <text font=$font-display size=$text-xl weight=700>Mon billet</text>
+        </col>
+        <IconButton icon=sun-moon kind=tonal on:click="mode next" aria-label="Thème"/>
+      </row>
+      <Billet motion=appear/>
+    </col>
+  </screen>
+
+  <!-- écran de contrôle : chaque état, pour l'audit au pixel -->
+  <screen name="États" device=desktop h=auto fill=$bg color=$text font=$font-sans x=480 y=0>
+    <row w=fill p=48 gap=48 align=start wrap>
+      <col gap=12><text size=$text-sm weight=600 color=$muted>Au repos</text><Billet/></col>
+      <col gap=12><text size=$text-sm weight=600 color=$muted>Talon à moitié décollé</text><Billet tear=0.45/></col>
+      <col gap=12><text size=$text-sm weight=600 color=$muted>À bord, en vol</text><Billet torn=1 tear=1 fly=0.5/></col>
+    </row>
+  </screen>
+
+  <flow name="demo">
+    start Billet
+    caption "Billet d’embarquement : un composant, tout l’éditeur"
+    wait 1800
+    caption "Un geste timide : le talon revient en ressort"
+    drag stub by 70 0 700
+    wait 1300
+    caption "Un geste franc : il se détache, l’avion décolle"
+    drag stub by 150 0 240
+    wait 3200
+    caption "Revoir le billet, puis l’alternative sans geste"
+    click "Revoir le billet"
+    wait 1400
+    click Embarquer
+    wait 3000
+  </flow>
+</project>

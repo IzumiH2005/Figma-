@@ -35,7 +35,8 @@ export function nodePath(node, a, box) {
   const { w, h } = box;
   switch (node.tag) {
     case 'shape': return shapePath(a.kind || 'rect', w, h, shapeParams(a));
-    case 'rect': return shapePath('rect', w, h, { radius: a.radius === 'full' ? Math.min(w, h) / 2 : a.radius || 0 });
+    // a frame used as an operand keeps its corners, per-corner too (radius="24 24 0 0"), like Figma's independent corners
+    case 'rect': case 'frame': return shapePath('rect', w, h, { radius: a.radius === 'full' ? Math.min(w, h) / 2 : a.radius || 0 });
     case 'ellipse': return shapePath('ellipse', w, h, {});
     case 'vector': case 'svg': case 'path': {
       const d = a.d || (node.children || []).filter((c) => c.tag === 'path').map((c) => c.attrs.d).join(' ');

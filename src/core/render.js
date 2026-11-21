@@ -937,7 +937,14 @@ function decorate(el, node, a, states, events, scope, parentLayout, ctx) {
   if (tag === 'divider' || tag === 'line') { delete css.backgroundColor; delete css.color; }
   if (el.classList.contains('mq-vec')) {
     for (const k of ['backgroundColor', 'backgroundImage', 'backgroundSize', 'outline', 'outlineOffset', 'color', 'webkitBackgroundClip', 'backgroundClip', 'webkitTextFillColor', 'animation']) delete css[k];
-    if (css.boxShadow) { css.filter = [css.filter, ...splitTop(css.boxShadow, ',').filter((x) => !x.includes('inset')).map((x) => `drop-shadow(${x.replace(/(-?\d+(?:\.\d+)?px\s+-?\d+(?:\.\d+)?px\s+-?\d+(?:\.\d+)?px)\s+-?\d+(?:\.\d+)?px/, '$1')})`)].filter(Boolean).join(' '); delete css.boxShadow; }
+    // a vector's shadow follows its silhouette (drop-shadow). Chained drop-shadows each blur the whole layer AND shadow the
+    // previous shadows: a layered "smooth" shadow (5 layers) is slow and builds up. Keep its contact and ambient layers only.
+    if (css.boxShadow) {
+      let layers = splitTop(css.boxShadow, ',').filter((x) => !x.includes('inset'));
+      if (layers.length > 2) layers = [layers[0], layers[layers.length - 1]];
+      css.filter = [css.filter, ...layers.map((x) => `drop-shadow(${x.replace(/(-?\d+(?:\.\d+)?px\s+-?\d+(?:\.\d+)?px\s+-?\d+(?:\.\d+)?px)\s+-?\d+(?:\.\d+)?px/, '$1')})`)].filter(Boolean).join(' ');
+      delete css.boxShadow;
+    }
     if (!el.style.width) css.width = css.width || el._box?.w + 'px';
   }
   if (tag === 'textpath') { delete css.color; delete css.backgroundImage; }
@@ -1090,7 +1097,8 @@ export function renderScreen(screen, ctx) {
 export function renderStandalone(node, ctx, layout = 'stack') {
   ctx.rules = []; ctx.anims = []; ctx.links = []; ctx.errors = [];
   const wrap = document.createElement('div');
-  wrap.style.cssText = 'display:inline-grid;position:relative;';
+  wrap.className = 'mq-standalone'; // same box model as inside a screen (border-box): spec sheets, Studio, asset previews
+  wrap.style.cssText = 'display:inline-grid;position:relative;box-sizing:border-box;';
   const fontDefault = ctx.project.token('font', ctx.mode) || ctx.project.fonts[0]?.split(':')[0] || 'Inter';
   wrap.style.fontFamily = fontStack(fontDefault);
   wrap.style.color = ctx.project.token('text', ctx.mode) || '#111';
@@ -1122,7 +1130,7 @@ function bindTilt(el, max) {
 
 export const BASE_CSS = `.mq-flow{animation:mq-flow 1s linear infinite}@keyframes mq-flow{to{stroke-dashoffset:-12}}
 
-.mq-screen *,.mq-screen *::before,.mq-screen *::after{box-sizing:border-box}
+.mq-screen *,.mq-screen *::before,.mq-screen *::after,.mq-standalone *,.mq-standalone *::before,.mq-standalone *::after{box-sizing:border-box}
 .mq-screen-body::-webkit-scrollbar,.mq-frame::-webkit-scrollbar{display:none}
 .mq-text{white-space:pre-line;overflow-wrap:break-word;min-width:0}
 .mq-note{white-space:pre-line;background:#FFE58F;color:#3d3200;padding:14px 16px;border-radius:4px;font:500 14px/1.45 Inter,system-ui,sans-serif;box-shadow:0 6px 18px rgba(0,0,0,.18);max-width:320px}

@@ -207,8 +207,10 @@ export function lintScreen(screenEl, project, screenNode) {
 
   // --- component anatomy (icon ↔ label, padding, nested radii, interactive feedback)
   const px = (v) => parseFloat(v) || 0;
+  // a rotated ancestor (a ticket stub being torn, a tilted card) skews the boxes: gaps can't be read there
+  const rotated = (el) => { for (let n = el.parentElement; n && n !== screenEl; n = n.parentElement) { const t = getComputedStyle(n); if ((t.rotate && t.rotate !== 'none' && parseFloat(t.rotate)) || /matrix\(([^,]+), ([^,]+), ([^,]+)/.test(t.transform) && (() => { const m = /matrix\(([^,]+), ([^,]+), ([^,]+)/.exec(t.transform); return Math.abs(+m[2]) > 0.01 || Math.abs(+m[3]) > 0.01; })()) return true; } return false; };
   screenEl.querySelectorAll('.mq-icon, [data-tag="icon"]').forEach((ic) => {
-    if (!visible(ic)) return;
+    if (!visible(ic) || rotated(ic)) return;
     const row = ic.parentElement; if (!row) return;
     const rcs = getComputedStyle(row); if (!(rcs.display.includes('flex') && rcs.flexDirection.startsWith('row'))) return;
     const rr = rel(row, screenEl); if (rr.h > 72) return;
