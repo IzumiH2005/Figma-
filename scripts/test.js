@@ -540,6 +540,16 @@ export function PillRow({ className, ...props }) { return <div className={cn("fl
   ok(evaluate('pathmix(0.5, a, "b")', new Scope({}, null, { dollar: () => undefined, shape: (n) => keys[n] || null })) === 'M0 5L10 5', 'pathmix(t, nom, nom): vecteurs nommés');
 }
 
+// every kit component has a single root (siblings would be silently dropped), and the lint catches it in a project
+{
+  const r = await page.evaluate(() => {
+    const p = MQ.loadProject('<project><component name="Two"><row if={1}/><col if={0}/></component><screen name="S" w=100 h=100><Two/></screen></project>');
+    const multi = Object.values(p.components).filter((c) => c.fromKit && (c.node.children || []).filter((n) => n.tag !== '#text' && n.tag !== '#comment').length > 1).map((c) => c.name);
+    return { multi, caught: MQ.lintProject(p).some((i) => i.code === 'component-roots') };
+  });
+  ok(!r.multi.length && r.caught, `Composants à racine unique (kit) et règle component-roots ${JSON.stringify(r)}`);
+}
+
 // editor boots
 const html = await buildEditorHTML({ projects: examples });
 const tmp = path.join(ROOT, 'out', '_test-editor.html');

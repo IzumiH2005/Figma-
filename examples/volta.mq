@@ -1,154 +1,9 @@
-<project name="Volta — énergie de la maison" modes="light dark">
-  <!-- Volta : piloter l'énergie d'une maison (production solaire, batterie, appareils, chauffage, bilan).
-       Conçue pour iPhone. Tout le visuel lit le design system ci-dessous ; la logique tient dans quelques variables :
-       $on (appareils allumés), $live (puissance instantanée, qui voyage en tween), $sched (programmations), $period, $mode. -->
-  <system brand=#17714F accent=#F2A516 neutral=cool radius=round density=comfortable elevation=soft motion=calm type="Inter/Sora"/>
+<project name="Volta — iOS" modes="light dark">
+  <!-- Volta pour iPhone. Le design system, les données et les composants métier viennent de la bibliothèque
+       📚 Volta UI (examples/volta-ui.mq), partagée avec la version Android (examples/volta-android.mq) :
+       seules les conventions de plateforme diffèrent (barre d'onglets, toast, segmenté, en-têtes). -->
+  <use lib="Volta UI"/>
 
-  <vars>
-    on: ["frigo", "box", "pac", "ve"]
-    live: 1.82
-    sched: []
-    dev: null
-    filter: 0
-    period: 0
-    mode: 0
-    toast: ""
-    devices: [{"id":"pac","name":"Pompe à chaleur","room":"Technique","icon":"heater","w":0.95},{"id":"ballon","name":"Chauffe-eau","room":"Technique","icon":"shower-head","w":1.2},{"id":"frigo","name":"Réfrigérateur","room":"Cuisine","icon":"refrigerator","w":0.12},{"id":"four","name":"Four","room":"Cuisine","icon":"cooking-pot","w":2.4},{"id":"lave","name":"Lave-linge","room":"Buanderie","icon":"washing-machine","w":2.1},{"id":"seche","name":"Sèche-linge","room":"Buanderie","icon":"wind","w":1.6},{"id":"box","name":"Box et réseau","room":"Salon","icon":"router","w":0.03},{"id":"ve","name":"Recharge voiture","room":"Garage","icon":"plug-zap","w":0.72}]
-    rooms: ["Technique", "Cuisine", "Buanderie", "Salon", "Garage"]
-    prod: [0, 0, 0, 0.2, 1.1, 2.2, 2.9, 3.1, 2.6, 1.4, 0.3, 0]
-    cons: [0.6, 0.5, 0.5, 1.4, 1.1, 0.9, 1.3, 1.8, 1.5, 2.6, 2.2, 1.1]
-    week: [[12.4, 10.8, 13.1, 11.6, 9.8, 14.9, 13.2], [361, 342, 318, 296], [512, 468, 401, 322, 268, 214, 198, 205, 251, 330, 421, 498]]
-  </vars>
-
-  <!-- ───────────────────────────── composants ───────────────────────────── -->
-
-  <!-- nœud du schéma de flux : pastille 48 (icône 20), libellé et valeur centrés dessous -->
-  <component name="FlowNode" props="key='n' icon=sun label='Solaire' value='' tone=primary" desc="Nœud du flux d'énergie. tone: primary|accent|info|neutral">
-    <col w=72 gap=4 align=center>
-      <stack name={key} w=48 h=48 radius=full center
-        fill={tone == 'accent' ? $accent-soft : tone == 'info' ? $info-soft : tone == 'neutral' ? $surface-2 : $primary-soft}
-        color={tone == 'accent' ? $accent-text : tone == 'info' ? $info-text : tone == 'neutral' ? $muted : $primary-text}>
-        <icon name={icon} size=20/>
-      </stack>
-      <text size=$text-sm color=$muted nowrap>{label}</text>
-      <text size=$text-sm weight=600 tabular nowrap>{value}</text>
-    </col>
-  </component>
-
-  <!-- indicateur chiffré compact -->
-  <component name="Metric" props="label='Conso.' value='0' unit='' icon=zap" desc="Chiffre clé (icône, valeur, unité, libellé)">
-    <col w=fill gap=8 p=16 radius=$radius-lg fill=$surface shadow=$shadow-1>
-      <icon name={icon} size=20 color=$primary-text/>
-      <row gap=4 align=baseline><text font=$font-display size=$text-lg weight=700 tabular>{value}</text><text size=$text-sm color=$muted>{unit}</text></row>
-      <text size=$text-sm color=$muted>{label}</text>
-    </col>
-  </component>
-
-  <!-- tuile d'appareil (accueil) : l'état vient de $on, l'appui bascule et fait voyager la puissance -->
-  <component name="DeviceTile" props="d={}" desc="Tuile d'appareil avec interrupteur">
-    <col w=fill gap=12 p=16 radius=$radius-lg fill={includes($on, d.id) ? $primary : $surface} color={includes($on, d.id) ? $on-primary : $text}
-      shadow={includes($on, d.id) ? $shadow-2 : $shadow-1} motion=press cursor=pointer aria-label={d.name}
-      on:click="set $on = toggleIn($on, d.id) smart 320 gentle; set $live = round(($live + (includes($on, d.id) ? d.w : -d.w)) * 100) / 100 tween 700 out">
-      <row justify=between>
-        <icon name={d.icon} size=24/>
-        <frame w=8 h=8 radius=full fill={includes($on, d.id) ? $on-primary : $subtle}/>
-      </row>
-      <col gap=4>
-        <text weight=600 truncate>{d.name}</text>
-        <text size=$text-sm color={includes($on, d.id) ? $on-primary : $muted}>{includes($on, d.id) ? fmt(d.w, 2) + ' kW' : 'Éteint'}</text>
-      </col>
-    </col>
-  </component>
-
-  <!-- ligne d'appareil (liste) : zone texte → feuille de programmation ; interrupteur à droite (cible 48) -->
-  <component name="DeviceRow" props="d={}" desc="Ligne d'appareil : icône, nom, état, interrupteur">
-    <row w=fill h=72 px=16 gap=12>
-      <row w=fill gap=12 cursor=pointer on:click="set $dev = d; overlay ScheduleSheet bottom" aria-label={'Programmer ' + d.name}>
-        <stack w=40 h=40 radius=$radius-md center fill={includes($on, d.id) ? $primary-soft : $surface-2} color={includes($on, d.id) ? $primary-text : $muted}>
-          <icon name={d.icon} size=20/>
-        </stack>
-        <col w=fill gap=2>
-          <text weight=600 truncate>{d.name}</text>
-          <text size=$text-sm color={includes($sched, d.id) ? $accent-text : $muted} truncate>{includes($sched, d.id) ? 'Programmé · 23:30' : includes($on, d.id) ? fmt(d.w, 2) + ' kW en ce moment' : 'Éteint'}</text>
-        </col>
-      </row>
-      <stack w=56 h=48 center cursor=pointer aria-label={(includes($on, d.id) ? 'Éteindre ' : 'Allumer ') + d.name}
-        on:click="set $on = toggleIn($on, d.id) smart 320 gentle; set $live = round(($live + (includes($on, d.id) ? d.w : -d.w)) * 100) / 100 tween 700 out">
-        <Toggle value={includes($on, d.id)} color=$primary/>
-      </stack>
-    </row>
-  </component>
-
-  <!-- thermostat : anneau de 16 (ratio 208/240), curseur sur l'arc, disque 176 ; rig d'angle + boutons −/+ (alternative au geste) -->
-  <component name="Thermostat" props="value=0.45 now=19.5" desc="Thermostat riggé (16–26 °C, pas de 0,5)" rig:value="angle 0..1 from=-135 to=135 in=dial">
-    <col w=fill gap=16 align=center>
-      <stack name=dial w=240 h=240 center>
-        <shape kind=ring ratio=0.8667 start=135 sweep=270 w=240 h=240 fill=$surface-3/>
-        <shape if={value > 0} kind=ring ratio=0.8667 start=135 sweep={value * 270} w=240 h=240 fill=$primary/>
-        <stack w=240 h=240 absolute x=0 y=0 rotate={-135 + value * 270}>
-          <frame w=24 h=24 radius=full absolute top=-4 x=center fill=$surface shadow=$shadow-2/>
-        </stack>
-        <col w=176 h=176 radius=full fill=$surface shadow=$shadow-2 center gap=4>
-          <text size=$text-sm color=$muted>Consigne</text>
-          <text font=$font-display size=$text-4xl weight=700 tabular lh=1>{fmt(round((16 + value * 10) * 2) / 2, 1)}°</text>
-          <text size=$text-sm color=$muted>Pièce : {fmt(now, 1)}°</text>
-        </col>
-      </stack>
-      <row gap=24 align=center>
-        <stack name=down w=48 h=48 radius=full center fill=$surface-2 motion=press cursor=pointer aria-label="Baisser" on:click="change value={max(0, value - 0.05)} smart 220 gentle"><icon name=minus size=20/></stack>
-        <col w=136 gap=2 align=center>
-          <text weight=600>{value < 0.3 ? 'Économie' : value < 0.6 ? 'Confort' : 'Chaud'}</text>
-          <text size=$text-sm color=$muted tabular>≈ {fmt(0.28 + value * 0.62, 2)} € / jour</text>
-        </col>
-        <stack name=up w=48 h=48 radius=full center fill=$surface-2 motion=press cursor=pointer aria-label="Monter" on:click="change value={min(1, value + 0.05)} smart 220 gentle"><icon name=plus size=20/></stack>
-      </row>
-    </col>
-  </component>
-
-  <!-- ligne de pièce (climat) -->
-  <component name="RoomRow" props="name='Salon' t=20 hum=48 icon=sofa" desc="Pièce : température et humidité">
-    <row w=fill h=64 px=16 gap=12>
-      <stack w=40 h=40 radius=$radius-md center fill=$surface-2 color=$muted><icon name={icon} size=20/></stack>
-      <col w=fill gap=2><text weight=600>{name}</text><text size=$text-sm color=$muted>Humidité {hum} %</text></col>
-      <text font=$font-display size=$text-lg weight=600 tabular>{fmt(t, 1)}°</text>
-    </row>
-  </component>
-
-  <!-- ligne de répartition (bilan) -->
-  <component name="ShareRow" props="label='Chauffage' pct=40 color=$primary" desc="Part de consommation (pastille, libellé, %)">
-    <row w=fill gap=12 h=32>
-      <frame w=12 h=12 radius=full fill={color}/>
-      <text w=fill>{label}</text>
-      <text weight=600 tabular>{pct} %</text>
-    </row>
-  </component>
-
-  <!-- feuille de programmation : créneaux (heures creuses, soleil), coût estimé, action -->
-  <component name="ScheduleSheet" props="slot=2" desc="Programmer un appareil (bottom sheet)">
-    <Sheet>
-      <col if={$dev} w=fill gap=24 pt=4>
-        <row gap=12>
-          <stack w=48 h=48 radius=$radius-md center fill=$primary-soft color=$primary-text anim="pop 420 hard"><icon name={$dev.icon} size=24/></stack>
-          <col w=fill gap=2>
-            <text font=$font-display size=$text-lg weight=700>{$dev.name}</text>
-            <text size=$text-sm color=$muted>{$dev.room} · {fmt($dev.w, 1)} kW en marche</text>
-          </col>
-        </row>
-        <col gap=8 motion=cascade>
-          <text size=$text-sm weight=600 color=$muted>Quand le lancer ?</text>
-          <row each={[['zap', 'Maintenant', 'Tarif plein'], ['sun', 'Vers 13:00', 'Avec le soleil'], ['moon', '23:30', 'Heures creuses']]} as=o
-            w=fill h=64 px=16 gap=12 radius=$radius-md cursor=pointer
-            fill={slot == i ? $primary-soft : $surface-2} on:click="change slot={i} smart 240 gentle" aria-label={o[1]}>
-            <icon name={o[0]} size=20 color={slot == i ? $primary-text : $muted}/>
-            <col w=fill gap=2><text weight=600>{o[1]}</text><text size=$text-sm color=$muted>{o[2]}</text></col>
-            <text weight=600 tabular color={slot == i ? $primary-text : $text}>{pick(i, '0,48 €', '0,00 €', '0,31 €')}</text>
-          </row>
-        </col>
-        <Button label={slot == 0 ? 'Lancer maintenant' : 'Programmer'} full size=lg
-          on:click="set $sched = slot == 0 ? $sched : push(without($sched, $dev.id), $dev.id); close; set $toast = $dev.name + (slot == 0 ? ' lancé' : ' programmé · ' + pick(slot, '', '13:00', '23:30')); wait 2400; set $toast = ''"/>
-      </col>
-    </Sheet>
-  </component>
 
   <!-- ───────────────────────────── écrans ───────────────────────────── -->
 
@@ -164,31 +19,7 @@
           <IconButton icon=bell kind=tonal badge=1 aria-label="Notifications"/>
         </row>
 
-        <!-- flux d'énergie en direct : la maison au centre, les flux animés suivent la puissance -->
-        <col w=fill gap=16 p=$card-pad radius=$card-radius fill=$surface shadow=$shadow-2 anim="rise 700 out">
-          <row justify=between>
-            <row gap=8>
-              <stack w=12 h=12 center><ellipse w=12 h=12 fill=$success opacity=0.3 loop="ping 1800"/><ellipse absolute x=2 y=2 w=8 h=8 fill=$success/></stack>
-              <text weight=600>En direct</text>
-            </row>
-            <text size=$text-sm color=$muted tabular>{2.4 - $live - 0.3 >= 0 ? 'Vous revendez ' + fmt(2.4 - $live - 0.3, 2) + ' kW' : 'Vous achetez ' + fmt($live + 0.3 - 2.4, 2) + ' kW'}</text>
-          </row>
-          <stack w=fill h=232>
-            <connector from=n-sun to=n-home curve=curve end=none color=$accent width=2 flow/>
-            <connector from=n-home to=n-batt curve=curve end=none color=$primary width=2 flow/>
-            <connector if={2.4 - $live - 0.3 >= 0} from=n-home to=n-grid curve=curve end=none color=$primary width=2 flow/>
-            <connector if={2.4 - $live - 0.3 < 0} from=n-grid to=n-home curve=curve end=none color=$danger width=2 flow/>
-            <connector from=n-home to=n-car curve=curve end=none color=$info width=2 dash="4 4"/>
-            <FlowNode key=n-sun icon=sun label=Solaire value="2,40 kW" tone=accent absolute x=0 y=0/>
-            <FlowNode key=n-grid icon=utility-pole label=Réseau value={fmt(abs(2.4 - $live - 0.3), 2) + ' kW'} tone={2.4 - $live - 0.3 >= 0 ? 'primary' : 'neutral'} absolute right=0 y=0/>
-            <col absolute x=center y=72 w=96 gap=4 align=center>
-              <stack name=n-home w=64 h=64 radius=full center fill=$primary color=$on-primary shadow=$shadow-3><icon name=house size=28/></stack>
-              <text name=live font=$font-display size=$text-lg weight=700 tabular nowrap>{fmt($live, 2)} kW</text>
-            </col>
-            <FlowNode key=n-batt icon=battery-charging label="Batterie 82 %" value="+0,30 kW" tone=primary absolute x=0 bottom=0/>
-            <FlowNode key=n-car icon=car label=Voiture value="Pleine 7:00" tone=info absolute right=0 bottom=0/>
-          </stack>
-        </col>
+        <LiveFlow/>
 
         <grid cols=3 gap=12 w=fill>
           <Metric icon=zap label="Consommé" value="12,4" unit=kWh/>
@@ -196,16 +27,7 @@
           <Metric icon=piggy-bank label="Économisé" value="3,12" unit=€/>
         </grid>
 
-        <col w=fill gap=16 p=$card-pad radius=$card-radius fill=$surface shadow=$shadow-1>
-          <row justify=between>
-            <text weight=600>Aujourd’hui</text>
-            <row gap=12>
-              <row gap=4><frame w=8 h=8 radius=full fill=$accent/><text size=$text-sm color=$muted>Solaire</text></row>
-              <row gap=4><frame w=8 h=8 radius=full fill=$primary/><text size=$text-sm color=$muted>Maison</text></row>
-            </row>
-          </row>
-          <chart type=area data={[$prod, $cons]} labels={['0h', '', '', '6h', '', '', '12h', '', '', '18h', '', '']} colors="$accent,$primary" w=fill h=152 reveal/>
-        </col>
+        <DayChart/>
 
         <row w=fill gap=12 p=16 radius=$radius-lg fill=$accent-soft color=$accent-text>
           <icon name=moon-star size=20/>
@@ -236,36 +58,9 @@
           <text font=$font-display size=$text-2xl weight=700>Appareils</text>
           <IconButton icon=plus kind=tonal aria-label="Ajouter un appareil"/>
         </row>
-        <col w=fill gap=16 p=$card-pad radius=$card-radius fill=$primary color=$on-primary shadow=$shadow-2 anim="fade-up 560 out">
-          <row justify=between>
-            <text size=$text-sm>Puissance en ce moment</text>
-            <text size=$text-sm weight=600>{len($on)} allumés</text>
-          </row>
-          <row gap=8 align=baseline>
-            <text font=$font-display size=$text-4xl weight=700 tabular lh=1>{fmt($live, 2)}</text>
-            <text size=$text-lg>kW</text>
-          </row>
-          <Progress value={min(1, $live / 6)} tone=$on-primary/>
-          <text size=$text-sm>Abonnement 6 kVA · {round($live / 6 * 100)} % de la capacité</text>
-        </col>
+        <PowerCard/>
         <Segmented items={['Tous', 'Allumés', 'Programmés']} active={$filter} var=filter/>
-        <!-- Tous : groupés par pièce ; Allumés / Programmés : liste à plat (ou état vide) -->
-        <col if={$filter == 0} w=fill gap=24 stagger="60 fade-up 380 out">
-          <col each={$rooms} as=r w=fill gap=8>
-            <text size=$text-sm weight=600 color=$muted px=4>{r}</text>
-            <col w=fill radius=$card-radius fill=$surface shadow=$shadow-1 clip>
-              <DeviceRow each={filter($devices, 'room', r)} as=dd d={dd}/>
-            </col>
-          </col>
-        </col>
-        <col if={$filter > 0 && len($filter == 1 ? $on : $sched) > 0} w=fill radius=$card-radius fill=$surface shadow=$shadow-1 clip anim="fade-up 360 out">
-          <DeviceRow each={$devices} as=dd d={dd} if={includes($filter == 1 ? $on : $sched, dd.id)}/>
-        </col>
-        <col if={$filter > 0 && len($filter == 1 ? $on : $sched) == 0} w=fill gap=8 p=32 radius=$card-radius fill=$surface align=center anim="fade-up 360 out">
-          <icon name={$filter == 1 ? 'power-off' : 'calendar-clock'} size=24 color=$muted/>
-          <text weight=600>{$filter == 1 ? 'Tout est éteint' : 'Rien de programmé'}</text>
-          <text size=$text-sm color=$muted talign=center maxw=240>{$filter == 1 ? 'Allume un appareil depuis la liste.' : 'Touchez un appareil pour le lancer en heures creuses ou avec le soleil.'}</text>
-        </col>
+        <DeviceList/>
       </col>
       <Toast if={$toast} message={$toast} icon=circle-check fixed place=bottom mb=112 mx=20 anim="fade-up 360 out"/>
       <TabBar fixed place=bottom w=fill active=1 items={[{icon:'house',label:'Maison',to:'Maison'},{icon:'plug',label:'Appareils',to:'Appareils'},{icon:'thermometer',label:'Climat',to:'Climat'},{icon:'chart-column',label:'Bilan',to:'Bilan'}]}/>
@@ -287,26 +82,9 @@
         </col>
         <col w=fill gap=12>
           <text size=$text-sm weight=600 color=$muted px=4>Planning d’aujourd’hui</text>
-          <col w=fill gap=8 p=16 radius=$radius-lg fill=$surface shadow=$shadow-1>
-            <row w=fill h=24 gap=4>
-              <frame w=fill grow=6 h=24 radius=$radius-sm fill=$info-soft/>
-              <frame w=fill grow=3 h=24 radius=$radius-sm fill=$primary/>
-              <frame w=fill grow=8 h=24 radius=$radius-sm fill={$mode == 0 ? $primary : $info-soft}/>
-              <frame w=fill grow=5 h=24 radius=$radius-sm fill=$primary/>
-              <frame w=fill grow=2 h=24 radius=$radius-sm fill=$info-soft/>
-            </row>
-            <row justify=between><text size=$text-sm color=$muted each={['0h', '6h', '12h', '18h', '24h']} as=hh>{hh}</text></row>
-            <row gap=16 pt=4>
-              <row gap=8><frame w=12 h=12 radius=4 fill=$primary/><text size=$text-sm color=$muted>Confort {fmt(round((16 + 0.45 * 10) * 2) / 2, 1)}°</text></row>
-              <row gap=8><frame w=12 h=12 radius=4 fill=$info-soft/><text size=$text-sm color=$muted>Éco 17°</text></row>
-            </row>
-          </col>
+          <Planning/>
         </col>
-        <col w=fill radius=$card-radius fill=$surface shadow=$shadow-1 clip>
-          <RoomRow name=Salon t=20.5 hum=46 icon=sofa/>
-          <RoomRow name=Chambre t=18 hum=51 icon=bed-double/>
-          <RoomRow name=Bureau t=19.5 hum=44 icon=monitor/>
-        </col>
+        <Rooms/>
       </col>
       <TabBar fixed place=bottom w=fill active=2 items={[{icon:'house',label:'Maison',to:'Maison'},{icon:'plug',label:'Appareils',to:'Appareils'},{icon:'thermometer',label:'Climat',to:'Climat'},{icon:'chart-column',label:'Bilan',to:'Bilan'}]}/>
     </screen>
@@ -318,37 +96,9 @@
           <IconButton icon=share kind=tonal aria-label="Partager"/>
         </row>
         <Segmented items={['Semaine', 'Mois', 'Année']} active={$period} var=period/>
-        <col w=fill gap=16 p=$card-pad radius=$card-radius fill=$surface shadow=$shadow-1>
-          <col gap=4>
-            <text size=$text-sm color=$muted>{pick($period, 'Cette semaine', 'Ce mois-ci', 'Sur 12 mois')}</text>
-            <row gap=8 align=baseline>
-              <text name=total font=$font-display size=$text-3xl weight=700 tabular lh=1>{pick($period, '85,8', '1 317', '4 088')}</text>
-              <text color=$muted>kWh</text>
-            </row>
-            <row gap=8><Badge label={pick($period, '− 12 %', '− 8 %', '− 19 %')} tone=success/><text size=$text-sm color=$muted>{pick($period, 'vs semaine dernière', 'vs octobre', 'vs l’an dernier')}</text></row>
-          </col>
-          <chart key={'bars' + $period} type=bar data={$week[$period]} labels={pick($period, ['L', 'M', 'M', 'J', 'V', 'S', 'D'], ['S1', 'S2', 'S3', 'S4'], ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'])} colors="$primary" w=fill h=176 reveal/>
-        </col>
-        <col w=fill gap=16 p=$card-pad radius=$card-radius fill=$surface shadow=$shadow-1>
-          <text weight=600>Répartition</text>
-          <row w=fill gap=24>
-            <chart type=donut data={[46, 21, 14, 11, 8]} colors="$primary,$accent,$info,$brand-300,$surface-3" w=112 h=112 center="46 %" reveal/>
-            <col w=fill gap=0>
-              <ShareRow label=Chauffage pct=46 color=$primary/>
-              <ShareRow label="Eau chaude" pct=21 color=$accent/>
-              <ShareRow label=Cuisine pct=14 color=$info/>
-              <ShareRow label=Lavage pct=11 color=$brand-300/>
-              <ShareRow label=Autres pct=8 color=$surface-3/>
-            </col>
-          </row>
-        </col>
-        <row w=fill gap=16 p=$card-pad radius=$card-radius fill=$primary-soft color=$primary-text>
-          <stack w=48 h=48 radius=full center fill=$surface><icon name=sun size=24 color=$accent-text/></stack>
-          <col w=fill gap=2>
-            <text font=$font-display size=$text-lg weight=700>38,40 € économisés</text>
-            <text size=$text-sm>Le solaire a couvert 64 % de vos besoins ce mois-ci.</text>
-          </col>
-        </row>
+        <PeriodSummary/>
+        <Breakdown/>
+        <Savings/>
       </col>
       <TabBar fixed place=bottom w=fill active=3 items={[{icon:'house',label:'Maison',to:'Maison'},{icon:'plug',label:'Appareils',to:'Appareils'},{icon:'thermometer',label:'Climat',to:'Climat'},{icon:'chart-column',label:'Bilan',to:'Bilan'}]}/>
     </screen>

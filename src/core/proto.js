@@ -1,7 +1,7 @@
 // Prototype runtime: navigation, transitions (incl. Smart Animate), overlays, variables, triggers.
 import { makeCtx, renderScreen, renderStandalone } from './render.js';
 import { evaluate, interp, lerpAny } from './expr.js';
-import { splitTop } from './project.js';
+import { splitTop, parseColor } from './project.js';
 import { playAnims, resolveEasing, EASINGS, prefersReducedMotion, easeFn, getTimeScale } from './anim.js';
 import { morphBetween, liveBoolean } from './vector.js';
 import { GestureMixin } from './gesture.js';
@@ -559,6 +559,15 @@ export class Player {
       const isText = el.dataset.tag === 'text' || el.dataset.tag === 'icon';
       if (isText) { const u = Math.abs(sx - sy) < 0.35 ? (sx + sy) / 2 : 1; sx = sy = u; }
       if (ap) { sx = 1; sy = 1; }
+      // a container never stretches (its children would be distorted): it moves, its children animate on their own;
+      // if it has a visible background and grew, the new area is revealed by a clip instead
+      const isContainer = !isText && [...el.children].some((c) => c.dataset && (c.dataset.id || c.dataset.tag || c.dataset.comp));
+      let reveal = null;
+      if (isContainer && (Math.abs(sx - 1) > 0.01 || Math.abs(sy - 1) > 0.01)) {
+        const bgA = (parseColor(getComputedStyle(el).backgroundColor) || [0, 0, 0, 0])[3];
+        if (bgA > 0.05 && (o.r.w < r.w - 0.5 || o.r.h < r.h - 0.5)) reveal = { right: Math.max(0, r.w - o.r.w), bottom: Math.max(0, r.h - o.r.h) };
+        sx = 1; sy = 1;
+      }
       const cs = getComputedStyle(el);
       // a layer riding a motion path: travel along the curve (offset-distance), not in a straight line
       const odNow = cs.offsetPath && cs.offsetPath !== 'none' ? cs.offsetPath + '|' + cs.offsetDistance : null;
@@ -571,6 +580,7 @@ export class Player {
       if (o.color !== cs.color) { from.color = o.color; to.color = cs.color; }
       if (o.radius !== cs.borderTopLeftRadius) { from.borderRadius = o.radius; to.borderRadius = cs.borderRadius; }
       if (o.opacity !== cs.opacity) { from.opacity = o.opacity; to.opacity = cs.opacity; }
+      if (reveal) { const rad = cs.borderTopLeftRadius || '0px'; from.clipPath = `inset(0px ${reveal.right}px ${reveal.bottom}px 0px round ${rad})`; to.clipPath = `inset(0px 0px 0px 0px round ${rad})`; }
       if (!Object.keys(from).length && !(o.d && el.dataset.d && o.d !== el.dataset.d)) continue;
       if (!Object.keys(from).length) { if (!liveBoolean(el, o.bool, el._bool, dur, easeFn(ez.easing))) morphBetween(el, o.d, el.dataset.d, dur, (p) => 1 - Math.pow(1 - p, 3)); continue; }
       const prevOrigin = el.style.transformOrigin;

@@ -9,7 +9,7 @@ import { parseSpec } from './anim.js';
 export const CATEGORIES = { a11y: 'Accessibilité', spacing: 'Espacement & grille', type: 'Typographie', color: 'Couleur', ux: 'Composants & UX', motion: 'Motion', proto: 'Prototype' };
 const CAT = {
   contrast: 'a11y', 'contrast-ui': 'a11y', 'tap-target': 'a11y', 'tiny-text': 'a11y', 'body-size': 'a11y', 'input-label': 'a11y', 'link-style': 'a11y',
-  'icon-gap': 'spacing', 'button-padding': 'spacing', misaligned: 'spacing', 'off-center': 'spacing', inset: 'spacing', escape: 'spacing', 'nested-radius': 'spacing', 'icon-size': 'ux', 'no-feedback': 'motion', 'gesture-alt': 'a11y', 'edge-stroke': 'color',
+  'icon-gap': 'spacing', 'button-padding': 'spacing', misaligned: 'spacing', 'component-roots': 'ux', 'off-center': 'spacing', inset: 'spacing', escape: 'spacing', 'nested-radius': 'spacing', 'icon-size': 'ux', 'no-feedback': 'motion', 'gesture-alt': 'a11y', 'edge-stroke': 'color',
   'off-grid': 'spacing', 'edge-margin': 'spacing', crowded: 'spacing', bounds: 'spacing', overflow: 'spacing',
   'type-scale': 'type', 'type-count': 'type', 'line-length': 'type', 'caps-long': 'type',
   hardcoded: 'color', 'pure-color': 'color', 'gradient-muddy': 'color', 'color-count': 'color', 'shadow-light': 'color',
@@ -424,6 +424,13 @@ export function lintProject(project) {
   const push = (level, code, msg, extra = {}) => issues.push({ level, code, cat: CAT[code] || 'ux', msg, ...extra });
   const names = new Set(project.screens().map((s) => s.attrs.name));
   const comps = new Set(Object.keys(project.components));
+
+  // a component renders ONE root element: siblings after the first are silently dropped (wrap them in a col/row)
+  for (const c of Object.values(project.components)) {
+    if (c.fromKit || c.fromLib) continue;
+    const roots = (c.node.children || []).filter((n) => n.tag !== '#text' && n.tag !== '#comment');
+    if (roots.length > 1) push('error', 'component-roots', `Le composant ${c.name} a ${roots.length} éléments racines (${roots.map((n) => n.tag).join(', ')}) : seul le premier est rendu. Enveloppe-les dans un col ou un row.`, { id: c.node.id });
+  }
 
   // links graph
   const compLinks = new Map();

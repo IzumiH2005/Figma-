@@ -8,6 +8,7 @@
   surface-2: #EAEAF0
   text: #14141A
   muted: #6B6B78
+  subtle: #8A8A96
   border: rgba(20,20,26,.10)
   danger: #D93644
   success: #2EB67D
@@ -61,11 +62,20 @@
   </stack>
 </component>
 
-<component name="Chip" props="label='Filtre' selected=false icon=''" desc="Puce de filtre / tag sélectionnable">
-  <row gap=8 h=36 px=16 radius=$chip-radius size=14 weight=500 press:scale=0.96
+<component name="Chip" props="label='Filtre' selected=false icon=''" desc="Puce de filtre / tag sélectionnable. Sur Android : puce de filtre Material 3 (32 dp, contournée, coche une fois choisie, zone tactile 48 dp).">
+  <row>
+  <row if={$platform == 'android'} h=48 py=8 cursor=pointer>
+    <row gap=8 h=32 px={selected ? 8 : 16} pr=16 radius=8 size=14 weight=500 transition=200
+      fill={selected ? $primary-soft : 'transparent'} color={selected ? $primary-text : $text} stroke={selected ? 'none' : '1 ' + $subtle + ' inside'}>
+      <icon if={selected || icon} name={selected ? 'check' : icon} size=18/>
+      <text nowrap>{label}</text>
+    </row>
+  </row>
+  <row if={$platform != 'android'} gap=8 h=36 px=16 radius=$chip-radius size=14 weight=500 press:scale=0.96
     fill={selected ? $text : $surface-2} color={selected ? $bg : $text}>
     <icon if={icon} name={icon} size=16/>
     <text nowrap>{label}</text>
+  </row>
   </row>
 </component>
 
@@ -193,12 +203,26 @@
   </col>
 </component>
 
-<component name="Segmented" props="items={['Jour','Semaine','Mois']} active=0 var=''" desc="Contrôle segmenté. var=nom de variable à mettre à jour">
-  <row w=fill p=4 radius=12 fill=$surface-2 gap=4>
+<component name="Segmented" props="items={['Jour','Semaine','Mois']} active=0 var=''" desc="Contrôle segmenté. var=nom de variable à mettre à jour. Sur Android : boutons segmentés Material 3 (pilule contournée 40 dp, coche sur l'actif, zone tactile 48 dp).">
+  <col w=fill>
+  <stack if={$platform == 'android'} w=fill h=48>
+    <frame absolute x=0 y=4 w=fill h=40 radius=full stroke={'1 ' + $subtle + ' inside'} events=none/>
+    <row w=fill h=48>
+      <stack each={items} w=fill h=48 py=4 cursor=pointer on:click="set ${var} = {i}" aria-label={item}>
+        <row w=fill h=40 gap=8 justify=center px=12 fill={i == active ? $primary-soft : 'transparent'} color={i == active ? $primary-text : $text}
+          radius={i == 0 ? '999 0 0 999' : i == len(items) - 1 ? '0 999 999 0' : '0'} stroke-l={i > 0 ? '1 ' + $subtle : 'none'} transition=200>
+          <icon if={i == active} name=check size=18/>
+          <text size=14 weight=500 nowrap>{item}</text>
+        </row>
+      </stack>
+    </row>
+  </stack>
+  <row if={$platform != 'android'} w=fill p=4 radius=12 fill=$surface-2 gap=4>
     <stack each={items} w=fill h=40 px=12 radius=8 center size=14 weight={i == active ? 600 : 500} fill={i == active ? $surface : 'transparent'} shadow={i == active ? 'sm' : 'none'} color=$text on:click="set ${var} = {i}">
       <text>{item}</text>
     </stack>
   </row>
+  </col>
 </component>
 
 <component name="Progress" props="value=0.6 h=8 tone=''" desc="Barre de progression (value 0..1)">
@@ -352,9 +376,10 @@
 </component>
 
 <component name="Snackbar" props="message='Message supprimé' action='Annuler'" desc="Confirmation éphémère avec action d'annulation">
-  <row gap=16 px=16 h=48 radius=12 fill=#1C1C22 color=#F4F4F6 shadow=lg w=fill maxw=480>
+  <!-- surface inverse (le texte devient le fond) : sombre en clair, claire en sombre ; action en primaire inversée -->
+  <row gap=16 pl=16 pr=4 h=48 radius=8 fill=$text color=$bg shadow=lg w=fill maxw=480>
     <text w=fill size=14 truncate>{message}</text>
-    <text if={action} size=14 weight=700 color=#B4A8FF cursor=pointer>{action}</text>
+    <stack if={action} h=48 px=12 center cursor=pointer><text size=14 weight=600 color={mix($primary, $bg, 35)}>{action}</text></stack>
   </row>
 </component>
 

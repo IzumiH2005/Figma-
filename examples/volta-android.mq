@@ -1,0 +1,171 @@
+<project name="Volta — Android" modes="light dark">
+  <!-- Volta pour Android (Pixel 9), à comparer avec examples/volta.mq (iPhone).
+       Même identité, mêmes données, mêmes blocs de contenu : tout vient de 📚 Volta UI (examples/volta-ui.mq).
+       Ce qui change, ce sont les conventions de la plateforme (Material 3), jamais la marque :
+       · barre d'app en haut (titre à gauche, actions à droite, 64 dp) au lieu du grand titre iOS ;
+       · barre de navigation à pastille au lieu de la barre d'onglets ;
+       · puces de filtre et boutons segmentés M3 au lieu du segmenté iOS ;
+       · bouton d'action flottant étendu (« Ajouter ») au lieu du « + » dans l'en-tête ;
+       · snackbar avec « Annuler » au lieu du toast ; bouton texte au lieu du chevron ;
+       · interrupteurs M3 et cibles de 48 dp (le kit les adapte seul, via $platform). -->
+  <use lib="Volta UI"/>
+
+  <!-- barre d'app Material 3 des destinations principales : titre à gauche, actions à droite -->
+  <component name="AppBar" props="title='' sub=''" desc="Barre d'app d'une destination principale (titre, sous-titre, actions en slot)">
+    <row w=fill h={sub ? 72 : 64} px=16 gap=4>
+      <col w=fill gap={sub ? 2 : 0}>
+        <text if={sub} size=$text-sm color=$muted>{sub}</text>
+        <text font=$font-display size=$text-xl weight=600 truncate>{title}</text>
+      </col>
+      <slot/>
+    </row>
+  </component>
+
+  <page name="App">
+    <screen name="Maison" device=pixel-9 start statusbar=blur homebar fill=$bg color=$text font=$font-sans pt=safe pb=120>
+      <col w=fill pb=24 gap=16 stagger="50 fade-up 500">
+        <AppBar title="Bonjour, Camille" sub="Mardi 18 novembre · Lyon">
+          <IconButton icon=sun-moon on:click="mode next" aria-label="Thème"/>
+          <IconButton icon=bell badge=1 aria-label="Notifications"/>
+        </AppBar>
+        <col w=fill px=16 gap=16>
+          <LiveFlow/>
+          <grid cols=3 gap=8 w=fill>
+            <Metric icon=zap label="Consommé" value="12,4" unit=kWh/>
+            <Metric icon=sun label="Produit" value="15,8" unit=kWh/>
+            <Metric icon=piggy-bank label="Économisé" value="3,12" unit=€/>
+          </grid>
+          <DayChart/>
+          <!-- carte d'action Material : le texte explique, le bouton texte agit (pas de chevron) -->
+          <col w=fill gap=8 pt=16 pl=16 pr=8 pb=8 radius=$radius-lg fill=$accent-soft color=$accent-text>
+            <row gap=12 pr=8>
+              <icon name=moon-star size=20/>
+              <col w=fill gap=2>
+                <text weight=600>Heures creuses à 23:30</text>
+                <text size=$text-sm>Programme le lave-linge : − 0,17 € par cycle.</text>
+              </col>
+            </row>
+            <row justify=end>
+              <Button name=plan-lave label="Programmer" kind=ghost size=md on:click="set $dev = $devices[4]; overlay ScheduleSheet bottom"/>
+            </row>
+          </col>
+          <col w=fill gap=8>
+            <row justify=between h=48>
+              <text font=$font-display size=$text-lg weight=600>Mes appareils</text>
+              <Button label="Tout voir" kind=ghost size=md on:click="go Appareils instant"/>
+            </row>
+            <grid cols=2 gap=8 w=fill>
+              <DeviceTile each={slice($devices, 0, 4)} as=dd d={dd}/>
+            </grid>
+          </col>
+        </col>
+      </col>
+      <!-- snackbar : au-dessus de la barre de navigation, avec une action d'annulation -->
+      <Snackbar if={$toast} message={$toast} action={includes($sched, ($dev || {}).id) ? 'Annuler' : ''} fixed place=bottom mb=112 mx=16 anim="fade-up 300 out"
+        on:click="if {$dev && includes($sched, $dev.id)} set $sched = without($sched, $dev.id); set $toast = 'Programmation annulée'; wait 1600; set $toast = ''"/>
+      <TabBar fixed place=bottom w=fill active=0 items={[{icon:'house',label:'Maison',to:'Maison'},{icon:'plug',label:'Appareils',to:'Appareils'},{icon:'thermometer',label:'Climat',to:'Climat'},{icon:'chart-column',label:'Bilan',to:'Bilan'}]}/>
+    </screen>
+
+    <screen name="Appareils" device=pixel-9 statusbar=blur homebar fill=$bg color=$text font=$font-sans pt=safe pb=184>
+      <col w=fill pb=24 gap=16>
+        <AppBar title="Appareils">
+          <IconButton icon=search aria-label="Rechercher"/>
+        </AppBar>
+        <col w=fill px=16 gap=16>
+          <PowerCard/>
+          <!-- filtrer = puces de filtre en Material 3 (le segmenté sert à basculer de vue) -->
+          <row w=fill gap=8>
+            <Chip label="Tous" selected={$filter == 0} on:click="set $filter = 0 smart 240 gentle"/>
+            <Chip label={'Allumés · ' + len($on)} selected={$filter == 1} on:click="set $filter = 1 smart 240 gentle"/>
+            <Chip label="Programmés" selected={$filter == 2} on:click="set $filter = 2 smart 240 gentle"/>
+          </row>
+          <DeviceList/>
+        </col>
+      </col>
+      <FAB icon=plus label="Ajouter" fixed place=bottom-right mb=120 mr=16 aria-label="Ajouter un appareil" anim="pop 420 hard"/>
+      <Snackbar if={$toast} message={$toast} action="" fixed place=bottom mb=112 mx=16 anim="fade-up 300 out"/>
+      <TabBar fixed place=bottom w=fill active=1 items={[{icon:'house',label:'Maison',to:'Maison'},{icon:'plug',label:'Appareils',to:'Appareils'},{icon:'thermometer',label:'Climat',to:'Climat'},{icon:'chart-column',label:'Bilan',to:'Bilan'}]}/>
+    </screen>
+
+    <screen name="Climat" device=pixel-9 statusbar=blur homebar fill=$bg color=$text font=$font-sans pt=safe pb=120>
+      <col w=fill pb=24 gap=16>
+        <AppBar title="Climat">
+          <IconButton icon=ellipsis-vertical aria-label="Plus d'options"/>
+        </AppBar>
+        <col w=fill px=16 gap=16>
+          <row gap=8><Badge label="Pompe à chaleur · active" tone=success/></row>
+          <col w=fill gap=24 p=$card-pad radius=$card-radius fill=$surface shadow=$shadow-1 anim="fade-up 460 out">
+            <Thermostat/>
+          </col>
+          <col w=fill gap=8>
+            <text size=$text-sm weight=600 color=$muted px=4>Mode</text>
+            <Segmented items={['Confort', 'Éco', 'Absence']} active={$mode} var=mode/>
+            <text size=$text-sm color=$muted px=4>{pick($mode, 'Consigne suivie toute la journée.', '− 1,5 ° la nuit et en journée de travail.', 'Hors-gel à 12 ° jusqu’à votre retour.')}</text>
+          </col>
+          <col w=fill gap=8>
+            <text size=$text-sm weight=600 color=$muted px=4>Planning d’aujourd’hui</text>
+            <Planning/>
+          </col>
+          <Rooms/>
+        </col>
+      </col>
+      <TabBar fixed place=bottom w=fill active=2 items={[{icon:'house',label:'Maison',to:'Maison'},{icon:'plug',label:'Appareils',to:'Appareils'},{icon:'thermometer',label:'Climat',to:'Climat'},{icon:'chart-column',label:'Bilan',to:'Bilan'}]}/>
+    </screen>
+
+    <screen name="Bilan" device=pixel-9 statusbar=blur homebar fill=$bg color=$text font=$font-sans pt=safe pb=120>
+      <col w=fill pb=24 gap=16>
+        <AppBar title="Bilan">
+          <IconButton icon=share-2 aria-label="Partager"/>
+        </AppBar>
+        <col w=fill px=16 gap=16>
+          <Segmented items={['Semaine', 'Mois', 'Année']} active={$period} var=period/>
+          <PeriodSummary/>
+          <Breakdown/>
+          <Savings/>
+        </col>
+      </col>
+      <TabBar fixed place=bottom w=fill active=3 items={[{icon:'house',label:'Maison',to:'Maison'},{icon:'plug',label:'Appareils',to:'Appareils'},{icon:'thermometer',label:'Climat',to:'Climat'},{icon:'chart-column',label:'Bilan',to:'Bilan'}]}/>
+    </screen>
+  </page>
+
+  <flow name="demo">
+    start Maison
+    caption "Volta sur Android — même marque, conventions Material 3"
+    wait 2600
+    caption "Programmer : bouton texte, feuille, snackbar avec « Annuler »"
+    scroll 560
+    wait 800
+    click plan-lave
+    wait 1400
+    click Programmer
+    wait 2200
+    caption "Allumer le four : le flux s'inverse"
+    scroll 520
+    wait 700
+    click Four
+    wait 1100
+    scroll -1400
+    wait 2000
+    caption "Appareils : puces de filtre et bouton flottant"
+    click Appareils
+    wait 1300
+    click Programmés
+    wait 1300
+    click "Allumés · 5"
+    wait 1300
+    caption "Climat : boutons segmentés Material 3"
+    click Climat
+    wait 1200
+    click up
+    wait 600
+    click up
+    wait 700
+    click Éco
+    wait 1200
+    caption "Bilan"
+    click Bilan
+    wait 1600
+    click Mois
+    wait 1900
+  </flow>
+</project>
